@@ -13,6 +13,8 @@ export const SETTING_DEFAULTS = {
   aiClassify: "1",
   /** modelo do Claude para classificar e resumir */
   aiModel: "",
+  /** veículos prioritários (domínios separados por vírgula ou linha): ganham buscas próprias por esfera no Google News */
+  priorityOutlets: "cnnbrasil.com.br",
   /** buscas do Google News por esfera e poder. Placeholders: {estado}, {cidade}, {uf} */
   queryFederalLegislativo: '("Câmara dos Deputados" OR Senado OR "Congresso Nacional" OR "projeto de lei" OR PEC OR CPI) -esporte',
   queryFederalExecutivo: '("governo federal" OR Planalto OR "presidente Lula" OR ministério OR "ministro da" OR "medida provisória") política',

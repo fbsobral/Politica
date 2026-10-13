@@ -237,6 +237,17 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
         });
       }
     }
+    // veículos prioritários: buscas restritas ao site do veículo, por esfera
+    const outlets = cfg.priorityOutlets.split(/[\s,;]+/).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter((d) => d.includes("."));
+    for (const d of outlets) {
+      origins.push({ label: `gnews:prio:federal:${d}`, url: googleNewsUrl(`site:${d} (política OR governo OR Congresso OR STF OR eleições OR ministro)`, days), scope: "FEDERAL", uf: null, municipalityKey: null });
+      for (const uf of ufs) {
+        origins.push({ label: `gnews:uf:${uf}:PRIO:${d}`, url: googleNewsUrl(`site:${d} "${UFS[uf]}" (governador OR "governo do estado" OR assembleia OR eleição OR prefeito)`, localDays), scope: "ESTADUAL", uf, municipalityKey: null });
+      }
+      for (const c of cities.values()) {
+        origins.push({ label: `gnews:city:${c.uf}:${c.key}:PRIO:${d}`, url: googleNewsUrl(`site:${d} "${c.name}" (prefeito OR prefeitura OR vereador OR câmara OR eleição)`, localDays), scope: "MUNICIPAL", uf: c.uf, municipalityKey: c.key });
+      }
+    }
     // eleições: nacional e por estado (inclui pesquisas)
     if (cfg.queryElectionFederal.trim()) {
       origins.push({ label: "gnews:elec:federal", url: googleNewsUrl(cfg.queryElectionFederal, days), scope: "FEDERAL", uf: null, municipalityKey: null });

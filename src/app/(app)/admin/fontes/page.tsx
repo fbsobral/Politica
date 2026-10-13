@@ -57,6 +57,11 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
             <label className="flex items-center gap-2"><input type="checkbox" name="googleNews" defaultChecked={cfg.googleNews === "1"} /> Buscar no Google News</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="aiClassify" defaultChecked={cfg.aiClassify === "1"} /> Classificar com IA (senão, só regras por palavra-chave)</label>
           </div>
+          <label className="mt-4 block">
+            <span className={label}>Veículos prioritários (domínios)</span>
+            <textarea name="priorityOutlets" defaultValue={cfg.priorityOutlets} rows={2} placeholder="cnnbrasil.com.br, folha.uol.com.br" className="input font-mono !text-[13px]" />
+            <span className="mt-1 block text-xs text-faint">Além do feed, o robô faz buscas só nesses sites para o federal, seu estado e sua cidade — cobertura mais funda do que o RSS entrega.</span>
+          </label>
           <p className="mt-3 text-xs text-faint"><b>0 = sem limite.</b> Idade máxima: descarta itens mais velhos que isso ao coletar (0 aceita tudo que o feed devolver). Guardar por: 0 mantém todo o histórico para sempre; favoritas nunca são apagadas. Horários (coleta de hora em hora, resumo às 7h) ficam nas variáveis INGEST_CRON e DIGEST_CRON do worker.</p>
         </section>
 
