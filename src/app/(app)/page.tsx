@@ -1,8 +1,10 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { ArticleCard, FeaturedCard, type ArticleView } from "@/components/article-card";
 import { FeedFilters } from "@/components/feed-filters";
 import { IconFilter, IconX } from "@/components/icons";
+import { RememberFilters } from "@/components/remember-filters";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
 import { db } from "@/lib/db";
 import { daysToRunoff } from "@/lib/election";
@@ -25,7 +27,18 @@ function href(sp: SP, patch: SP): string {
 
 export default async function FeedPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireUser();
-  const sp = await searchParams;
+  const raw = await searchParams;
+  // filtros guardados: valem quando a URL não traz nenhum filtro (links explícitos sempre vencem)
+  const FILTER_KEYS = ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo", "q", "pagina"];
+  let sp: SP = raw;
+  if (!FILTER_KEYS.some((k) => raw[k])) {
+    try {
+      const saved = JSON.parse(decodeURIComponent((await cookies()).get("pol_feed")?.value ?? "{}")) as SP;
+      sp = Object.fromEntries(Object.entries(saved).filter(([k, v]) => ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo"].includes(k) && typeof v === "string"));
+    } catch {
+      sp = raw;
+    }
+  }
   const scope: Scope = SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL";
   const agrupar = ["veiculo", "tipo", "categoria"].includes(sp.agrupar ?? "") ? sp.agrupar! : "";
   const page = Math.max(1, Number(sp.pagina) || 1);
@@ -119,6 +132,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   return (
     <div>
+      <RememberFilters />
       <header className="mb-6">
         <p className="eyebrow mb-1 block first-letter:uppercase">{today}</p>
         <h1 className="display text-4xl font-semibold leading-none sm:text-5xl">{place}</h1>
