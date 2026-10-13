@@ -1,10 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-const isPublic = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/api/cron(.*)", "/api/health"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublic(req)) await auth.protect();
-});
+// A proteção é feita em cada página/ação/rota (getDbUser/requireUser/requireAdmin e auth()),
+// como recomenda o Clerk; o middleware só disponibiliza a sessão.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [

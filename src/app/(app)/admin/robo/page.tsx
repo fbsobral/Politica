@@ -29,7 +29,7 @@ export default async function RoboPage({ searchParams }: { searchParams: Promise
   ]);
   const stats = [["Notícias", articles], ["Usuários", users], ["Representantes", pols]] as const;
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader eyebrow="Administração" title="Robô de notícias" />
       <AdminTabs active="robo" />
       {sp.iniciado && <div className="mb-5"><Notice kind="info">“{sp.iniciado}” iniciado em segundo plano. Atualize a página em instantes.</Notice></div>}
@@ -47,7 +47,7 @@ export default async function RoboPage({ searchParams }: { searchParams: Promise
       </div>
 
       <h2 className="display mb-3 text-xl font-semibold">Execuções recentes</h2>
-      <ul className="space-y-2">
+      <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
         {runs.map((r) => (
           <li key={r.id} className="card-flat flex items-start gap-3 p-3.5">
             <span className="mt-0.5 text-lg" aria-hidden>{!r.finishedAt ? "⏳" : r.ok ? "✅" : "❌"}</span>

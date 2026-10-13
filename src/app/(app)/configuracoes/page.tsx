@@ -36,11 +36,11 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const msg = sp.digest ? MSG[sp.digest] : null;
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader eyebrow={user.email} title="Sua conta" />
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div className="lg:col-span-2"><PageHeader eyebrow={user.email} title="Sua conta" /></div>
 
       {user.role === "ADMIN" && (
-        <Link href="/admin/usuarios" className="card-flat flex items-center justify-between gap-3 p-4 transition-shadow hover:shadow-card">
+        <Link href="/admin/usuarios" className="card-flat flex lg:col-span-2 items-center justify-between gap-3 p-4 transition-shadow hover:shadow-card">
           <span><b className="block">Painel de administração</b><span className="text-sm text-muted">Usuários, convites e robô de notícias.</span></span>
           <span aria-hidden>→</span>
         </Link>

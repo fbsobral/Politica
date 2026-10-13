@@ -19,6 +19,12 @@ enum Scope {
   FEDERAL
 }
 
+enum Branch {
+  LEGISLATIVO
+  EXECUTIVO
+  JUDICIARIO
+}
+
 enum SourceCategory {
   PORTAL_NACIONAL
   JORNAL
@@ -103,6 +109,7 @@ model Article {
   uf              String?
   municipalityKey String?
   category        NewsCategory @default(OUTROS)
+  branch          Branch?
   clusterKey      String
   searchText      String       @default("")
   classified      Boolean      @default(false)
@@ -115,6 +122,7 @@ model Article {
   alertMatches AlertMatch[]
 
   @@index([scope, publishedAt(sort: Desc)])
+  @@index([scope, branch, publishedAt(sort: Desc)])
   @@index([scope, uf, publishedAt(sort: Desc)])
   @@index([scope, uf, municipalityKey, publishedAt(sort: Desc)])
   @@index([clusterKey])
@@ -212,4 +220,27 @@ model JobRun {
   info       String?
 
   @@index([job, startedAt(sort: Desc)])
+}
+
+model FeedSource {
+  id              String         @id @default(cuid())
+  name            String         @unique
+  feedUrl         String         @unique
+  homepage        String?
+  category        SourceCategory @default(OUTRO)
+  scope           Scope          @default(FEDERAL)
+  branch          Branch?
+  uf              String?
+  municipality    String?
+  municipalityKey String?
+  active          Boolean        @default(true)
+  lastOkAt        DateTime?
+  lastError       String?
+  lastCount       Int?
+  createdAt       DateTime       @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
 }

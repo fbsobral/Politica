@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { sendDigestNow } from "@/lib/digest";
+import { runJob } from "@/lib/jobs";
 import { listMunicipalities } from "@/lib/ibge";
 import { syncUf } from "@/lib/politicians/sync";
 import { UFS } from "@/lib/taxonomy";
@@ -20,6 +21,8 @@ export async function saveLocation(formData: FormData) {
   await db.user.update({ where: { id: user.id }, data: { uf, municipality: match.name, municipalityKey: match.key } });
   // carrega eleitos da UF em segundo plano (download do TSE leva alguns segundos)
   syncUf(uf).catch((e) => console.warn("[syncUf]", (e as Error).message));
+  // coleta já as notícias da cidade escolhida, sem esperar a próxima hora cheia
+  runJob("ingest").catch(() => undefined);
   revalidatePath("/", "layout");
   redirect("/");
 }

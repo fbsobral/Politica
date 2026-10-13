@@ -2,6 +2,7 @@ import { processAlerts } from "@/lib/alerts";
 import { db } from "@/lib/db";
 import { sendDigests } from "@/lib/digest";
 import { runIngest } from "@/lib/news/ingest";
+import { getSettings } from "@/lib/settings";
 import { syncAll, syncMissing } from "@/lib/politicians/sync";
 
 export const JOBS = {
@@ -23,9 +24,10 @@ export const JOBS = {
     await syncMissing();
     return { ok: true };
   },
-  /** remove notícias com mais de 90 dias que ninguém favoritou */
+  /** remove notícias antigas (retenção configurável) que ninguém favoritou */
   async cleanup() {
-    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 90);
+    const days = Math.max(7, Number((await getSettings()).retentionDays) || 90);
+    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * days);
     const r = await db.article.deleteMany({ where: { publishedAt: { lt: cutoff }, favorites: { none: {} } } });
     return { deleted: r.count };
   },

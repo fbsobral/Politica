@@ -13,9 +13,9 @@ export default async function AlertasPage() {
   const user = await requireUser();
   const alerts = await db.alert.findMany({ where: { userId: user.id }, include: { politician: true }, orderBy: { createdAt: "desc" } });
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader eyebrow="Avisos por e-mail" title="Alertas" />
-      <p className="-mt-3 mb-6 text-[0.9375rem] leading-relaxed text-muted">
+      <p className="-mt-3 mb-6 max-w-3xl text-[0.9375rem] leading-relaxed text-muted">
         A cada hora, se uma notícia nova citar sua palavra-chave ou um político monitorado, enviamos um e-mail para <b className="text-ink">{user.email}</b>.
       </p>
       {!user.alertEmails && (
@@ -31,7 +31,7 @@ export default async function AlertasPage() {
       </form>
 
       {alerts.length ? (
-        <ul className="space-y-2.5">
+        <ul className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
           {alerts.map((a) => (
             <li key={a.id} className={`card-flat flex flex-wrap items-center gap-3 p-3.5 transition-opacity ${a.active ? "" : "opacity-60"}`}>
               {a.politician ? <Avatar p={a.politician} size={40} /> : <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-brand-soft text-brand"><IconSearch /></span>}

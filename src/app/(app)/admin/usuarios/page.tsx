@@ -14,7 +14,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
   const users = await db.user.findMany({ orderBy: { createdAt: "desc" } });
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div>
       <PageHeader eyebrow="Administração" title="Usuários" />
       <AdminTabs active="usuarios" />
       <div className="mb-5 space-y-2">

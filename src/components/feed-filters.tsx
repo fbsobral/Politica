@@ -25,6 +25,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
   return (
     <AutoForm className="space-y-5">
       <input type="hidden" name="esfera" value={scope.toLowerCase()} />
+      {sp.poder && <input type="hidden" name="poder" value={sp.poder} />}
 
       <div className="relative">
         <IconSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" width={18} height={18} />
@@ -88,7 +89,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
         <button className="btn btn-primary w-full">Aplicar filtros</button>
       </noscript>
 
-      {(sp.tipo || sp.veiculo || sp.cat || sp.q || sp.seguindo || sp.agrupar) && (
+      {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.q || sp.seguindo || sp.agrupar) && (
         <Link href={`/?esfera=${scope.toLowerCase()}`} className="btn btn-ghost btn-sm w-full">Limpar filtros</Link>
       )}
     </AutoForm>

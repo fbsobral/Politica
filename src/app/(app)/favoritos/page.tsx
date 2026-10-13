@@ -15,10 +15,10 @@ export default async function FavoritosPage() {
     orderBy: { createdAt: "desc" },
   });
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader eyebrow="Guardadas para depois" title="Favoritos" />
       {favs.length ? (
-        <div className="space-y-3.5">{favs.map((f, i) => <ArticleCard key={f.articleId} index={i} a={{ ...f.article, favorited: true, alsoIn: [] }} />)}</div>
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{favs.map((f, i) => <ArticleCard key={f.articleId} index={i} a={{ ...f.article, favorited: true, alsoIn: [] }} />)}</div>
       ) : (
         <EmptyState title="Nenhuma notícia salva" action={<Link href="/" className="btn btn-primary">Ir para o feed</Link>}>
           Toque na estrela de uma notícia para guardá-la aqui. Favoritas não são apagadas na limpeza automática.

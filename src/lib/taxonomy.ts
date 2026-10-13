@@ -1,4 +1,4 @@
-import type { NewsCategory, PoliticianRole, Scope, SourceCategory } from "@prisma/client";
+import type { Branch, NewsCategory, PoliticianRole, Scope, SourceCategory } from "@prisma/client";
 
 export const SCOPE_LABEL: Record<Scope, string> = {
   MUNICIPAL: "Municipal",
@@ -53,6 +53,13 @@ export const ROLE_LABEL: Record<PoliticianRole, string> = {
   VICE_PREFEITO: "Vice-prefeito(a)",
   VEREADOR: "Vereador(a)",
 };
+
+export const BRANCH_LABEL: Record<Branch, string> = {
+  LEGISLATIVO: "Legislativo",
+  EXECUTIVO: "Executivo",
+  JUDICIARIO: "Judiciário",
+};
+export const BRANCH_VALUES = Object.keys(BRANCH_LABEL) as Branch[];
 
 export const SCOPE_VALUES = Object.keys(SCOPE_LABEL) as Scope[];
 export const SOURCE_CATEGORY_VALUES = Object.keys(SOURCE_CATEGORY_LABEL) as SourceCategory[];

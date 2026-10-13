@@ -1,9 +1,10 @@
 import Parser from "rss-parser";
-import type { Scope } from "@prisma/client";
+import type { Branch, Scope } from "@prisma/client";
 import { db } from "@/lib/db";
+import { fillTemplate, getSettings, type Settings } from "@/lib/settings";
 import { UFS } from "@/lib/taxonomy";
 import { clusterKey, normalize, stripHtml, truncate } from "@/lib/text";
-import { classifyArticles, classifySources, type ClassifyInput } from "./classify";
+import { classifyArticles, classifySources, setAiEnabled, type ClassifyInput } from "./classify";
 import { NATIONAL_FEEDS, guessSourceCategory } from "./sources";
 
 const parser = new Parser({
@@ -18,8 +19,6 @@ const parser = new Parser({
   },
 });
 
-const MAX_AGE_MS = 1000 * 60 * 60 * 24 * 3;
-
 type Candidate = {
   url: string;
   title: string;
@@ -30,6 +29,7 @@ type Candidate = {
   sourceHomepage?: string;
   scope: Scope;
   scopeLocked: boolean;
+  branch: Branch | null;
   uf: string | null;
   municipalityKey: string | null;
   origin: string;
@@ -42,10 +42,12 @@ type Origin = {
   uf: string | null;
   municipalityKey: string | null;
   fixedSource?: { name: string; homepage: string };
+  feedId?: string;
+  branch?: Branch | null;
 };
 
-function googleNewsUrl(query: string): string {
-  const q = encodeURIComponent(`${query} when:3d`);
+function googleNewsUrl(query: string, days: number): string {
+  const q = encodeURIComponent(`${query} when:${days}d`);
   return `https://news.google.com/rss/search?q=${q}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
 }
 
@@ -60,7 +62,7 @@ function imageOf(item: Record<string, any>): string | null {
   );
 }
 
-async function fetchOrigin(o: Origin): Promise<Candidate[]> {
+async function fetchOrigin(o: Origin, maxAgeMs: number): Promise<Candidate[]> {
   try {
     const res = await fetch(o.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)", Accept: "application/rss+xml, application/xml, text/xml, */*" },
@@ -75,7 +77,7 @@ async function fetchOrigin(o: Origin): Promise<Candidate[]> {
       const rawTitle: string | undefined = item.title;
       if (!url || !rawTitle) continue;
       const publishedAt = new Date(item.isoDate ?? item.pubDate ?? Date.now());
-      if (Number.isNaN(publishedAt.getTime()) || Date.now() - publishedAt.getTime() > MAX_AGE_MS) continue;
+      if (Number.isNaN(publishedAt.getTime()) || Date.now() - publishedAt.getTime() > maxAgeMs) continue;
 
       let title = stripHtml(rawTitle);
       let sourceName = o.fixedSource?.name ?? "";
@@ -101,14 +103,17 @@ async function fetchOrigin(o: Origin): Promise<Candidate[]> {
         sourceHomepage: o.fixedSource?.homepage,
         scope: o.scope,
         scopeLocked: !o.fixedSource,
+        branch: o.branch ?? null,
         uf: o.uf,
         municipalityKey: o.municipalityKey,
         origin: o.label,
       });
     }
+    if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastOkAt: new Date(), lastError: null, lastCount: out.length } }).catch(() => undefined);
     return out;
   } catch (err) {
     console.warn(`[ingest] falha em ${o.label}:`, (err as Error).message);
+    if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastError: (err as Error).message.slice(0, 200) } }).catch(() => undefined);
     return [];
   }
 }
@@ -126,23 +131,51 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return results;
 }
 
-async function buildOrigins(): Promise<Origin[]> {
-  const origins: Origin[] = NATIONAL_FEEDS.map((f) => ({
-    label: `feed:${f.name}`,
-    url: f.feedUrl,
-    scope: "FEDERAL",
-    uf: null,
-    municipalityKey: null,
-    fixedSource: { name: f.name, homepage: f.homepage },
-  }));
+/** Cadastra os feeds padrão na primeira execução (depois a lista é gerenciada no painel admin). */
+export async function ensureDefaultFeeds(): Promise<void> {
+  if (!(await db.feedSource.count())) {
+    await db.feedSource.createMany({
+      data: NATIONAL_FEEDS.map((f) => ({ name: f.name, feedUrl: f.feedUrl, homepage: f.homepage, category: f.category, scope: "FEDERAL" as const, branch: f.branch })),
+      skipDuplicates: true,
+    });
+  }
+  for (const f of NATIONAL_FEEDS.filter((x) => x.branch)) {
+    await db.feedSource.updateMany({ where: { feedUrl: f.feedUrl, branch: null }, data: { branch: f.branch } });
+  }
+}
 
-  origins.push({
-    label: "gnews:federal",
-    url: googleNewsUrl('("governo federal" OR "Congresso Nacional" OR "Câmara dos Deputados" OR Senado OR STF) política'),
-    scope: "FEDERAL",
-    uf: null,
-    municipalityKey: null,
-  });
+async function buildOrigins(cfg: Settings): Promise<Origin[]> {
+  await ensureDefaultFeeds();
+  const days = Math.max(1, Number(cfg.maxAgeDays) || 3);
+  const origins: Origin[] = [];
+
+  const feeds = await db.feedSource.findMany({ where: { active: true } });
+  for (const f of feeds) {
+    origins.push({
+      label: f.scope === "FEDERAL" ? `feed:${f.name}` : `local:${f.name}`,
+      url: f.feedUrl,
+      scope: f.scope,
+      uf: f.uf,
+      municipalityKey: f.municipalityKey,
+      fixedSource: { name: f.name, homepage: f.homepage ?? f.feedUrl },
+      feedId: f.id,
+      branch: f.branch,
+    });
+  }
+
+  const gnews = cfg.googleNews === "1";
+  const BRANCHES: [Branch, "Legislativo" | "Executivo" | "Judiciario"][] = [
+    ["LEGISLATIVO", "Legislativo"],
+    ["EXECUTIVO", "Executivo"],
+    ["JUDICIARIO", "Judiciario"],
+  ];
+  const q = (level: "Federal" | "State" | "City", p: "Legislativo" | "Executivo" | "Judiciario") => cfg[`query${level}${p}` as keyof Settings];
+  if (gnews) {
+    for (const [branch, p] of BRANCHES) {
+      const query = q("Federal", p);
+      if (query.trim()) origins.push({ label: `gnews:federal:${branch}`, url: googleNewsUrl(query, days), scope: "FEDERAL", uf: null, municipalityKey: null, branch });
+    }
+  }
 
   const users = await db.user.findMany({
     where: { uf: { not: null } },
@@ -155,33 +188,65 @@ async function buildOrigins(): Promise<Origin[]> {
     ufs.add(u.uf);
     if (u.municipality && u.municipalityKey) cities.set(`${u.uf}:${u.municipalityKey}`, { uf: u.uf, name: u.municipality, key: u.municipalityKey });
   }
-  for (const uf of ufs) {
-    const state = UFS[uf];
-    origins.push({
-      label: `gnews:uf:${uf}`,
-      url: googleNewsUrl(`("governador" OR "Assembleia Legislativa" OR "governo do estado") "${state}"`),
-      scope: "ESTADUAL",
-      uf,
-      municipalityKey: null,
-    });
-  }
-  for (const c of cities.values()) {
-    origins.push({
-      label: `gnews:city:${c.uf}:${c.key}`,
-      url: googleNewsUrl(`"${c.name}" ${UFS[c.uf]} (prefeito OR prefeitura OR vereadores OR "câmara municipal")`),
-      scope: "MUNICIPAL",
-      uf: c.uf,
-      municipalityKey: c.key,
-    });
+  if (gnews) {
+    for (const uf of ufs) {
+      for (const [branch, p] of BRANCHES) {
+        const query = q("State", p);
+        if (!query.trim()) continue;
+        origins.push({
+          label: `gnews:uf:${uf}:${branch}`,
+          url: googleNewsUrl(fillTemplate(query, { estado: UFS[uf], uf }), days),
+          scope: "ESTADUAL",
+          uf,
+          municipalityKey: null,
+          branch,
+        });
+      }
+    }
+    for (const c of cities.values()) {
+      for (const [branch, p] of BRANCHES) {
+        const query = q("City", p);
+        if (!query.trim()) continue;
+        origins.push({
+          label: `gnews:city:${c.uf}:${c.key}:${branch}`,
+          url: googleNewsUrl(fillTemplate(query, { cidade: c.name, estado: UFS[c.uf], uf: c.uf }), days),
+          scope: "MUNICIPAL",
+          uf: c.uf,
+          municipalityKey: c.key,
+          branch,
+        });
+      }
+    }
   }
   return origins;
+}
+
+/** Testa um feed RSS (usado ao cadastrar): devolve quantos itens e o título do primeiro. */
+export async function probeFeed(url: string): Promise<{ ok: true; items: number; title: string } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const feed = await parser.parseString((await res.text()).replace(/^[^<]+/, ""));
+    if (!feed.items.length) return { ok: false, error: "O feed não tem itens" };
+    return { ok: true, items: feed.items.length, title: feed.title ?? "" };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+function isLocalOrigin(origin: string | null): boolean {
+  return Boolean(origin && (origin.startsWith("gnews:uf") || origin.startsWith("gnews:city") || origin.startsWith("local:")));
 }
 
 export type IngestResult = { fetched: number; created: number; classified: number; removed: number; newArticleIds: string[] };
 
 export async function runIngest(): Promise<IngestResult> {
-  const origins = await buildOrigins();
-  const batches = await mapLimit(origins, 6, fetchOrigin);
+  const cfg = await getSettings();
+  if (cfg.aiModel) process.env.ANTHROPIC_MODEL = cfg.aiModel;
+  setAiEnabled(cfg.aiClassify === "1");
+  const maxAgeMs = Math.max(1, Number(cfg.maxAgeDays) || 3) * 24 * 60 * 60 * 1000;
+  const origins = await buildOrigins(cfg);
+  const batches = await mapLimit(origins, 6, (o) => fetchOrigin(o, maxAgeMs));
   const all = batches.flat();
 
   // dedupe dentro do lote e contra o banco
@@ -228,6 +293,7 @@ export async function runIngest(): Promise<IngestResult> {
           scope: c.scope,
           uf: c.uf,
           municipalityKey: c.municipalityKey,
+          branch: c.branch,
           clusterKey: clusterKey(c.title),
           searchText: normalize(`${c.title} ${c.description ?? ""}`),
           origin: c.origin,
@@ -276,10 +342,11 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     description: a.description,
     source: a.source.name,
     scopeHint: a.scope,
-    scopeLocked: a.origin?.startsWith("gnews:uf") || a.origin?.startsWith("gnews:city") || false,
+    scopeLocked: isLocalOrigin(a.origin),
+    branchHint: a.branch,
     locationHint: a.municipalityKey
       ? `município de ${a.municipalityKey}, ${a.uf}`
-      : a.origin?.startsWith("gnews:uf") && a.uf
+      : isLocalOrigin(a.origin) && a.uf
         ? `estado de ${UFS[a.uf]} (${a.uf})`
         : undefined,
   }));
@@ -294,12 +361,12 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     const orig = pending.find((p) => p.id === r.id)!;
     let scope = r.scope;
     let uf = orig.uf;
-    if (!orig.origin?.startsWith("gnews:uf") && !orig.origin?.startsWith("gnews:city")) {
+    if (!isLocalOrigin(orig.origin)) {
       if (scope === "ESTADUAL") uf = r.uf;
       if (scope === "MUNICIPAL") scope = "ESTADUAL"; // sem cidade identificada, trate como estadual
       if (scope === "ESTADUAL" && !uf) scope = "FEDERAL";
     }
-    await db.article.update({ where: { id: r.id }, data: { scope, uf, category: r.category, classified: true } });
+    await db.article.update({ where: { id: r.id }, data: { scope, uf, category: r.category, branch: r.branch ?? orig.branch, classified: true } });
     classified++;
   }
   if (toRemove.length) await db.article.deleteMany({ where: { id: { in: toRemove } } });

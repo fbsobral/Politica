@@ -1,12 +1,12 @@
 import Link from "next/link";
-import type { NewsCategory, Scope, SourceCategory } from "@prisma/client";
+import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { ArticleCard, FeaturedCard, type ArticleView } from "@/components/article-card";
 import { FeedFilters } from "@/components/feed-filters";
 import { IconFilter, IconX } from "@/components/icons";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
 import { db } from "@/lib/db";
 import { buildWhere, scopeWhere } from "@/lib/feed";
-import { NEWS_CATEGORY_LABEL, SCOPE_LABEL, SCOPE_SLUG, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
+import { BRANCH_LABEL, BRANCH_VALUES, NEWS_CATEGORY_LABEL, SCOPE_LABEL, SCOPE_SLUG, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
 export const metadata = { title: "Feed" };
@@ -28,11 +28,12 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const scope: Scope = SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL";
   const agrupar = ["veiculo", "tipo", "categoria"].includes(sp.agrupar ?? "") ? sp.agrupar! : "";
   const page = Math.max(1, Number(sp.pagina) || 1);
-  const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, q: sp.q, seguindo: sp.seguindo === "1" };
+  const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, q: sp.q, seguindo: sp.seguindo === "1" };
 
   const where = await buildWhere(user, params);
   const facetWhere = (await buildWhere(user, { scope }))!;
-  const [rows, scopeCounts, bySource, byCat] = await Promise.all([
+  const branchFacetWhere = (await buildWhere(user, { ...params, poder: undefined }))!;
+  const [rows, scopeCounts, bySource, byCat, byBranch] = await Promise.all([
     where
       ? db.article.findMany({
           where,
@@ -45,6 +46,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     Promise.all((["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s) => db.article.count({ where: { classified: true, ...scopeWhere(user, s) } }))),
     db.article.groupBy({ by: ["sourceId"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["category"], where: facetWhere, _count: true }),
+    db.article.groupBy({ by: ["branch"], where: branchFacetWhere, _count: true }),
   ]);
   const hasMore = !agrupar && rows.length > PAGE;
   const pageRows = agrupar ? rows : rows.slice(0, PAGE);
@@ -82,6 +84,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       imageUrl: a.imageUrl ?? group.find((g) => g.imageUrl)?.imageUrl ?? null,
       publishedAt: a.publishedAt,
       category: a.category,
+      branch: a.branch,
       source: a.source,
       favorited: favSet.has(a.id),
       alsoIn: [...new Set(group.slice(1).map((g) => g.source.name).filter((n) => n !== a.source.name))].slice(0, 4),
@@ -100,11 +103,12 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   const today = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(new Date());
-  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
+  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
   const chips: { label: string; clear: SP }[] = [];
   if (sp.q) chips.push({ label: `“${sp.q}”`, clear: { q: undefined } });
   if (sp.tipo) chips.push({ label: SOURCE_CATEGORY_LABEL[sp.tipo as SourceCategory] ?? sp.tipo, clear: { tipo: undefined, veiculo: undefined } });
   if (sp.veiculo) chips.push({ label: srcById.get(sp.veiculo)?.name ?? "Veículo", clear: { veiculo: undefined } });
+  if (sp.poder) chips.push({ label: BRANCH_LABEL[sp.poder as Branch] ?? sp.poder, clear: { poder: undefined } });
   if (sp.cat) chips.push({ label: NEWS_CATEGORY_LABEL[sp.cat as NewsCategory] ?? sp.cat, clear: { cat: undefined } });
   if (sp.seguindo) chips.push({ label: "Quem eu sigo", clear: { seguindo: undefined } });
 
@@ -135,6 +139,17 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
           );
         })}
       </div>
+
+      <nav aria-label="Poder" className="scrollbar-none -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        {[{ v: "", l: "Todos os poderes", n: byBranch.reduce((a, b) => a + b._count, 0) }, ...BRANCH_VALUES.map((b) => ({ v: b, l: BRANCH_LABEL[b], n: byBranch.find((x) => x.branch === b)?._count ?? 0 }))].map((b) => {
+          const active = (sp.poder ?? "") === b.v;
+          return (
+            <Link key={b.v} href={href({ ...sp, pagina: undefined }, { poder: b.v || undefined })} aria-current={active ? "true" : undefined} className={`flex flex-none items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${active ? "border-brand bg-brand-soft text-brand" : "border-line-strong bg-surface text-muted hover:text-ink"}`}>
+              {b.l} <span className="text-xs font-medium opacity-60">{b.n}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
         <section aria-label="Notícias" className="min-w-0 space-y-4">

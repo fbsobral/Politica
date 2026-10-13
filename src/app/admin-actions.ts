@@ -98,3 +98,88 @@ export async function runJobNow(job: string) {
   revalidatePath("/admin/robo");
   redirect("/admin/robo?iniciado=" + encodeURIComponent(job));
 }
+
+// ───────── Configuração do robô ─────────
+import { saveSettings, SETTING_DEFAULTS, type Settings } from "@/lib/settings";
+import { probeFeed } from "@/lib/news/ingest";
+import { normalize } from "@/lib/text";
+import { UFS } from "@/lib/taxonomy";
+
+function backFontes(kind: "ok" | "erro", msg: string): never {
+  redirect(`/admin/fontes?${kind}=${encodeURIComponent(msg)}`);
+}
+
+export async function saveRobotSettings(formData: FormData) {
+  await requireAdmin();
+  const values: Partial<Settings> = {};
+  for (const key of Object.keys(SETTING_DEFAULTS) as (keyof Settings)[]) {
+    if (key === "googleNews" || key === "aiClassify") values[key] = formData.get(key) === "on" ? "1" : "0";
+    else values[key] = String(formData.get(key) ?? "").trim();
+  }
+  const num = (v: string | undefined, min: number, max: number, def: string) => String(Math.min(max, Math.max(min, Number(v) || Number(def))));
+  values.maxAgeDays = num(values.maxAgeDays, 1, 14, SETTING_DEFAULTS.maxAgeDays);
+  values.retentionDays = num(values.retentionDays, 7, 730, SETTING_DEFAULTS.retentionDays);
+  await saveSettings(values);
+  revalidatePath("/admin/fontes");
+  backFontes("ok", "Configuração salva. Vale na próxima coleta (ou clique em “Coletar notícias agora” na aba Robô).");
+}
+
+export async function resetRobotSettings() {
+  await requireAdmin();
+  await db.setting.deleteMany();
+  revalidatePath("/admin/fontes");
+  backFontes("ok", "Configuração restaurada para o padrão.");
+}
+
+const feedSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  feedUrl: z.string().trim().url("URL inválida"),
+  category: z.enum(["PORTAL_NACIONAL", "JORNAL", "REVISTA", "TV", "RADIO", "AGENCIA_NOTICIAS", "ORGAO_OFICIAL", "REGIONAL", "BLOG_INDEPENDENTE", "OUTRO"]),
+  scope: z.enum(["MUNICIPAL", "ESTADUAL", "FEDERAL"]),
+  branch: z.enum(["", "LEGISLATIVO", "EXECUTIVO", "JUDICIARIO"]),
+  uf: z.string().trim().toUpperCase().optional(),
+  municipality: z.string().trim().optional(),
+});
+
+export async function addFeed(formData: FormData) {
+  await requireAdmin();
+  const parsed = feedSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) backFontes("erro", parsed.error.issues[0].message);
+  const d = parsed.data;
+  if (d.scope !== "FEDERAL" && !(d.uf && d.uf in UFS)) backFontes("erro", "Feeds estaduais e municipais precisam de um estado (UF) válido.");
+  if (d.scope === "MUNICIPAL" && !d.municipality) backFontes("erro", "Feeds municipais precisam do nome do município.");
+  const probe = await probeFeed(d.feedUrl);
+  if (!probe.ok) backFontes("erro", `Não consegui ler esse feed: ${probe.error}`);
+  try {
+    await db.feedSource.create({
+      data: {
+        name: d.name,
+        feedUrl: d.feedUrl,
+        homepage: new URL(d.feedUrl).origin,
+        category: d.category,
+        scope: d.scope,
+        branch: d.branch || null,
+        uf: d.scope === "FEDERAL" ? null : d.uf,
+        municipality: d.scope === "MUNICIPAL" ? d.municipality : null,
+        municipalityKey: d.scope === "MUNICIPAL" ? normalize(d.municipality!) : null,
+      },
+    });
+  } catch {
+    backFontes("erro", "Já existe um feed com esse nome ou essa URL.");
+  }
+  revalidatePath("/admin/fontes");
+  backFontes("ok", `Feed “${d.name}” adicionado (${probe.items} itens encontrados).`);
+}
+
+export async function toggleFeed(id: string) {
+  await requireAdmin();
+  const f = await db.feedSource.findUnique({ where: { id } });
+  if (f) await db.feedSource.update({ where: { id }, data: { active: !f.active } });
+  revalidatePath("/admin/fontes");
+}
+
+export async function deleteFeed(id: string) {
+  await requireAdmin();
+  await db.feedSource.deleteMany({ where: { id } });
+  revalidatePath("/admin/fontes");
+}

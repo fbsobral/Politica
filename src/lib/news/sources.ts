@@ -1,4 +1,4 @@
-import type { SourceCategory } from "@prisma/client";
+import type { Branch, SourceCategory } from "@prisma/client";
 import { normalize } from "@/lib/text";
 
 export type FeedSource = {
@@ -6,6 +6,7 @@ export type FeedSource = {
   feedUrl: string;
   homepage: string;
   category: SourceCategory;
+  branch?: Branch;
 };
 
 /** Feeds RSS nacionais (esfera federal por padrão; a IA pode reclassificar). */
@@ -26,10 +27,10 @@ export const NATIONAL_FEEDS: FeedSource[] = [
   { name: "ConJur", feedUrl: "https://www.conjur.com.br/rss.xml", homepage: "https://www.conjur.com.br", category: "PORTAL_NACIONAL" },
   { name: "BBC News Brasil", feedUrl: "https://www.bbc.com/portuguese/index.xml", homepage: "https://www.bbc.com/portuguese", category: "PORTAL_NACIONAL" },
   { name: "Agência Brasil", feedUrl: "https://agenciabrasil.ebc.com.br/rss/politica/feed.xml", homepage: "https://agenciabrasil.ebc.com.br", category: "AGENCIA_NOTICIAS" },
-  { name: "Agência Câmara", feedUrl: "https://www.camara.leg.br/noticias/rss/dinamico/POLITICA", homepage: "https://www.camara.leg.br/noticias", category: "ORGAO_OFICIAL" },
-  { name: "Agência Senado", feedUrl: "https://www12.senado.leg.br/noticias/rss", homepage: "https://www12.senado.leg.br/noticias", category: "ORGAO_OFICIAL" },
-  { name: "Notícias do STF", feedUrl: "https://noticias.stf.jus.br/feed/", homepage: "https://noticias.stf.jus.br", category: "ORGAO_OFICIAL" },
-  { name: "Planalto", feedUrl: "https://www.gov.br/planalto/pt-br/acompanhe-o-planalto/noticias/RSS", homepage: "https://www.gov.br/planalto", category: "ORGAO_OFICIAL" },
+  { name: "Agência Câmara", feedUrl: "https://www.camara.leg.br/noticias/rss/dinamico/POLITICA", homepage: "https://www.camara.leg.br/noticias", category: "ORGAO_OFICIAL" , branch: "LEGISLATIVO" },
+  { name: "Agência Senado", feedUrl: "https://www12.senado.leg.br/noticias/rss", homepage: "https://www12.senado.leg.br/noticias", category: "ORGAO_OFICIAL" , branch: "LEGISLATIVO" },
+  { name: "Notícias do STF", feedUrl: "https://noticias.stf.jus.br/feed/", homepage: "https://noticias.stf.jus.br", category: "ORGAO_OFICIAL" , branch: "JUDICIARIO" },
+  { name: "Planalto", feedUrl: "https://www.gov.br/planalto/pt-br/acompanhe-o-planalto/noticias/RSS", homepage: "https://www.gov.br/planalto", category: "ORGAO_OFICIAL" , branch: "EXECUTIVO" },
 ];
 
 /** Veículos conhecidos que aparecem via Google News (nome normalizado → categoria). */

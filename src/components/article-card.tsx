@@ -1,10 +1,10 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { NewsCategory, SourceCategory } from "@prisma/client";
+import type { Branch, NewsCategory, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
 import { IconExternal, IconStar } from "@/components/icons";
 import { SourceAvatar } from "@/components/ui";
-import { NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
+import { BRANCH_LABEL, NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
 
 export type ArticleView = {
   id: string;
@@ -14,6 +14,7 @@ export type ArticleView = {
   imageUrl: string | null;
   publishedAt: Date;
   category: NewsCategory;
+  branch?: Branch | null;
   source: { name: string; category: SourceCategory };
   favorited: boolean;
   alsoIn: string[];
@@ -55,6 +56,7 @@ function Tags({ a }: { a: ArticleView }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <span className="chip !bg-brand-soft !text-brand">{NEWS_CATEGORY_LABEL[a.category]}</span>
+      {a.branch && <span className="chip">{BRANCH_LABEL[a.branch]}</span>}
       {a.alsoIn.length > 0 && (
         <span className="text-xs text-faint">
           também em <span className="text-muted">{a.alsoIn.join(", ")}</span>

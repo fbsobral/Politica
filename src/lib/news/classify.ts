@@ -1,8 +1,8 @@
-import type { NewsCategory, Scope, SourceCategory } from "@prisma/client";
+import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { z } from "zod";
 import { aiEnabled, ask, extractJson } from "@/lib/ai";
 import { normalize, truncate } from "@/lib/text";
-import { NEWS_CATEGORY_VALUES, SOURCE_CATEGORY_VALUES, UFS } from "@/lib/taxonomy";
+import { BRANCH_VALUES, NEWS_CATEGORY_VALUES, SOURCE_CATEGORY_VALUES, UFS } from "@/lib/taxonomy";
 
 export type ClassifyInput = {
   id: string;
@@ -12,6 +12,8 @@ export type ClassifyInput = {
   scopeHint: Scope;
   /** true quando o escopo vem de uma busca por cidade/UF e não deve mudar */
   scopeLocked: boolean;
+  /** poder sugerido pela origem (busca/feed), quando houver */
+  branchHint?: Branch | null;
   /** local esperado (ex: "Campinas, SP" ou "estado de São Paulo") quando a busca foi local */
   locationHint?: string;
 };
@@ -22,6 +24,7 @@ export type ClassifyOutput = {
   scope: Scope;
   uf: string | null;
   category: NewsCategory;
+  branch: Branch | null;
 };
 
 const KEYWORDS: [NewsCategory, RegExp][] = [
@@ -39,10 +42,23 @@ const KEYWORDS: [NewsCategory, RegExp][] = [
   ["ADMINISTRACAO", /prefeitura|prefeito|governo|secretar|licitacao|concurso|servidor|gestao|decreto/],
 ];
 
+let aiOn = true;
+/** Permite desligar a IA pela configuração do robô. */
+export function setAiEnabled(on: boolean) {
+  aiOn = on;
+}
+
+const BRANCH_RULES: [Branch, RegExp][] = [
+  ["JUDICIARIO", /\bstf\b|\bstj\b|\btse\b|\btre\b|\btjsp?\b|tribunal|juiz|juiza|desembargador|ministro do supremo|supremo|policia federal|\bpf\b|\bpgr\b|ministerio publico|promotor|\bmpf\b|\bmpsp\b|denuncia|condena|\bpreso\b|operacao/],
+  ["LEGISLATIVO", /camara dos deputados|\bsenado|\bsenador|deputad|vereador|camara municipal|assembleia legislativa|alesp|plenario|\bcpi\b|projeto de lei|\bpec\b|\bpl\b|congresso|relator|sessao/],
+  ["EXECUTIVO", /president[ea]|planalto|\bministr|ministerio|governador|governo|prefeit|secretari|decreto|medida provisoria|palacio/],
+];
+
 export function classifyByRules(i: ClassifyInput): ClassifyOutput {
   const text = normalize(`${i.title} ${i.description ?? ""}`);
   const category = KEYWORDS.find(([, re]) => re.test(text))?.[0] ?? "OUTROS";
-  return { id: i.id, political: true, scope: i.scopeHint, uf: null, category };
+  const branch = i.branchHint ?? BRANCH_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
+  return { id: i.id, political: true, scope: i.scopeHint, uf: null, category, branch };
 }
 
 const outSchema = z.array(
@@ -53,6 +69,7 @@ const outSchema = z.array(
     scope: z.enum(["MUNICIPAL", "ESTADUAL", "FEDERAL"]),
     uf: z.string().nullable().optional(),
     category: z.string(),
+    branch: z.string().nullable().optional(),
   }),
 );
 
@@ -60,17 +77,18 @@ const SYSTEM = `Você classifica notícias brasileiras sobre política para um a
 Para cada notícia devolva:
 - political: true se trata de política, governo, legislativo, judiciário, eleições, políticas públicas ou agentes públicos; false para esporte, celebridades, crimes comuns sem relação com poder público, etc.
 - scope: "FEDERAL" (presidência, ministérios, Congresso Nacional, STF/STJ/TSE, assuntos nacionais), "ESTADUAL" (governo do estado, assembleia legislativa, secretarias estaduais) ou "MUNICIPAL" (prefeitura, câmara de vereadores, assuntos da cidade). Quando "scopeLocked" for true, mantenha exatamente o "scopeHint".
+- branch: o poder a que a notícia mais se refere: \"LEGISLATIVO\" (Congresso, Câmara, Senado, assembleias, câmaras de vereadores, leis, CPIs, parlamentares), \"EXECUTIVO\" (presidente, governadores, prefeitos, ministérios, secretarias, decretos, gestão e políticas públicas) ou \"JUDICIARIO\" (STF, STJ, TSE, tribunais, juízes, Ministério Público, Polícia Federal, processos e decisões judiciais). Use null quando não houver poder claro (ex.: eleições e campanha em geral). "branchHint", quando existir, indica a origem da busca: confirme ou corrija.
 - onLocation: só quando "locationHint" existir. true SOMENTE se o fato principal da notícia acontece nesse estado/município ou envolve diretamente o governo/poder público dele. false se o foco é outro estado, outro município ou o plano nacional (ex.: eleição para governador do Acre quando o local é São Paulo; apoio a candidato a presidente; disputa nacional). Na dúvida, false.
 - uf: sigla do estado (ex: "SP") apenas se scope for ESTADUAL e o estado estiver explícito no texto; senão null.
 - category: uma de ${NEWS_CATEGORY_VALUES.join(", ")}.
-Responda SOMENTE com um array JSON: [{"id":"...","political":true,"onLocation":true,"scope":"FEDERAL","uf":null,"category":"ECONOMIA"}].`;
+Responda SOMENTE com um array JSON: [{"id":"...","political":true,"onLocation":true,"scope":"FEDERAL","uf":null,"branch":"EXECUTIVO","category":"ECONOMIA"}].`;
 
 const BATCH = 25;
 
 /** Classifica com Claude Haiku (em lotes); cai para regras se a IA estiver indisponível. */
 export async function classifyArticles(items: ClassifyInput[]): Promise<ClassifyOutput[]> {
   if (!items.length) return [];
-  if (!aiEnabled()) return items.map(classifyByRules);
+  if (!aiOn || !aiEnabled()) return items.map(classifyByRules);
 
   const batches: ClassifyInput[][] = [];
   for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));
@@ -84,6 +102,7 @@ export async function classifyArticles(items: ClassifyInput[]): Promise<Classify
       scopeHint: b.scopeHint,
       scopeLocked: b.scopeLocked,
       locationHint: b.locationHint,
+      branchHint: b.branchHint,
     }));
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -97,7 +116,8 @@ export async function classifyArticles(items: ClassifyInput[]): Promise<Classify
           if (!p) return classifyByRules(item);
           const category = (NEWS_CATEGORY_VALUES as string[]).includes(p.category) ? (p.category as NewsCategory) : classifyByRules(item).category;
           const uf = p.uf && p.uf.toUpperCase() in UFS ? p.uf.toUpperCase() : null;
-          return { id: item.id, political: p.political && !(item.locationHint && p.onLocation === false), scope: item.scopeLocked ? item.scopeHint : (p.scope as Scope), uf, category };
+          const branch = (BRANCH_VALUES as string[]).includes(p.branch ?? "") ? (p.branch as Branch) : (item.branchHint ?? null);
+          return { id: item.id, political: p.political && !(item.locationHint && p.onLocation === false), scope: item.scopeLocked ? item.scopeHint : (p.scope as Scope), uf, category, branch };
         });
       } catch (err) {
         lastErr = err as Error;
@@ -127,7 +147,7 @@ const srcSchema = z.record(z.string(), z.string());
 /** Categoriza veículos desconhecidos (nome → categoria). */
 export async function classifySources(names: string[]): Promise<Record<string, SourceCategory>> {
   const out: Record<string, SourceCategory> = {};
-  if (!names.length || !aiEnabled()) return out;
+  if (!names.length || !aiOn || !aiEnabled()) return out;
   const system = `Você categoriza veículos de comunicação brasileiros. Categorias possíveis: ${SOURCE_CATEGORY_VALUES.join(", ")}.
 PORTAL_NACIONAL = portal/site de notícias de alcance nacional; JORNAL = jornal (impresso/digital); REVISTA; TV; RADIO; AGENCIA_NOTICIAS; ORGAO_OFICIAL = site de governo, câmara, tribunal; REGIONAL = veículo local/regional; BLOG_INDEPENDENTE = blog ou mídia independente; OUTRO.
 Responda SOMENTE um objeto JSON {"nome do veículo":"CATEGORIA"}.`;
