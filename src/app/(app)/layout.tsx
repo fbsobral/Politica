@@ -1,7 +1,7 @@
-import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { IconBell, IconLogo, IconSettings, IconShield, IconStar, IconUser, IconFeed } from "@/components/icons";
+import { IconLogo, IconSettings, IconShield } from "@/components/icons";
 import { DesktopNav, MobileNav } from "@/components/nav";
+import { UserMenu } from "@/components/user-menu";
 import { UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -31,15 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/configuracoes" aria-label="Configurações da conta" title="Configurações" className="hidden h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-ink/5 hover:text-ink lg:flex">
             <IconSettings width={19} height={19} />
           </Link>
-          <UserButton>
-            <UserButton.MenuItems>
-              <UserButton.Link label="Diário Oficial" labelIcon={<IconFeed width={16} height={16} />} href="/diario-oficial" />
-              <UserButton.Link label="Favoritos" labelIcon={<IconStar width={16} height={16} />} href="/favoritos" />
-              <UserButton.Link label="Alertas" labelIcon={<IconBell width={16} height={16} />} href="/alertas" />
-              <UserButton.Link label="Minha conta" labelIcon={<IconUser width={16} height={16} />} href="/configuracoes" />
-              {isAdmin && <UserButton.Link label="Administração" labelIcon={<IconShield width={16} height={16} />} href="/admin" />}
-            </UserButton.MenuItems>
-          </UserButton>
+          <UserMenu isAdmin={isAdmin} />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
