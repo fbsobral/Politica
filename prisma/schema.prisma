@@ -93,6 +93,7 @@ model Source {
   homepage      String?
   category      SourceCategory @default(OUTRO)
   categoryKnown Boolean        @default(false)
+  factCheck     Boolean        @default(false)
   createdAt     DateTime       @default(now())
 
   articles Article[]
@@ -234,6 +235,7 @@ model FeedSource {
   municipality    String?
   municipalityKey String?
   active          Boolean        @default(true)
+  factCheck       Boolean        @default(false)
   lastOkAt        DateTime?
   lastError       String?
   lastCount       Int?

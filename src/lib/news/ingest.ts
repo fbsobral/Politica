@@ -5,7 +5,7 @@ import { fillTemplate, getSettings, type Settings } from "@/lib/settings";
 import { UFS } from "@/lib/taxonomy";
 import { clusterKey, normalize, stripHtml, truncate } from "@/lib/text";
 import { classifyArticles, classifySources, setAiEnabled, type ClassifyInput } from "./classify";
-import { NATIONAL_FEEDS, guessSourceCategory } from "./sources";
+import { FACT_CHECK_FEEDS, NATIONAL_FEEDS, guessSourceCategory } from "./sources";
 
 const parser = new Parser({
   timeout: 20000,
@@ -27,6 +27,7 @@ type Candidate = {
   publishedAt: Date;
   sourceName: string;
   sourceHomepage?: string;
+  factCheck?: boolean;
   scope: Scope;
   scopeLocked: boolean;
   branch: Branch | null;
@@ -44,6 +45,7 @@ type Origin = {
   fixedSource?: { name: string; homepage: string };
   feedId?: string;
   branch?: Branch | null;
+  factCheck?: boolean;
 };
 
 // days = 0 (sem limite): o Google News só devolve os itens mais recentes (~100), então usamos uma janela de 30 dias
@@ -103,6 +105,7 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
         publishedAt,
         sourceName,
         sourceHomepage: o.fixedSource?.homepage,
+        factCheck: o.factCheck,
         scope: o.scope,
         scopeLocked: !o.fixedSource,
         branch: o.branch ?? null,
@@ -141,6 +144,13 @@ export async function ensureDefaultFeeds(): Promise<void> {
       skipDuplicates: true,
     });
   }
+  if (!(await db.setting.findUnique({ where: { key: "seed_factcheck" } }))) {
+    await db.feedSource.createMany({
+      data: FACT_CHECK_FEEDS.map((f) => ({ name: f.name, feedUrl: f.feedUrl, homepage: f.homepage, category: f.category, scope: "FEDERAL" as const, factCheck: true })),
+      skipDuplicates: true,
+    });
+    await db.setting.create({ data: { key: "seed_factcheck", value: "1" } });
+  }
   for (const f of NATIONAL_FEEDS.filter((x) => x.branch)) {
     await db.feedSource.updateMany({ where: { feedUrl: f.feedUrl, branch: null }, data: { branch: f.branch } });
   }
@@ -163,6 +173,7 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
       fixedSource: { name: f.name, homepage: f.homepage ?? f.feedUrl },
       feedId: f.id,
       branch: f.branch,
+      factCheck: f.factCheck,
     });
   }
 
@@ -278,8 +289,9 @@ export async function runIngest(): Promise<IngestResult> {
         homepage: feed?.homepage ?? fresh.find((c) => c.sourceName === name)?.sourceHomepage ?? null,
         category: guessed ?? "OUTRO",
         categoryKnown: guessed !== null,
+        factCheck: fresh.find((c) => c.sourceName === name)?.factCheck ?? false,
       },
-      update: {},
+      update: fresh.find((c) => c.sourceName === name)?.factCheck ? { factCheck: true } : {},
     });
     sourceIds.set(name, src.id);
   }
@@ -338,7 +350,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     where: { classified: false },
     orderBy: { publishedAt: "desc" },
     take: limit,
-    include: { source: { select: { name: true } } },
+    include: { source: { select: { name: true, factCheck: true } } },
   });
   const inputs: ClassifyInput[] = pending.map((a) => ({
     id: a.id,
@@ -358,11 +370,11 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   let classified = 0;
   const toRemove: string[] = [];
   for (const r of results) {
-    if (!r.political) {
+    const orig = pending.find((p) => p.id === r.id)!;
+    if (!r.political && !orig.source.factCheck) {
       toRemove.push(r.id);
       continue;
     }
-    const orig = pending.find((p) => p.id === r.id)!;
     let scope = r.scope;
     let uf = orig.uf;
     if (!isLocalOrigin(orig.origin)) {

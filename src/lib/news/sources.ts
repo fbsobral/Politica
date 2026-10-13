@@ -7,6 +7,7 @@ export type FeedSource = {
   homepage: string;
   category: SourceCategory;
   branch?: Branch;
+  factCheck?: boolean;
 };
 
 /** Feeds RSS nacionais (esfera federal por padrão; a IA pode reclassificar). */
@@ -67,3 +68,10 @@ export function guessSourceCategory(rawName: string): SourceCategory | null {
   if (/\b(blog|midia|observatorio)\b/.test(n)) return "BLOG_INDEPENDENTE";
   return null;
 }
+
+/** Agências de checagem de fatos (cadastradas uma vez; depois são gerenciadas no painel). */
+export const FACT_CHECK_FEEDS: FeedSource[] = [
+  { name: "Agência Lupa", feedUrl: "https://lupa.news/feed/", homepage: "https://lupa.news", category: "AGENCIA_NOTICIAS", factCheck: true },
+  { name: "Aos Fatos", feedUrl: "https://www.aosfatos.org/noticias/feed/", homepage: "https://www.aosfatos.org", category: "AGENCIA_NOTICIAS", factCheck: true },
+  { name: "Projeto Comprova", feedUrl: "https://projetocomprova.com.br/feed/", homepage: "https://projetocomprova.com.br", category: "AGENCIA_NOTICIAS", factCheck: true },
+];

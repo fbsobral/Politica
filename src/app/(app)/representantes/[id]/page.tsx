@@ -4,6 +4,7 @@ import { togglePoliticianAlert } from "@/app/actions";
 import { ArticleCard } from "@/components/article-card";
 import { IconBell, IconMail, IconPhone, IconPin, IconExternal } from "@/components/icons";
 import { Avatar, FollowButton } from "@/components/politician-card";
+import { PoliticianExtra } from "@/components/politician-extra";
 import { EmptyState, PartyBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { normalize } from "@/lib/text";
@@ -71,6 +72,8 @@ export default async function PoliticianPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </section>
+
+      <PoliticianExtra p={p} />
 
       <section className="space-y-3.5">
         <h2 className="display text-2xl font-semibold">Nas notícias</h2>

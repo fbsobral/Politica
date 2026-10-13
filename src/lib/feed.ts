@@ -36,7 +36,7 @@ export async function followedNeedles(userId: string): Promise<string[]> {
 
 export async function buildWhere(user: FeedUser, p: FeedParams, opts: { ignore?: ("tipo" | "veiculo" | "cat" | "poder")[] } = {}): Promise<Prisma.ArticleWhereInput | null> {
   const ignore = opts.ignore ?? [];
-  const and: Prisma.ArticleWhereInput[] = [{ classified: true }, scopeWhere(user, p.scope)];
+  const and: Prisma.ArticleWhereInput[] = [{ classified: true }, { source: { factCheck: false } }, scopeWhere(user, p.scope)];
   if (!ignore.includes("tipo") && p.tipo && (SOURCE_CATEGORY_VALUES as string[]).includes(p.tipo)) and.push({ source: { category: p.tipo as SourceCategory } });
   if (!ignore.includes("veiculo") && p.veiculo) and.push({ sourceId: p.veiculo });
   if (!ignore.includes("cat") && p.cat && (NEWS_CATEGORY_VALUES as string[]).includes(p.cat)) and.push({ category: p.cat as NewsCategory });

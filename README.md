@@ -11,6 +11,11 @@ Feed de notícias políticas (municipal, estadual, federal) + diretório de repr
 - **Representantes:** prefeito, vice e vereadores; governador, vice e deputados estaduais; presidente, vice, senadores e deputados federais. Fontes: API da Câmara, API do Senado e dados abertos do TSE (eleitos 2022 e 2024).
 - **Seguir** políticos, **favoritar** notícias, **alertas** por palavra-chave/político (e-mail, a cada hora) e **resumo diário** às 7h (e-mail via Resend, resumo escrito pelo Haiku).
 
+- **Perfil do político:** projetos de lei de autoria (deputados e senadores) e gastos da cota parlamentar (deputados), buscados na fonte oficial na hora.
+- **Agenda e votações:** sessões e comissões da Câmara nos próximos 10 dias e últimas votações do plenário.
+- **Checagem de fatos:** Agência Lupa, Aos Fatos e Projeto Comprova lidos pelo robô, em página própria.
+- **Diário Oficial:** edições do seu município via [Querido Diário](https://queridodiario.ok.org.br), com busca por texto.
+
 ## Administração e papéis
 
 Dois papéis: **USER** e **ADMIN**. Defina `ADMIN_EMAILS` (vírgula) no ambiente: quem entrar com esses e-mails vira admin automaticamente (é assim que nasce o primeiro admin). Admins têm o menu **Admin**:

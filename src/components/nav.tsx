@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconBell, IconFeed, IconPeople, IconShield, IconStar, IconUser } from "./icons";
+import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar } from "./icons";
 
 type Item = { href: string; label: string; short?: string; icon: React.ReactNode; match: (p: string) => boolean };
 
@@ -10,18 +10,29 @@ function items(isAdmin: boolean): Item[] {
   const list: Item[] = [
     { href: "/", label: "Feed", icon: <IconFeed />, match: (p) => p === "/" },
     { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
-    { href: "/favoritos", label: "Favoritos", icon: <IconStar />, match: (p) => p.startsWith("/favoritos") },
+    { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
+    { href: "/checagens", label: "Checagens", icon: <IconShield />, match: (p) => p.startsWith("/checagens") },
+    { href: "/diario-oficial", label: "Diário Oficial", icon: <IconFeed />, match: (p) => p.startsWith("/diario-oficial") },
     { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-    { href: "/configuracoes", label: "Conta", icon: <IconUser />, match: (p) => p.startsWith("/configuracoes") },
+    { href: "/favoritos", label: "Favoritos", icon: <IconMore />, match: (p) => p.startsWith("/favoritos") },
+    { href: "/configuracoes", label: "Conta", icon: <IconMore />, match: (p) => p.startsWith("/configuracoes") },
   ];
   if (isAdmin) list.push({ href: "/admin/usuarios", label: "Admin", icon: <IconShield />, match: (p) => p.startsWith("/admin") });
   return list;
 }
 
+const MOBILE: Item[] = [
+  { href: "/", label: "Feed", icon: <IconFeed />, match: (p) => p === "/" },
+  { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
+  { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
+  { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+];
+
 export function DesktopNav({ isAdmin }: { isAdmin: boolean }) {
   const path = usePathname();
   return (
-    <nav className="hidden items-center gap-1 md:flex" aria-label="Principal">
+    <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Principal">
       {items(isAdmin).map((i) => {
         const active = i.match(path);
         return (
@@ -39,13 +50,13 @@ export function DesktopNav({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
+export function MobileNav() {
   const path = usePathname();
-  const list = items(isAdmin).filter((i) => i.href !== "/admin/usuarios");
+  const list = MOBILE;
   return (
     <nav
       aria-label="Principal"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/90 backdrop-blur-xl lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="mx-auto grid max-w-md grid-cols-5">
