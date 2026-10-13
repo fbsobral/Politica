@@ -118,6 +118,7 @@ export async function saveRobotSettings(formData: FormData) {
   }
   const num = (v: string | undefined, min: number, max: number, def: string) => String(Math.min(max, Math.max(min, v === undefined || v === "" || Number.isNaN(Number(v)) ? Number(def) : Number(v))));
   values.maxAgeDays = num(values.maxAgeDays, 0, 365, SETTING_DEFAULTS.maxAgeDays);
+  values.ingestIntervalMinutes = num(values.ingestIntervalMinutes, 10, 1440, SETTING_DEFAULTS.ingestIntervalMinutes);
   values.localMaxAgeDays = num(values.localMaxAgeDays, 0, 365, SETTING_DEFAULTS.localMaxAgeDays);
   values.retentionDays = num(values.retentionDays, 0, 3650, SETTING_DEFAULTS.retentionDays);
   await saveSettings(values);

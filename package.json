@@ -20,6 +20,7 @@
     "@clerk/nextjs": "^7.9.14",
     "@prisma/client": "^6.19.3",
     "adm-zip": "^0.6.1",
+    "cheerio": "^1.2.0",
     "date-fns": "^4.4.0",
     "next": "15.5.27",
     "node-cron": "^4.6.0",
@@ -28,8 +29,8 @@
     "react-dom": "~19.1.4",
     "resend": "^6.32.1",
     "rss-parser": "^3.13.0",
-    "zod": "^4.6.7",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

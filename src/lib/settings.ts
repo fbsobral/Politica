@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 
 export const SETTING_DEFAULTS = {
+  /** intervalo entre coletas automáticas, em minutos (10 a 1440) */
+  ingestIntervalMinutes: "60",
   /** idade máxima (dias) das notícias nacionais aceitas; 0 = sem limite */
   maxAgeDays: "0",
   /** idade máxima (dias) para notícias locais (estaduais/municipais); 0 = sem limite */

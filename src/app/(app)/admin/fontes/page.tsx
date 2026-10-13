@@ -57,6 +57,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
         <section className="card p-5 sm:p-6">
           <h2 className="display mb-4 text-xl font-semibold">Geral</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block"><span className={label}>Coletar a cada (minutos)</span><input name="ingestIntervalMinutes" type="number" min={10} max={1440} step={5} defaultValue={cfg.ingestIntervalMinutes} className="input" /></label>
             <label className="block"><span className={label}>Idade máx. nacionais (dias)</span><input name="maxAgeDays" type="number" min={0} max={365} defaultValue={cfg.maxAgeDays} className="input" /></label>
             <label className="block"><span className={label}>Idade máx. locais (dias)</span><input name="localMaxAgeDays" type="number" min={0} max={365} defaultValue={cfg.localMaxAgeDays} className="input" /></label>
             <label className="block"><span className={label}>Guardar histórico por (dias)</span><input name="retentionDays" type="number" min={0} max={3650} defaultValue={cfg.retentionDays} className="input" /></label>
@@ -71,7 +72,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
             <textarea name="priorityOutlets" defaultValue={cfg.priorityOutlets} rows={2} placeholder="cnnbrasil.com.br, folha.uol.com.br" className="input font-mono !text-[13px]" />
             <span className="mt-1 block text-xs text-faint">Além do feed, o robô faz buscas só nesses sites para o federal, seu estado e sua cidade — cobertura mais funda do que o RSS entrega.</span>
           </label>
-          <p className="mt-3 text-xs text-faint"><b>0 = sem limite.</b> Idade máxima: descarta itens mais velhos que isso ao coletar (0 aceita tudo que o feed devolver). Guardar por: 0 mantém todo o histórico para sempre; favoritas nunca são apagadas. Horários (coleta de hora em hora, resumo às 7h) ficam nas variáveis INGEST_CRON e DIGEST_CRON do worker.</p>
+          <p className="mt-3 text-xs text-faint"><b>0 = sem limite.</b> Idade máxima: descarta itens mais velhos que isso ao coletar (0 aceita tudo que o feed devolver). Guardar por: 0 mantém todo o histórico para sempre; favoritas nunca são apagadas. <b>Coletar a cada:</b> mínimo de 10 minutos (o robô confere a cada 5). Em produção com tarefas agendadas do Coolify, use uma tarefa a cada 10 minutos com <code>npm run job -- ingest --scheduled</code>. O horário dos resumos por e-mail continua nas variáveis DIGEST_CRON, WEEKLY_DIGEST_CRON e MONTHLY_DIGEST_CRON.</p>
         </section>
 
         {LEVELS.map(({ level, label: lvl, hint }) => (

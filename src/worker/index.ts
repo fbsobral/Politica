@@ -7,14 +7,15 @@ function schedule(expr: string, job: JobName) {
   cron.schedule(
     expr,
     () => {
-      runJob(job).catch(() => undefined);
+      runJob(job, { scheduled: true }).catch(() => undefined);
     },
     { timezone: tz },
   );
   console.log(`[worker] ${job} agendado: "${expr}" (${tz})`);
 }
 
-schedule(process.env.INGEST_CRON || "0 * * * *", "ingest");
+// verifica a cada 5 min; o intervalo real da coleta é configurado em Admin → Fontes e buscas
+schedule(process.env.INGEST_CRON || "*/5 * * * *", "ingest");
 schedule(process.env.DIGEST_CRON || "0 7 * * *", "digest");
 schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");
 schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");

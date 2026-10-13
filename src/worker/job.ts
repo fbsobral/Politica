@@ -2,10 +2,11 @@
 import { JOBS, runJob, type JobName } from "@/lib/jobs";
 
 const name = process.argv[2] as JobName;
+const scheduled = process.argv.includes("--scheduled");
 if (!name || !(name in JOBS)) {
   console.error(`Uso: npm run job -- <${Object.keys(JOBS).join("|")}>`);
   process.exit(1);
 }
-runJob(name)
+runJob(name, { scheduled })
   .then(() => process.exit(0))
   .catch(() => process.exit(1));

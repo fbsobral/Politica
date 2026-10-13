@@ -64,8 +64,18 @@ export type JobName = keyof typeof JOBS;
 
 const running = new Set<string>();
 
-export async function runJob(name: JobName): Promise<unknown> {
+/**
+ * `scheduled`: chamada por um agendador (cron do worker ou tarefa do Coolify). A coleta respeita o intervalo
+ * configurado no painel; execuções manuais (botão do admin, `npm run job -- ingest`) ignoram o intervalo.
+ */
+export async function runJob(name: JobName, opts: { scheduled?: boolean } = {}): Promise<unknown> {
   if (running.has(name)) return { skipped: "já em execução" };
+  if (opts.scheduled && name === "ingest") {
+    const minutes = Math.min(1440, Math.max(10, Number((await getSettings()).ingestIntervalMinutes) || 60));
+    const last = await db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
+    // tolerância de 3 min: os agendadores disparam em minutos "redondos"
+    if (last && Date.now() - last.startedAt.getTime() < (minutes - 3) * 60000) return { skipped: `próxima coleta em até ${minutes} min` };
+  }
   running.add(name);
   const run = await db.jobRun.create({ data: { job: name } });
   try {

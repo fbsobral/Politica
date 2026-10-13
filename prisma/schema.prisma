@@ -125,6 +125,10 @@ model Article {
   category        NewsCategory @default(OUTROS)
   branch          Branch?
   factCheck       Boolean      @default(false)
+  summary         String?
+  summaryKind     String?
+  summaryAt       DateTime?
+  directUrl       String?
   cargo           ElectionOffice?
   poll            Boolean      @default(false)
   clusterKey      String

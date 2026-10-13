@@ -29,6 +29,7 @@ function timeAgo(d: Date) {
 
 function sheetData(a: ArticleView) {
   return {
+    id: a.id,
     url: a.url,
     title: a.title,
     description: a.description,
