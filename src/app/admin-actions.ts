@@ -23,8 +23,14 @@ function back(kind: "ok" | "erro", msg: string): never {
 }
 
 function clerkMessage(err: unknown): string {
-  const e = err as { errors?: { longMessage?: string; message?: string }[]; message?: string };
-  return e.errors?.[0]?.longMessage ?? e.errors?.[0]?.message ?? e.message ?? "Erro desconhecido";
+  const e = err as { errors?: { longMessage?: string; message?: string; code?: string }[]; message?: string };
+  const raw = e.errors?.[0]?.longMessage ?? e.errors?.[0]?.message ?? e.message ?? "Erro desconhecido";
+  if (/only supported on instances that accept email/i.test(raw)) {
+    return "O Clerk não está aceitando e-mail como forma de login. No painel do Clerk, vá em Configure → User & authentication → Email, phone, username e ative “Email address”. Depois tente de novo.";
+  }
+  if (/already exists|is taken|form_identifier_exists/i.test(raw + (e.errors?.[0]?.code ?? ""))) return "Já existe uma conta com esse e-mail no Clerk.";
+  if (/password/i.test(raw) && /(pwned|breach|weak|short|length)/i.test(raw)) return `Senha recusada pelo Clerk: ${raw}`;
+  return raw;
 }
 
 export async function createUser(formData: FormData) {
