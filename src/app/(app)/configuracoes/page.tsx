@@ -16,6 +16,22 @@ const MSG: Record<string, [kind: "ok" | "erro" | "info", text: string]> = {
   erro: ["erro", "Não foi possível enviar. Verifique RESEND_API_KEY e EMAIL_FROM (domínio verificado no Resend)."],
 };
 
+function TierPicker({ name, value }: { name: string; value: string }) {
+  const selected = new Set(value.split(","));
+  return (
+    <fieldset className="flex flex-wrap items-center gap-2 pb-3 pl-0.5">
+      <legend className="sr-only">Tiers de veículos considerados</legend>
+      <span className="text-xs font-semibold text-muted">Veículos considerados:</span>
+      {[["1", "Tier 1"], ["2", "Tier 2"], ["3", "Tier 3"]].map(([v, l]) => (
+        <label key={v} className="cursor-pointer">
+          <input type="checkbox" name={name} value={v} defaultChecked={selected.has(v)} className="peer sr-only" />
+          <span className="block rounded-full border border-line-strong px-3 py-1 text-xs font-semibold text-muted transition peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand">{l}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 function Toggle({ name, defaultChecked, title, desc }: { name: string; defaultChecked: boolean; title: string; desc: string }) {
   return (
     <label className="flex cursor-pointer items-start justify-between gap-4 py-3">
@@ -41,8 +57,8 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
       <div className="lg:col-span-2"><PageHeader eyebrow={user.email} title="Sua conta" /></div>
 
       {user.role === "ADMIN" && (
-        <Link href="/admin/usuarios" className="card-flat flex lg:col-span-2 items-center justify-between gap-3 p-4 transition-shadow hover:shadow-card">
-          <span><b className="block">Painel de administração</b><span className="text-sm text-muted">Usuários, convites e robô de notícias.</span></span>
+        <Link href="/admin" className="card-flat flex lg:col-span-2 items-center justify-between gap-3 p-4 transition-shadow hover:shadow-card">
+          <span><b className="block">Painel de administração</b><span className="text-sm text-muted">Visão geral, usuários, fontes e robô de notícias.</span></span>
           <span aria-hidden>→</span>
         </Link>
       )}
@@ -51,9 +67,18 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
         <h2 className="display mb-1 text-xl font-semibold">E-mails</h2>
         <form action={savePrefs}>
           <div className="divide-y divide-line">
-            <Toggle name="dailyDigest" defaultChecked={user.dailyDigest} title="Resumo diário · todo dia às 7h" desc="Notícias das três esferas, votações recentes no Congresso, quem você segue e checagens." />
-            <Toggle name="weeklyDigest" defaultChecked={user.weeklyDigest} title="Resumo semanal · segunda às 7h" desc="Os assuntos que mais mexeram com a política na semana, com as votações do período." />
-            <Toggle name="monthlyDigest" defaultChecked={user.monthlyDigest} title="Resumo mensal · dia 1 às 7h" desc="Panorama do mês: principais notícias, votações e checagens." />
+            <div>
+              <Toggle name="dailyDigest" defaultChecked={user.dailyDigest} title="Resumo diário · todo dia às 7h" desc="Notícias das três esferas, votações recentes no Congresso, quem você segue e checagens." />
+              <TierPicker name="tiers_daily" value={user.digestTiersDaily} />
+            </div>
+            <div>
+              <Toggle name="weeklyDigest" defaultChecked={user.weeklyDigest} title="Resumo semanal · segunda às 7h" desc="Os assuntos que mais mexeram com a política na semana, com as votações do período." />
+              <TierPicker name="tiers_weekly" value={user.digestTiersWeekly} />
+            </div>
+            <div>
+              <Toggle name="monthlyDigest" defaultChecked={user.monthlyDigest} title="Resumo mensal · dia 1 às 7h" desc="Panorama do mês: principais notícias, votações e checagens." />
+              <TierPicker name="tiers_monthly" value={user.digestTiersMonthly} />
+            </div>
             <Toggle name="alertEmails" defaultChecked={user.alertEmails} title="Alertas" desc="Aviso quando surgirem notícias das suas palavras-chave e dos políticos monitorados." />
           </div>
           <SubmitButton className="btn btn-primary mt-3" pendingText="Salvando…">Salvar preferências</SubmitButton>

@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="truncate">{user.municipality} · {user.uf}</span>
           </Link>
           {isAdmin && (
-            <Link href="/admin/usuarios" className="hidden items-center gap-1.5 rounded-full bg-gold/25 px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gold/40 lg:flex" title="Painel de administração">
+            <Link href="/admin" className="hidden items-center gap-1.5 rounded-full bg-gold/25 px-3 py-1.5 text-sm font-semibold text-ink hover:bg-gold/40 lg:flex" title="Painel de administração">
               <IconShield width={16} height={16} /> Admin
             </Link>
           )}
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <UserButton.Link label="Favoritos" labelIcon={<IconStar width={16} height={16} />} href="/favoritos" />
               <UserButton.Link label="Alertas" labelIcon={<IconBell width={16} height={16} />} href="/alertas" />
               <UserButton.Link label="Minha conta" labelIcon={<IconUser width={16} height={16} />} href="/configuracoes" />
-              {isAdmin && <UserButton.Link label="Administração" labelIcon={<IconShield width={16} height={16} />} href="/admin/usuarios" />}
+              {isAdmin && <UserButton.Link label="Administração" labelIcon={<IconShield width={16} height={16} />} href="/admin" />}
             </UserButton.MenuItems>
           </UserButton>
         </div>

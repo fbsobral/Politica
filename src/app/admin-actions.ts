@@ -100,37 +100,50 @@ export async function runJobNow(job: string) {
 }
 
 // ───────── Configuração do robô ─────────
-import { saveSettings, SETTING_DEFAULTS, type Settings } from "@/lib/settings";
+import { saveSettings, SETTING_DEFAULTS, SETTING_GROUPS, type SettingGroup, type Settings } from "@/lib/settings";
 import { probeFeed } from "@/lib/news/ingest";
 import { normalize } from "@/lib/text";
 import { UFS } from "@/lib/taxonomy";
 
-function backFontes(kind: "ok" | "erro", msg: string): never {
-  redirect(`/admin/fontes?${kind}=${encodeURIComponent(msg)}`);
+function go(kind: "ok" | "erro", msg: string, path = "/admin"): never {
+  redirect(`${path}?${kind}=${encodeURIComponent(msg)}`);
 }
 
+/** Destino pós-ação vindo do formulário (`_back`), restrito ao painel admin. */
+function backOf(formData: FormData, fallback: string): string {
+  const b = String(formData.get("_back") ?? "");
+  return /^\/admin(\/[a-z-]*)?$/.test(b) ? b : fallback;
+}
+
+/** Salva só as configurações presentes no formulário (cada página do admin edita um grupo). */
 export async function saveRobotSettings(formData: FormData) {
   await requireAdmin();
   const values: Partial<Settings> = {};
   for (const key of Object.keys(SETTING_DEFAULTS) as (keyof Settings)[]) {
-    if (key === "googleNews" || key === "aiClassify") values[key] = formData.get(key) === "on" ? "1" : "0";
-    else values[key] = String(formData.get(key) ?? "").trim();
+    if (formData.has(`__cb_${key}`)) values[key] = formData.get(key) === "on" ? "1" : "0";
+    else if (formData.has(key)) values[key] = String(formData.get(key) ?? "").trim();
   }
   const num = (v: string | undefined, min: number, max: number, def: string) => String(Math.min(max, Math.max(min, v === undefined || v === "" || Number.isNaN(Number(v)) ? Number(def) : Number(v))));
-  values.maxAgeDays = num(values.maxAgeDays, 0, 365, SETTING_DEFAULTS.maxAgeDays);
-  values.ingestIntervalMinutes = num(values.ingestIntervalMinutes, 10, 1440, SETTING_DEFAULTS.ingestIntervalMinutes);
-  values.localMaxAgeDays = num(values.localMaxAgeDays, 0, 365, SETTING_DEFAULTS.localMaxAgeDays);
-  values.retentionDays = num(values.retentionDays, 0, 3650, SETTING_DEFAULTS.retentionDays);
+  if (values.maxAgeDays !== undefined) values.maxAgeDays = num(values.maxAgeDays, 0, 365, SETTING_DEFAULTS.maxAgeDays);
+  if (values.ingestIntervalMinutes !== undefined) values.ingestIntervalMinutes = num(values.ingestIntervalMinutes, 10, 1440, SETTING_DEFAULTS.ingestIntervalMinutes);
+  if (values.localMaxAgeDays !== undefined) values.localMaxAgeDays = num(values.localMaxAgeDays, 0, 365, SETTING_DEFAULTS.localMaxAgeDays);
+  if (values.retentionDays !== undefined) values.retentionDays = num(values.retentionDays, 0, 3650, SETTING_DEFAULTS.retentionDays);
   await saveSettings(values);
-  revalidatePath("/admin/fontes");
-  backFontes("ok", "Configuração salva. Vale na próxima coleta (ou clique em “Coletar notícias agora” na aba Robô).");
+  const back = backOf(formData, "/admin/robo");
+  revalidatePath(back);
+  go("ok", "Configuração salva. Vale na próxima coleta (ou use “Coletar notícias agora” no Robô).", back);
 }
 
-export async function resetRobotSettings() {
+/** Restaura o padrão apenas do grupo de configurações da página (não mexe nos marcadores internos). */
+export async function resetRobotSettings(formData: FormData) {
   await requireAdmin();
-  await db.setting.deleteMany();
-  revalidatePath("/admin/fontes");
-  backFontes("ok", "Configuração restaurada para o padrão.");
+  const group = String(formData.get("_group") ?? "") as SettingGroup;
+  const keys = SETTING_GROUPS[group];
+  if (!keys) go("erro", "Grupo de configurações inválido.");
+  await db.setting.deleteMany({ where: { key: { in: [...keys] } } });
+  const back = backOf(formData, "/admin/robo");
+  revalidatePath(back);
+  go("ok", "Configuração restaurada para o padrão.", back);
 }
 
 const feedSchema = z.object({
@@ -143,15 +156,19 @@ const feedSchema = z.object({
   municipality: z.string().trim().optional(),
 });
 
+function goFeeds(k: "ok" | "erro", m: string): never {
+  return go(k, m, "/admin/feeds");
+}
+
 export async function addFeed(formData: FormData) {
   await requireAdmin();
   const parsed = feedSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) backFontes("erro", parsed.error.issues[0].message);
+  if (!parsed.success) goFeeds("erro", parsed.error.issues[0].message);
   const d = parsed.data;
-  if (d.scope !== "FEDERAL" && !(d.uf && d.uf in UFS)) backFontes("erro", "Feeds estaduais e municipais precisam de um estado (UF) válido.");
-  if (d.scope === "MUNICIPAL" && !d.municipality) backFontes("erro", "Feeds municipais precisam do nome do município.");
+  if (d.scope !== "FEDERAL" && !(d.uf && d.uf in UFS)) goFeeds("erro", "Feeds estaduais e municipais precisam de um estado (UF) válido.");
+  if (d.scope === "MUNICIPAL" && !d.municipality) goFeeds("erro", "Feeds municipais precisam do nome do município.");
   const probe = await probeFeed(d.feedUrl);
-  if (!probe.ok) backFontes("erro", `Não consegui ler esse feed: ${probe.error}`);
+  if (!probe.ok) goFeeds("erro", `Não consegui ler esse feed: ${probe.error}`);
   try {
     await db.feedSource.create({
       data: {
@@ -167,23 +184,27 @@ export async function addFeed(formData: FormData) {
       },
     });
   } catch {
-    backFontes("erro", "Já existe um feed com esse nome ou essa URL.");
+    goFeeds("erro", "Já existe um feed com esse nome ou essa URL.");
   }
-  revalidatePath("/admin/fontes");
-  backFontes("ok", `Feed “${d.name}” adicionado (${probe.items} itens encontrados).`);
+  revalidatePath("/admin/feeds");
+  goFeeds("ok", `Feed “${d.name}” adicionado (${probe.items} itens encontrados).`);
 }
 
 export async function toggleFeed(id: string) {
   await requireAdmin();
   const f = await db.feedSource.findUnique({ where: { id } });
   if (f) await db.feedSource.update({ where: { id }, data: { active: !f.active } });
-  revalidatePath("/admin/fontes");
+  revalidatePath("/admin/feeds");
 }
 
 export async function deleteFeed(id: string) {
   await requireAdmin();
   await db.feedSource.deleteMany({ where: { id } });
-  revalidatePath("/admin/fontes");
+  revalidatePath("/admin/feeds");
+}
+
+function goTiers(k: "ok" | "erro", m: string): never {
+  return go(k, m, "/admin/veiculos");
 }
 
 export async function saveTiers(formData: FormData) {
@@ -202,8 +223,8 @@ export async function saveTiers(formData: FormData) {
       await db.source.update({ where: { id: s.id }, data: { tierBy: "admin" } }); // confirmou a sugestão
     }
   }
-  revalidatePath("/admin/fontes");
-  backFontes("ok", changed ? `${changed} veículo(s) atualizado(s).` : "Nenhuma mudança.");
+  revalidatePath("/admin/veiculos");
+  goTiers("ok", changed ? `${changed} veículo(s) atualizado(s).` : "Nenhuma mudança.");
 }
 
 function parseIds(formData: FormData): string[] {
@@ -216,27 +237,27 @@ export async function bulkApplyTiers(formData: FormData) {
   const ids = parseIds(formData);
   const raw = String(formData.get("bulkTier") ?? "");
   const tier = raw === "" ? null : Number(raw);
-  if (!ids.length) backFontes("erro", "Marque pelo menos um veículo.");
-  if (tier !== null && ![1, 2, 3].includes(tier)) backFontes("erro", "Tier inválido.");
+  if (!ids.length) goTiers("erro", "Marque pelo menos um veículo.");
+  if (tier !== null && ![1, 2, 3].includes(tier)) goTiers("erro", "Tier inválido.");
   const r = await db.source.updateMany({ where: { id: { in: ids } }, data: { tier, tierBy: tier === null ? null : "admin" } });
-  revalidatePath("/admin/fontes");
-  backFontes("ok", `${r.count} veículo(s) definidos como ${tier ? `Tier ${tier}` : "sem tier"}.`);
+  revalidatePath("/admin/veiculos");
+  goTiers("ok", `${r.count} veículo(s) definidos como ${tier ? `Tier ${tier}` : "sem tier"}.`);
 }
 
 /** Confirma como definitivas as sugestões da IA dos veículos marcados. */
 export async function bulkConfirmTiers(formData: FormData) {
   await requireAdmin();
   const ids = parseIds(formData);
-  if (!ids.length) backFontes("erro", "Marque pelo menos um veículo.");
+  if (!ids.length) goTiers("erro", "Marque pelo menos um veículo.");
   const r = await db.source.updateMany({ where: { id: { in: ids }, tierBy: "ai" }, data: { tierBy: "admin" } });
-  revalidatePath("/admin/fontes");
-  backFontes("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
+  revalidatePath("/admin/veiculos");
+  goTiers("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
 }
 
 /** Confirma TODAS as sugestões pendentes da IA. */
 export async function confirmAllAiTiers() {
   await requireAdmin();
   const r = await db.source.updateMany({ where: { tierBy: "ai" }, data: { tierBy: "admin" } });
-  revalidatePath("/admin/fontes");
-  backFontes("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
+  revalidatePath("/admin/veiculos");
+  goTiers("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
 }

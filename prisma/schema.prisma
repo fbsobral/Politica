@@ -86,6 +86,10 @@ model User {
   dailyDigest      Boolean  @default(true)
   weeklyDigest     Boolean  @default(false)
   monthlyDigest    Boolean  @default(false)
+  /// tiers de veículos considerados em cada resumo (ex.: "1,2"); padrão: todos
+  digestTiersDaily   String @default("1,2,3")
+  digestTiersWeekly  String @default("1,2,3")
+  digestTiersMonthly String @default("1,2,3")
   alertEmails      Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

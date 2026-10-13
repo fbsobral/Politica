@@ -27,6 +27,12 @@ export async function saveLocation(formData: FormData) {
   redirect("/");
 }
 
+/** Tiers marcados (1-3) como "1,2"; se nenhum estiver marcado, vale todos. */
+function tiersOf(formData: FormData, name: string): string {
+  const t = [...new Set(formData.getAll(name).map(Number).filter((n) => [1, 2, 3].includes(n)))].sort();
+  return (t.length ? t : [1, 2, 3]).join(",");
+}
+
 export async function savePrefs(formData: FormData) {
   const user = await getDbUser();
   await db.user.update({
@@ -35,6 +41,9 @@ export async function savePrefs(formData: FormData) {
       dailyDigest: formData.get("dailyDigest") === "on",
       weeklyDigest: formData.get("weeklyDigest") === "on",
       monthlyDigest: formData.get("monthlyDigest") === "on",
+      digestTiersDaily: tiersOf(formData, "tiers_daily"),
+      digestTiersWeekly: tiersOf(formData, "tiers_weekly"),
+      digestTiersMonthly: tiersOf(formData, "tiers_monthly"),
       alertEmails: formData.get("alertEmails") === "on",
     },
   });

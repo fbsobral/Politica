@@ -54,3 +54,10 @@ export async function saveSettings(values: Partial<Settings>): Promise<void> {
 export function fillTemplate(tpl: string, vars: { estado?: string; cidade?: string; uf?: string }): string {
   return tpl.replace(/\{(estado|cidade|uf)\}/g, (_, k: "estado" | "cidade" | "uf") => vars[k] ?? "");
 }
+
+/** Grupos de configurações editados em páginas diferentes do admin (cada formulário só salva o seu grupo). */
+export const SETTING_GROUPS = {
+  geral: ["ingestIntervalMinutes", "maxAgeDays", "localMaxAgeDays", "retentionDays", "aiModel", "googleNews", "aiClassify"],
+  buscas: Object.keys(SETTING_DEFAULTS).filter((k) => k === "priorityOutlets" || k.startsWith("query")),
+} as const satisfies Record<string, readonly string[]>;
+export type SettingGroup = keyof typeof SETTING_GROUPS;

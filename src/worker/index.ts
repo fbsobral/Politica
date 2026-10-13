@@ -14,7 +14,7 @@ function schedule(expr: string, job: JobName) {
   console.log(`[worker] ${job} agendado: "${expr}" (${tz})`);
 }
 
-// verifica a cada 5 min; o intervalo real da coleta é configurado em Admin → Fontes e buscas
+// verifica a cada 5 min; o intervalo real da coleta é configurado em Admin → Robô
 schedule(process.env.INGEST_CRON || "*/5 * * * *", "ingest");
 schedule(process.env.DIGEST_CRON || "0 7 * * *", "digest");
 schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");

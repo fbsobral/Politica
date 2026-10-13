@@ -28,9 +28,20 @@ export function todayKey(): string {
 /** assuntos cobertos por mais veículos pesam mais; veículos tier 1 e 2 dão um bônus */
 const weight = (c: { source: { tier: number | null } }[]) => c.length + c.reduce((n, r) => n + (r.source.tier === 1 ? 1 : r.source.tier === 2 ? 0.4 : 0), 0);
 
-async function topNews(where: Prisma.ArticleWhereInput, since: Date, take: number): Promise<Item[]> {
+/** tiers aceitos no resumo; veículos sem tier contam como Tier 3 */
+function tierWhere(tiers: number[]): Prisma.ArticleWhereInput {
+  if (tiers.length >= 3) return {};
+  return { source: { OR: [{ tier: { in: tiers } }, ...(tiers.includes(3) ? [{ tier: null }] : [])] } };
+}
+
+export function parseTiers(raw: string | null | undefined): number[] {
+  const t = (raw ?? "1,2,3").split(",").map(Number).filter((n) => [1, 2, 3].includes(n));
+  return t.length ? [...new Set(t)].sort() : [1, 2, 3];
+}
+
+async function topNews(where: Prisma.ArticleWhereInput, since: Date, take: number, tiers: number[] = [1, 2, 3]): Promise<Item[]> {
   const rows = await db.article.findMany({
-    where: { classified: true, publishedAt: { gte: since }, ...where },
+    where: { classified: true, publishedAt: { gte: since }, ...where, AND: [tierWhere(tiers)] },
     include: { source: true },
     orderBy: { publishedAt: "desc" },
     take: take * 10,
@@ -64,9 +75,9 @@ function cached(cache: Cache, key: string, build: () => Promise<Block>): Promise
   return cache.get(key)!;
 }
 
-const newsBlock = (kind: DigestKind, cache: Cache, key: string, label: string, where: Prisma.ArticleWhereInput, since: Date) =>
-  cached(cache, `${kind}:${key}`, async () => {
-    const items = await topNews({ factCheck: false, ...where }, since, PERIOD[kind].take);
+const newsBlock = (kind: DigestKind, cache: Cache, key: string, label: string, where: Prisma.ArticleWhereInput, since: Date, tiers: number[]) =>
+  cached(cache, `${kind}:${tiers.join("")}:${key}`, async () => {
+    const items = await topNews({ factCheck: false, ...where }, since, PERIOD[kind].take, tiers);
     return { items, summary: await summarize(kind, label, items.map((i) => `${i.title} (${i.source})`)) };
   });
 
@@ -127,18 +138,19 @@ function congressSection(c: Congress, kind: DigestKind): string {
   );
 }
 
-type DigestUser = { id: string; email: string; uf: string | null; municipality: string | null; municipalityKey: string | null };
+type DigestUser = { id: string; email: string; uf: string | null; municipality: string | null; municipalityKey: string | null; digestTiersDaily?: string; digestTiersWeekly?: string; digestTiersMonthly?: string };
 
 async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, congressCache: Map<string, Promise<Congress>>): Promise<boolean | "empty"> {
   const since = new Date(Date.now() - PERIOD[kind].days * 86400000);
   const uf = user.uf!;
   const local = user.municipalityKey ? { uf, municipalityKey: user.municipalityKey } : null;
   const needles = await followedNeedles(user.id);
+  const tiers = parseTiers(kind === "daily" ? user.digestTiersDaily : kind === "weekly" ? user.digestTiersWeekly : user.digestTiersMonthly);
 
   const [mun, est, fed, congress, checks, follows] = await Promise.all([
-    local ? newsBlock(kind, cache, `mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, { scope: "MUNICIPAL", ...local }, since) : Promise.resolve({ items: [], summary: null } as Block),
-    newsBlock(kind, cache, `est:${uf}`, `Estadual — ${UFS[uf]}`, { scope: "ESTADUAL", uf }, since),
-    newsBlock(kind, cache, "fed", "Federal", { scope: "FEDERAL" }, since),
+    local ? newsBlock(kind, cache, `mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, { scope: "MUNICIPAL", ...local }, since, tiers) : Promise.resolve({ items: [], summary: null } as Block),
+    newsBlock(kind, cache, `est:${uf}`, `Estadual — ${UFS[uf]}`, { scope: "ESTADUAL", uf }, since, tiers),
+    newsBlock(kind, cache, "fed", "Federal", { scope: "FEDERAL" }, since, tiers),
     congressBlock(kind, congressCache),
     cached(cache, `${kind}:fc:${uf}:${user.municipalityKey}`, async () => ({
       items: await topNews(
@@ -149,7 +161,7 @@ async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, co
       summary: null,
     })),
     needles.length
-      ? topNews({ factCheck: false, OR: needles.map((n) => ({ searchText: { contains: n } })) }, since, PERIOD[kind].take)
+      ? topNews({ factCheck: false, OR: needles.map((n) => ({ searchText: { contains: n } })) }, since, PERIOD[kind].take, tiers)
       : Promise.resolve([] as Item[]),
   ]);
 

@@ -14,7 +14,7 @@ export default async function MaisPage() {
     { href: "/favoritos", t: "Favoritos", d: "Notícias salvas", i: <IconStar /> },
     { href: "/alertas", t: "Alertas", d: "Palavras-chave e políticos", i: <IconBell /> },
     { href: "/configuracoes", t: "Conta", d: "E-mails e localização", i: <IconUser /> },
-    ...(user.role === "ADMIN" ? [{ href: "/admin/usuarios", t: "Administração", d: "Usuários, fontes e robô", i: <IconShield /> }] : []),
+    ...(user.role === "ADMIN" ? [{ href: "/admin", t: "Administração", d: "Visão geral, usuários, fontes e robô", i: <IconShield /> }] : []),
   ];
   return (
     <div>

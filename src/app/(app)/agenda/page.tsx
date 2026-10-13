@@ -126,7 +126,7 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
       {items.length ? (
         <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{items.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />)}</div>
       ) : (
-        <EmptyState title="Nada sobre sessões ou votações por enquanto">O robô procura essas notícias a cada hora. Ajuste as buscas em Admin → Fontes e buscas se quiser ampliar.</EmptyState>
+        <EmptyState title="Nada sobre sessões ou votações por enquanto">O robô procura essas notícias a cada hora. Ajuste as buscas em Admin → Buscas se quiser ampliar.</EmptyState>
       )}
     </div>
   );

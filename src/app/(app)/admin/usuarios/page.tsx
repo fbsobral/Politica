@@ -1,6 +1,6 @@
 import { createUser, deleteUser, setRole } from "@/app/admin-actions";
-import { AdminTabs } from "@/components/admin-tabs";
 import { Notice, PageHeader } from "@/components/ui";
+import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit-button";
 import { SourceAvatar } from "@/components/ui";
 import { db } from "@/lib/db";
@@ -17,7 +17,6 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader eyebrow="Administração" title="Usuários" />
-      <AdminTabs active="usuarios" />
       <div className="mb-5 space-y-2">
         {sp.ok && <Notice kind="ok">{sp.ok}</Notice>}
         {sp.erro && <Notice kind="erro">{sp.erro}</Notice>}
@@ -66,7 +65,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
                   ) : (
                     <div className="flex gap-1">
                       <form action={setRole.bind(null, u.id, u.role === "ADMIN" ? "USER" : "ADMIN")}><button className="btn btn-ghost btn-sm">{u.role === "ADMIN" ? "Tornar usuário" : "Tornar admin"}</button></form>
-                      <form action={deleteUser.bind(null, u.id)}><button className="btn btn-danger btn-sm">Excluir</button></form>
+                      <form action={deleteUser.bind(null, u.id)}><ConfirmButton message={`Excluir ${u.email}? A conta também será removida do login e não dá para desfazer.`}>Excluir</ConfirmButton></form>
                     </div>
                   )}
                 </li>
