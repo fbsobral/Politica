@@ -1,7 +1,7 @@
 import { processAlerts } from "@/lib/alerts";
 import { db } from "@/lib/db";
 import { sendDigests } from "@/lib/digest";
-import { runIngest } from "@/lib/news/ingest";
+import { classifyPending, runIngest } from "@/lib/news/ingest";
 import { getSettings } from "@/lib/settings";
 import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
@@ -23,6 +23,22 @@ export const JOBS = {
   async politicians() {
     await syncAll();
     return { ok: true };
+  },
+  /** reclassifica notícias eleitorais sem cargo (preenche cargo e pesquisa nas antigas) */
+  async reclassifyElections() {
+    const reopened = await db.article.updateMany({
+      where: { cargo: null, OR: [{ category: "ELEICOES" }, { searchText: { contains: "eleic" } }, { searchText: { contains: "candidat" } }, { searchText: { contains: "pesquisa" } }, { searchText: { contains: "segundo turno" } }] },
+      data: { classified: false },
+    });
+    let classified = 0;
+    let removed = 0;
+    for (let round = 0; round < 10; round++) {
+      const r = await classifyPending();
+      classified += r.classified;
+      removed += r.removed;
+      if (r.classified + r.removed < 300) break;
+    }
+    return { reopened: reopened.count, classified, removed };
   },
   /** candidatos das eleições 2026 (presidente, governador, senado) */
   async candidates() {

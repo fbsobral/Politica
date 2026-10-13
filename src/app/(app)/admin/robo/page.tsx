@@ -19,6 +19,7 @@ const LABEL: Record<string, string> = {
   digestMonthly: "Enviar resumo mensal",
   politicians: "Atualizar representantes",
   candidates: "Atualizar candidatos (TSE)",
+  reclassifyElections: "Reclassificar notícias de eleição",
   cleanup: "Limpar notícias antigas",
 };
 
