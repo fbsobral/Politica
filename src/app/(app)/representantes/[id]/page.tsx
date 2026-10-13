@@ -29,7 +29,7 @@ export default async function PoliticianPage({ params }: { params: Promise<{ id:
   const articles = needles.length
     ? await db.article.findMany({
         where: { classified: true, OR: needles.map((n) => ({ searchText: { contains: n } })) },
-        include: { source: { select: { name: true, category: true } } },
+        include: { source: { select: { name: true, category: true, tier: true } } },
         orderBy: { publishedAt: "desc" },
         take: 15,
       })

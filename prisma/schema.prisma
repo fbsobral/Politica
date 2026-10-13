@@ -103,6 +103,10 @@ model Source {
   category      SourceCategory @default(OUTRO)
   categoryKnown Boolean        @default(false)
   factCheck     Boolean        @default(false)
+  /// 1 = grande alcance nacional/oficial, 2 = relevante (nacional menor, especializado, regional forte), 3 = demais; null = sem classificação
+  tier          Int?
+  /// quem definiu o tier: default (lista curada), ai (sugestão do Claude) ou admin
+  tierBy        String?
   createdAt     DateTime       @default(now())
 
   articles Article[]

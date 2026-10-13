@@ -184,3 +184,23 @@ export async function deleteFeed(id: string) {
   await db.feedSource.deleteMany({ where: { id } });
   revalidatePath("/admin/fontes");
 }
+
+export async function saveTiers(formData: FormData) {
+  await requireAdmin();
+  const ids = [...formData.keys()].filter((k) => k.startsWith("tier_")).map((k) => k.slice(5));
+  const current = await db.source.findMany({ where: { id: { in: ids } }, select: { id: true, tier: true, tierBy: true } });
+  let changed = 0;
+  for (const s of current) {
+    const raw = String(formData.get(`tier_${s.id}`) ?? "");
+    const next = raw === "" ? null : Number(raw);
+    if (next !== null && ![1, 2, 3].includes(next)) continue;
+    if (next !== s.tier) {
+      await db.source.update({ where: { id: s.id }, data: { tier: next, tierBy: next === null ? null : "admin" } });
+      changed++;
+    } else if (next !== null && s.tierBy !== "admin" && formData.get(`ok_${s.id}`) === "on") {
+      await db.source.update({ where: { id: s.id }, data: { tierBy: "admin" } }); // confirmou a sugestão
+    }
+  }
+  revalidatePath("/admin/fontes");
+  backFontes("ok", changed ? `${changed} veículo(s) atualizado(s).` : "Nenhuma mudança.");
+}

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { CALENDAR, daysToRunoff, ELECTION, OFFICE_LABEL, OFFICE_VALUES, VOTING_TIPS } from "@/lib/election";
 import { collapseClusters } from "@/lib/feed";
 import { UFS } from "@/lib/taxonomy";
+import { NIVEL_OPTIONS, tiersFor } from "@/lib/tier-legend";
 import { requireUser } from "@/lib/user";
 
 export const metadata = { title: "Eleições" };
@@ -15,12 +16,14 @@ const PAGE = 30;
 
 const DATE = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 
-export default async function EleicoesPage({ searchParams }: { searchParams: Promise<{ cargo?: string; pagina?: string }> }) {
+export default async function EleicoesPage({ searchParams }: { searchParams: Promise<{ cargo?: string; pagina?: string; nivel?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
   const cargo = (OFFICE_VALUES as string[]).includes(sp.cargo ?? "") ? (sp.cargo as ElectionOffice) : null;
   const page = Math.max(1, Number(sp.pagina) || 1);
   const left = daysToRunoff();
+  const tiers = tiersFor(sp.nivel);
+  const tierWhere: Prisma.ArticleWhereInput = tiers ? { source: { tier: { in: tiers } } } : {};
 
   // notícias de eleição relevantes para o usuário: nacionais + do estado + da cidade
   const relevant: Prisma.ArticleWhereInput = {
@@ -35,11 +38,11 @@ export default async function EleicoesPage({ searchParams }: { searchParams: Pro
   const baseWhere: Prisma.ArticleWhereInput = { classified: true, factCheck: false, AND: [relevant, { OR: [{ category: "ELEICOES" }, { cargo: { not: null } }] }] };
 
   const [rows, polls, checks, candidates, counts] = await Promise.all([
-    db.article.findMany({ where: { ...baseWhere, ...cargoWhere, poll: false }, include: { source: { select: { name: true, category: true } } }, orderBy: { publishedAt: "desc" }, take: PAGE + 1, skip: (page - 1) * PAGE }),
-    db.article.findMany({ where: { ...baseWhere, ...cargoWhere, poll: true }, include: { source: { select: { name: true, category: true } } }, orderBy: { publishedAt: "desc" }, take: 12 }),
+    db.article.findMany({ where: { ...baseWhere, ...cargoWhere, ...tierWhere, poll: false }, include: { source: { select: { name: true, category: true, tier: true } } }, orderBy: { publishedAt: "desc" }, take: PAGE + 1, skip: (page - 1) * PAGE }),
+    db.article.findMany({ where: { ...baseWhere, ...cargoWhere, ...tierWhere, poll: true }, include: { source: { select: { name: true, category: true, tier: true } } }, orderBy: { publishedAt: "desc" }, take: 12 }),
     db.article.findMany({
-      where: { factCheck: true, classified: true, AND: [relevant, { OR: [{ category: "ELEICOES" }, { cargo: { not: null } }, { searchText: { contains: "eleic" } }, { searchText: { contains: "candidat" } }] }, ...(cargo ? [cargoWhere] : [])] },
-      include: { source: { select: { name: true, category: true } } },
+      where: { factCheck: true, classified: true, ...tierWhere, AND: [relevant, { OR: [{ category: "ELEICOES" }, { cargo: { not: null } }, { searchText: { contains: "eleic" } }, { searchText: { contains: "candidat" } }] }, ...(cargo ? [cargoWhere] : [])] },
+      include: { source: { select: { name: true, category: true, tier: true } } },
       orderBy: { publishedAt: "desc" },
       take: 8,
     }),
@@ -59,7 +62,8 @@ export default async function EleicoesPage({ searchParams }: { searchParams: Pro
   const card = (a: (typeof news)[number], i: number) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />;
   const countOf = (c: ElectionOffice) => counts.find((x) => x.cargo === c)?._count ?? 0;
 
-  const tabHref = (c: string | null) => (c ? `/eleicoes?cargo=${c}` : "/eleicoes");
+  const nivelQs = sp.nivel ? `nivel=${sp.nivel}` : "";
+  const tabHref = (c: string | null) => `/eleicoes${c || nivelQs ? "?" : ""}${[c ? `cargo=${c}` : "", nivelQs].filter(Boolean).join("&")}`;
   const tab = (c: ElectionOffice | null, label: string, n?: number) => (
     <Link key={c ?? "geral"} role="tab" aria-selected={cargo === c} href={tabHref(c)} className={`flex flex-none items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${cargo === c ? "border-ink bg-ink text-paper" : "border-line-strong bg-surface text-muted hover:text-ink"}`}>
       {label}
@@ -87,6 +91,13 @@ export default async function EleicoesPage({ searchParams }: { searchParams: Pro
       <div role="tablist" aria-label="Cargo" className="scrollbar-none -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         {tab(null, "Geral")}
         {OFFICE_VALUES.map((c) => tab(c, OFFICE_LABEL[c], countOf(c)))}
+      </div>
+
+      <div className="-mt-3 mb-6 flex flex-wrap items-center gap-2 text-sm">
+        <span className="eyebrow mr-1">Veículos</span>
+        {NIVEL_OPTIONS.map((o) => (
+          <Link key={o.v} href={`/eleicoes${cargo || o.v ? "?" : ""}${[cargo ? `cargo=${cargo}` : "", o.v ? `nivel=${o.v}` : ""].filter(Boolean).join("&")}`} className={`rounded-full border px-3 py-1 font-medium ${(sp.nivel ?? "") === o.v ? "border-brand bg-brand-soft text-brand" : "border-line-strong bg-surface text-muted hover:text-ink"}`}>{o.l}</Link>
+        ))}
       </div>
 
       {candidates.length > 0 && (
@@ -130,8 +141,8 @@ export default async function EleicoesPage({ searchParams }: { searchParams: Pro
           )}
           {(page > 1 || rows.length > PAGE) && (
             <nav className="flex justify-between pt-5">
-              {page > 1 ? <Link href={`${tabHref(cargo)}${cargo ? "&" : "?"}pagina=${page - 1}`} className="btn btn-secondary">← Mais recentes</Link> : <span />}
-              {rows.length > PAGE && <Link href={`${tabHref(cargo)}${cargo ? "&" : "?"}pagina=${page + 1}`} className="btn btn-secondary">Mais antigas →</Link>}
+              {page > 1 ? <Link href={`${tabHref(cargo)}${cargo || nivelQs ? "&" : "?"}pagina=${page - 1}`} className="btn btn-secondary">← Mais recentes</Link> : <span />}
+              {rows.length > PAGE && <Link href={`${tabHref(cargo)}${cargo || nivelQs ? "&" : "?"}pagina=${page + 1}`} className="btn btn-secondary">Mais antigas →</Link>}
             </nav>
           )}
         </section>

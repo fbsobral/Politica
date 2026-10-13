@@ -3,6 +3,7 @@ import type { NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { AutoForm } from "@/components/auto-form";
 import { IconSearch } from "@/components/icons";
 import { NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
+import { NIVEL_OPTIONS, TIER_LEGEND } from "@/lib/tier-legend";
 
 export type FilterData = {
   scope: Scope;
@@ -44,6 +45,22 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
             </label>
           ))}
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend className="eyebrow mb-2">Nível do veículo</legend>
+        <div className="grid grid-cols-3 gap-1.5">
+          {NIVEL_OPTIONS.map((o) => (
+            <label key={o.v} className="cursor-pointer">
+              <input type="radio" name="nivel" value={o.v} defaultChecked={(sp.nivel ?? "") === o.v} className="peer sr-only" />
+              <span className="block rounded-lg border border-line-strong px-2 py-2 text-center text-[13px] font-medium text-muted transition peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand">{o.l}</span>
+            </label>
+          ))}
+        </div>
+        <details className="mt-1.5 text-xs text-faint">
+          <summary className="cursor-pointer">O que significa?</summary>
+          <ul className="mt-1.5 space-y-1">{([1, 2, 3] as const).map((t) => <li key={t}><b className="text-muted">{TIER_LEGEND[t].label}:</b> {TIER_LEGEND[t].desc}</li>)}</ul>
+        </details>
       </fieldset>
 
       <div className="space-y-3">
@@ -89,7 +106,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
         <button className="btn btn-primary w-full">Aplicar filtros</button>
       </noscript>
 
-      {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.q || sp.seguindo || sp.agrupar) && (
+      {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.nivel || sp.q || sp.seguindo || sp.agrupar) && (
         <Link href={`/?esfera=${scope.toLowerCase()}`} className="btn btn-ghost btn-sm w-full">Limpar filtros</Link>
       )}
     </AutoForm>

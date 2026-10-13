@@ -29,7 +29,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const scope: Scope = SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL";
   const agrupar = ["veiculo", "tipo", "categoria"].includes(sp.agrupar ?? "") ? sp.agrupar! : "";
   const page = Math.max(1, Number(sp.pagina) || 1);
-  const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, q: sp.q, seguindo: sp.seguindo === "1" };
+  const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, nivel: sp.nivel, q: sp.q, seguindo: sp.seguindo === "1" };
 
   const where = await buildWhere(user, params);
   const facetWhere = (await buildWhere(user, { scope }))!;
@@ -38,7 +38,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     where
       ? db.article.findMany({
           where,
-          include: { source: { select: { name: true, category: true } } },
+          include: { source: { select: { name: true, category: true, tier: true } } },
           orderBy: { publishedAt: "desc" },
           take: agrupar ? 200 : PAGE + 1,
           skip: agrupar ? 0 : (page - 1) * PAGE,
@@ -104,12 +104,13 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   const today = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(new Date());
-  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
+  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.nivel, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
   const chips: { label: string; clear: SP }[] = [];
   if (sp.q) chips.push({ label: `“${sp.q}”`, clear: { q: undefined } });
   if (sp.tipo) chips.push({ label: SOURCE_CATEGORY_LABEL[sp.tipo as SourceCategory] ?? sp.tipo, clear: { tipo: undefined, veiculo: undefined } });
   if (sp.veiculo) chips.push({ label: srcById.get(sp.veiculo)?.name ?? "Veículo", clear: { veiculo: undefined } });
   if (sp.poder) chips.push({ label: BRANCH_LABEL[sp.poder as Branch] ?? sp.poder, clear: { poder: undefined } });
+  if (sp.nivel) chips.push({ label: sp.nivel === "1" ? "Só Tier 1" : "Tier 1 e 2", clear: { nivel: undefined } });
   if (sp.cat) chips.push({ label: NEWS_CATEGORY_LABEL[sp.cat as NewsCategory] ?? sp.cat, clear: { cat: undefined } });
   if (sp.seguindo) chips.push({ label: "Quem eu sigo", clear: { seguindo: undefined } });
 

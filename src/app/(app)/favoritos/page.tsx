@@ -11,7 +11,7 @@ export default async function FavoritosPage() {
   const user = await requireUser();
   const favs = await db.favorite.findMany({
     where: { userId: user.id },
-    include: { article: { include: { source: { select: { name: true, category: true } } } } },
+    include: { article: { include: { source: { select: { name: true, category: true, tier: true } } } } },
     orderBy: { createdAt: "desc" },
   });
   return (

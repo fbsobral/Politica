@@ -5,6 +5,7 @@ import { fillTemplate, getSettings, type Settings } from "@/lib/settings";
 import { UFS } from "@/lib/taxonomy";
 import { clusterKey, normalize, stripHtml, truncate } from "@/lib/text";
 import { classifyArticles, classifySources, setAiEnabled, type ClassifyInput } from "./classify";
+import { applyTiers } from "./tiers";
 import { FACT_CHECK_FEEDS, MORE_FEEDS, NATIONAL_FEEDS, guessSourceCategory } from "./sources";
 
 const parser = new Parser({
@@ -399,6 +400,7 @@ export async function runIngest(): Promise<IngestResult> {
     }
   }
 
+  await applyTiers();
   let classified = 0;
   let removed = 0;
   for (let round = 0; round < 4; round++) {

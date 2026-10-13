@@ -1,12 +1,13 @@
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { addFeed, deleteFeed, resetRobotSettings, saveRobotSettings, toggleFeed } from "@/app/admin-actions";
+import { addFeed, deleteFeed, resetRobotSettings, saveRobotSettings, saveTiers, toggleFeed } from "@/app/admin-actions";
 import { AdminTabs } from "@/components/admin-tabs";
 import { Notice, PageHeader, SourceAvatar } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { getSettings, type Settings } from "@/lib/settings";
 import { BRANCH_LABEL, SCOPE_LABEL, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
+import { TIER_LEGEND } from "@/lib/tier-legend";
 import { requireAdmin } from "@/lib/user";
 
 export const metadata = { title: "Admin · Fontes e buscas" };
@@ -19,9 +20,17 @@ const LEVELS = [
 ] as const;
 const POWERS = ["Legislativo", "Executivo", "Judiciario"] as const;
 
-export default async function FontesPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
+export default async function FontesPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string; vq?: string; revisar?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
+  const vq = sp.vq?.trim();
+  const sources = await db.source.findMany({
+    where: { ...(vq ? { name: { contains: vq, mode: "insensitive" as const } } : {}), ...(sp.revisar ? { tierBy: { not: "admin" } } : {}) },
+    include: { _count: { select: { articles: true } } },
+    orderBy: [{ articles: { _count: "desc" } }],
+    take: 80,
+  });
+  const reviewCount = await db.source.count({ where: { tierBy: "ai" } });
   const [cfg, feeds, cities] = await Promise.all([
     getSettings(),
     db.feedSource.findMany({ orderBy: [{ scope: "desc" }, { name: "asc" }] }),
@@ -106,6 +115,40 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
           <SubmitButton formAction={resetRobotSettings} formNoValidate className="btn btn-ghost" pendingText="Restaurando…">Restaurar padrão</SubmitButton>
         </div>
       </form>
+
+      <section className="mt-10">
+        <h2 className="display text-2xl font-semibold">Níveis (tiers) dos veículos</h2>
+        <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">
+          O tier mede <b>alcance e tipo</b> do veículo, não qualidade nem posição política. {([1, 2, 3] as const).map((t) => <span key={t}><b className="text-ink">{TIER_LEGEND[t].label}</b>: {TIER_LEGEND[t].desc} </span>)}
+          A lista inicial é curada; veículos novos recebem uma sugestão da IA (selo <span className="chip">IA</span>) que você pode confirmar ou corrigir.
+        </p>
+        <form className="mb-3 flex flex-wrap gap-2">
+          <input name="vq" defaultValue={vq} placeholder="Buscar veículo…" className="input max-w-xs" />
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="revisar" value="1" defaultChecked={Boolean(sp.revisar)} /> Só os não revisados ({reviewCount} sugeridos pela IA)</label>
+          <button className="btn btn-secondary btn-sm">Filtrar</button>
+        </form>
+        <form action={saveTiers}>
+          <div className="card-flat divide-y divide-line">
+            {sources.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
+                <SourceAvatar name={s.name} size={28} />
+                <div className="min-w-0 flex-1">
+                  <span className="truncate text-sm font-semibold">{s.name}</span>
+                  <span className="ml-2 text-xs text-faint">{SOURCE_CATEGORY_LABEL[s.category]} · {s._count.articles} notícias</span>
+                </div>
+                {s.tierBy === "ai" && <span className="chip">IA</span>}
+                {s.tierBy === "ai" && <label className="flex items-center gap-1 text-xs text-muted"><input type="checkbox" name={`ok_${s.id}`} /> confirmar</label>}
+                <select name={`tier_${s.id}`} defaultValue={s.tier ?? ""} className="input !w-32 !py-1.5 text-sm">
+                  <option value="">Sem tier</option><option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option>
+                </select>
+              </div>
+            ))}
+            {!sources.length && <p className="p-4 text-sm text-muted">Nenhum veículo encontrado.</p>}
+          </div>
+          <SubmitButton className="btn btn-primary mt-3" pendingText="Salvando…">Salvar tiers</SubmitButton>
+          <span className="ml-3 text-xs text-faint">Mostrando os 80 veículos com mais notícias.</span>
+        </form>
+      </section>
 
       <section className="mt-10">
         <h2 className="mb-3 flex items-center gap-2.5"><span className="display text-2xl font-semibold">Feeds RSS</span><span className="chip">{feeds.length}</span></h2>

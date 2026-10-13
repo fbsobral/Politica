@@ -107,7 +107,7 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
       ...scopeWhere(user, scope),
       OR: VOTING_TERMS.map((t) => ({ searchText: { contains: t } })),
     },
-    include: { source: { select: { name: true, category: true } } },
+    include: { source: { select: { name: true, category: true, tier: true } } },
     orderBy: { publishedAt: "desc" },
     take: 40,
   });

@@ -18,7 +18,7 @@ export default async function ChecagensPage({ searchParams }: { searchParams: Pr
   const page = Math.max(1, Number(sp.pagina) || 1);
   const rows = await db.article.findMany({
     where: { factCheck: true, classified: true, ...scopeWhere(user, scope) },
-    include: { source: { select: { name: true, category: true } } },
+    include: { source: { select: { name: true, category: true, tier: true } } },
     orderBy: { publishedAt: "desc" },
     take: PAGE + 1,
     skip: (page - 1) * PAGE,

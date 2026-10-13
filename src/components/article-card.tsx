@@ -4,6 +4,7 @@ import type { Branch, NewsCategory, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
 import { IconExternal, IconStar } from "@/components/icons";
 import { SourceAvatar } from "@/components/ui";
+import { TIER_LEGEND } from "@/lib/tier-legend";
 import { BRANCH_LABEL, NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
 
 export type ArticleView = {
@@ -15,7 +16,7 @@ export type ArticleView = {
   publishedAt: Date;
   category: NewsCategory;
   branch?: Branch | null;
-  source: { name: string; category: SourceCategory };
+  source: { name: string; category: SourceCategory; tier?: number | null };
   favorited: boolean;
   alsoIn: string[];
 };
@@ -46,6 +47,9 @@ function Meta({ a }: { a: ArticleView }) {
       <span className="truncate font-semibold text-ink">{a.source.name}</span>
       <span aria-hidden className="text-line-strong">•</span>
       <span>{SOURCE_CATEGORY_LABEL[a.source.category]}</span>
+      {a.source.tier && (
+        <span title={`${TIER_LEGEND[a.source.tier as 1 | 2 | 3].label}: ${TIER_LEGEND[a.source.tier as 1 | 2 | 3].desc}`} className={`rounded px-1.5 py-px text-[10px] font-bold tracking-wide ${a.source.tier === 1 ? "bg-gold/25 text-ink" : a.source.tier === 2 ? "bg-ink/8 text-muted" : "bg-ink/5 text-faint"}`}>T{a.source.tier}</span>
+      )}
       <span aria-hidden className="text-line-strong">•</span>
       <time dateTime={a.publishedAt.toISOString()}>{timeAgo(a.publishedAt)}</time>
     </div>

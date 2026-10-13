@@ -25,6 +25,9 @@ export function todayKey(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: TZ }).format(new Date());
 }
 
+/** assuntos cobertos por mais veículos pesam mais; veículos tier 1 e 2 dão um bônus */
+const weight = (c: { source: { tier: number | null } }[]) => c.length + c.reduce((n, r) => n + (r.source.tier === 1 ? 1 : r.source.tier === 2 ? 0.4 : 0), 0);
+
 async function topNews(where: Prisma.ArticleWhereInput, since: Date, take: number): Promise<Item[]> {
   const rows = await db.article.findMany({
     where: { classified: true, publishedAt: { gte: since }, ...where },
@@ -36,7 +39,7 @@ async function topNews(where: Prisma.ArticleWhereInput, since: Date, take: numbe
   const clusters = new Map<string, typeof rows>();
   for (const r of rows) clusters.set(r.clusterKey, [...(clusters.get(r.clusterKey) ?? []), r]);
   return [...clusters.values()]
-    .sort((a, b) => b.length - a.length || +b[0].publishedAt - +a[0].publishedAt)
+    .sort((a, b) => weight(b) - weight(a) || +b[0].publishedAt - +a[0].publishedAt)
     .slice(0, take)
     .map((c) => ({ title: c[0].title, url: c[0].url, source: c[0].source.name, tag: NEWS_CATEGORY_LABEL[c[0].category] }));
 }
