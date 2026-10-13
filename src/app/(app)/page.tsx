@@ -7,6 +7,8 @@ import { IconFilter, IconX } from "@/components/icons";
 import { RememberFilters } from "@/components/remember-filters";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
 import { db } from "@/lib/db";
+import { formatDistanceToNowStrict } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { daysToRunoff } from "@/lib/election";
 import { buildWhere, scopeWhere } from "@/lib/feed";
 import { BRANCH_LABEL, BRANCH_VALUES, NEWS_CATEGORY_LABEL, SCOPE_LABEL, SCOPE_SLUG, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
@@ -62,6 +64,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     db.article.groupBy({ by: ["category"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["branch"], where: branchFacetWhere, _count: true }),
   ]);
+  const lastRun = await db.jobRun.findFirst({ where: { job: "ingest", ok: true, finishedAt: { not: null } }, orderBy: { finishedAt: "desc" }, select: { finishedAt: true } });
   const hasMore = !agrupar && rows.length > PAGE;
   const pageRows = agrupar ? rows : rows.slice(0, PAGE);
 
@@ -136,6 +139,12 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       <header className="mb-6">
         <p className="eyebrow mb-1 block first-letter:uppercase">{today}</p>
         <h1 className="display text-4xl font-semibold leading-none sm:text-5xl">{place}</h1>
+        {lastRun?.finishedAt && (
+          <p className="mt-3 flex items-center gap-2 text-xs text-muted" title={`Última coleta: ${lastRun.finishedAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-municipal" aria-hidden />
+            Notícias atualizadas há {formatDistanceToNowStrict(lastRun.finishedAt, { locale: ptBR })}
+          </p>
+        )}
       </header>
 
       {daysToRunoff() >= 0 && (
