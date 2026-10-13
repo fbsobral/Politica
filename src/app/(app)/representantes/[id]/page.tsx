@@ -7,6 +7,7 @@ import { Avatar, FollowButton } from "@/components/politician-card";
 import { PoliticianExtra } from "@/components/politician-extra";
 import { EmptyState, PartyBadge } from "@/components/ui";
 import { db } from "@/lib/db";
+import { collapseClusters } from "@/lib/feed";
 import { normalize } from "@/lib/text";
 import { ROLE_LABEL, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -33,7 +34,8 @@ export default async function PoliticianPage({ params }: { params: Promise<{ id:
         take: 15,
       })
     : [];
-  const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: articles.map((a) => a.id) } }, select: { articleId: true } });
+  const unique = collapseClusters(articles);
+  const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: unique.map((a) => a.id) } }, select: { articleId: true } });
   const favSet = new Set(favs.map((f) => f.articleId));
   const place = [p.municipality, p.uf ? UFS[p.uf] : null].filter(Boolean).join(" · ");
 
@@ -77,8 +79,8 @@ export default async function PoliticianPage({ params }: { params: Promise<{ id:
 
       <section className="space-y-3.5">
         <h2 className="display text-2xl font-semibold">Nas notícias</h2>
-        {articles.length ? (
-          articles.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: favSet.has(a.id), alsoIn: [] }} />)
+        {unique.length ? (
+          unique.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: favSet.has(a.id) }} />)
         ) : (
           <EmptyState title="Sem menções recentes">Nenhuma notícia dos últimos dias cita este nome. Ative os alertas para ser avisado quando aparecer.</EmptyState>
         )}

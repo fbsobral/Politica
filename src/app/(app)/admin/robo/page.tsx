@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 const LABEL: Record<string, string> = {
   ingest: "Coletar notícias agora",
   digest: "Enviar resumo diário",
+  digestWeekly: "Enviar resumo semanal",
+  digestMonthly: "Enviar resumo mensal",
   politicians: "Atualizar representantes",
   cleanup: "Limpar notícias antigas",
 };

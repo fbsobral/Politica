@@ -3,7 +3,7 @@ import type { Scope } from "@prisma/client";
 import { ArticleCard } from "@/components/article-card";
 import { EmptyState, PageHeader, ScopeTabs } from "@/components/ui";
 import { db } from "@/lib/db";
-import { scopeWhere } from "@/lib/feed";
+import { collapseClusters, scopeWhere } from "@/lib/feed";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -25,7 +25,7 @@ export default async function ChecagensPage({ searchParams }: { searchParams: Pr
   });
   const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: rows.map((r) => r.id) } }, select: { articleId: true } });
   const fav = new Set(favs.map((f) => f.articleId));
-  const list = rows.slice(0, PAGE);
+  const list = collapseClusters(rows.slice(0, PAGE));
   const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   const link = (p: number) => `/checagens?esfera=${scope.toLowerCase()}&pagina=${p}`;
   return (
@@ -33,7 +33,7 @@ export default async function ChecagensPage({ searchParams }: { searchParams: Pr
       <PageHeader eyebrow="Agência Lupa · Aos Fatos · Comprova · busca local" title={`Checagens · ${place}`} />
       <ScopeTabs base="/checagens" scope={scope} />
       {list.length ? (
-        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{list.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id), alsoIn: [] }} />)}</div>
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{list.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />)}</div>
       ) : (
         <EmptyState title="Nenhuma checagem nesta esfera ainda">
           {scope === "FEDERAL" ? "As agências de checagem são lidas a cada hora pelo robô." : "As agências de checagem são nacionais; para o local o robô busca no Google News reportagens de checagem sobre o seu estado e cidade. Se acabou de configurar, rode a coleta em Admin → Robô."}

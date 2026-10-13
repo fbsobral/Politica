@@ -1,17 +1,36 @@
-import type { Scope } from "@prisma/client";
+import type { Prisma, Scope } from "@prisma/client";
 import { aiEnabled, ask } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { appUrl, escapeHtml, layout, sendEmail } from "@/lib/email";
+import { followedNeedles } from "@/lib/feed";
+import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
 import { NEWS_CATEGORY_LABEL, SCOPE_LABEL, UFS } from "@/lib/taxonomy";
 
-type Item = { title: string; url: string; source: string; category: string };
+export type DigestKind = "daily" | "weekly" | "monthly";
 
-async function top(scope: Scope, where: object, since: Date, take: number): Promise<Item[]> {
+const PERIOD: Record<DigestKind, { days: number; take: number; label: string; noun: string }> = {
+  daily: { days: 1, take: 5, label: "Resumo do dia", noun: "nas últimas 24 horas" },
+  weekly: { days: 7, take: 7, label: "Resumo da semana", noun: "nos últimos 7 dias" },
+  monthly: { days: 30, take: 9, label: "Resumo do mês", noun: "nos últimos 30 dias" },
+};
+
+type Item = { title: string; url: string; source: string; tag: string };
+type Block = { items: Item[]; summary: string | null };
+type Cache = Map<string, Promise<Block>>;
+
+const TZ = "America/Sao_Paulo";
+const fmt = (opts: Intl.DateTimeFormatOptions, d = new Date()) => new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, ...opts }).format(d);
+
+export function todayKey(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: TZ }).format(new Date());
+}
+
+async function topNews(where: Prisma.ArticleWhereInput, since: Date, take: number): Promise<Item[]> {
   const rows = await db.article.findMany({
-    where: { scope, classified: true, publishedAt: { gte: since }, ...where },
+    where: { classified: true, publishedAt: { gte: since }, ...where },
     include: { source: true },
     orderBy: { publishedAt: "desc" },
-    take: take * 6,
+    take: take * 10,
   });
   // prioriza assuntos cobertos por mais veículos
   const clusters = new Map<string, typeof rows>();
@@ -19,15 +38,15 @@ async function top(scope: Scope, where: object, since: Date, take: number): Prom
   return [...clusters.values()]
     .sort((a, b) => b.length - a.length || +b[0].publishedAt - +a[0].publishedAt)
     .slice(0, take)
-    .map((c) => ({ title: c[0].title, url: c[0].url, source: c[0].source.name, category: NEWS_CATEGORY_LABEL[c[0].category] }));
+    .map((c) => ({ title: c[0].title, url: c[0].url, source: c[0].source.name, tag: NEWS_CATEGORY_LABEL[c[0].category] }));
 }
 
-async function summarize(label: string, items: Item[]): Promise<string | null> {
-  if (!aiEnabled() || items.length < 3) return null;
+async function summarize(kind: DigestKind, label: string, lines: string[]): Promise<string | null> {
+  if (!aiEnabled() || lines.length < 3) return null;
   try {
     const text = await ask(
-      "Você escreve o resumo diário de um app de notícias políticas brasileiras. Em português, escreva 2 a 4 frases corridas, objetivas e neutras, resumindo os principais assuntos da lista. Sem listas, sem markdown, sem opinião.",
-      `Esfera: ${label}\n` + items.map((i) => `- ${i.title} (${i.source})`).join("\n"),
+      `Você escreve o ${PERIOD[kind].label.toLowerCase()} de um app de notícias políticas brasileiras. Em português, escreva 2 a 4 frases corridas, objetivas e neutras, resumindo os principais assuntos da lista (${PERIOD[kind].noun}). Sem listas, sem markdown, sem opinião.`,
+      `Seção: ${label}\n` + lines.map((l) => `- ${l}`).join("\n"),
       500,
     );
     return text.trim() || null;
@@ -37,81 +56,156 @@ async function summarize(label: string, items: Item[]): Promise<string | null> {
   }
 }
 
-function section(label: string, summary: string | null, items: Item[]): string {
-  if (!items.length) return "";
-  const lis = items
-    .map(
-      (i) =>
-        `<li style="margin:0 0 10px"><a href="${escapeHtml(i.url)}" style="color:#1d4ed8;text-decoration:none">${escapeHtml(i.title)}</a><br><span style="font-size:12px;color:#71717a">${escapeHtml(i.source)} · ${escapeHtml(i.category)}</span></li>`,
-    )
-    .join("");
-  return `<h2 style="font-size:16px;margin:24px 0 8px;border-bottom:1px solid #e4e4e7;padding-bottom:6px">${escapeHtml(label)}</h2>
-${summary ? `<p style="margin:0 0 12px;line-height:1.5">${escapeHtml(summary)}</p>` : ""}
-<ul style="padding-left:18px;margin:0">${lis}</ul>`;
+function cached(cache: Cache, key: string, build: () => Promise<Block>): Promise<Block> {
+  if (!cache.has(key)) cache.set(key, build());
+  return cache.get(key)!;
 }
 
-export function todayKey(): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date());
+const newsBlock = (kind: DigestKind, cache: Cache, key: string, label: string, where: Prisma.ArticleWhereInput, since: Date) =>
+  cached(cache, `${kind}:${key}`, async () => {
+    const items = await topNews({ factCheck: false, ...where }, since, PERIOD[kind].take);
+    return { items, summary: await summarize(kind, label, items.map((i) => `${i.title} (${i.source})`)) };
+  });
+
+/* ───────── Congresso: votações + próximas sessões ───────── */
+type Congress = { votes: PlenaryVote[]; upcoming: AgendaEvent[]; summary: string | null };
+
+const congressBlock = (kind: DigestKind, cache: Map<string, Promise<Congress>>): Promise<Congress> => {
+  const key = `${kind}:congress`;
+  if (!cache.has(key)) {
+    cache.set(
+      key,
+      (async () => {
+        const days = PERIOD[kind].days;
+        const [cv, sv, ca, sa] = await Promise.allSettled([camaraVotes(days), senadoVotes(days), camaraAgenda(7), senadoAgenda(7)]);
+        const ok = <T,>(r: PromiseSettledResult<T[]>): T[] => (r.status === "fulfilled" ? r.value : []);
+        const since = Date.now() - days * 86400000;
+        const votes = [...ok(cv), ...ok(sv)]
+          .filter((v) => new Date(v.date.length === 16 ? `${v.date}:00-03:00` : v.date).getTime() >= since)
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, kind === "daily" ? 5 : kind === "weekly" ? 8 : 10);
+        const upcoming = [...ok(ca), ...ok(sa)]
+          .filter((e) => /delibera/i.test(e.type) && !/n[ãa]o delibera/i.test(e.type))
+          .sort((a, b) => a.start.localeCompare(b.start))
+          .slice(0, 5);
+        const summary = await summarize(kind, "Votações no Congresso Nacional", votes.map((v) => `${v.house}: ${v.description}${v.approved === true ? " (aprovada)" : v.approved === false ? " (rejeitada)" : ""}`));
+        return { votes, upcoming, summary };
+      })(),
+    );
+  }
+  return cache.get(key)!;
+};
+
+/* ───────── HTML ───────── */
+const H2 = (t: string) => `<h2 style="font-size:16px;margin:26px 0 8px;border-bottom:1px solid #e4e4e7;padding-bottom:6px">${escapeHtml(t)}</h2>`;
+const P = (t: string | null) => (t ? `<p style="margin:0 0 12px;line-height:1.55">${escapeHtml(t)}</p>` : "");
+const A = (i: Item) =>
+  `<li style="margin:0 0 10px"><a href="${escapeHtml(i.url)}" style="color:#1d4ed8;text-decoration:none">${escapeHtml(i.title)}</a><br><span style="font-size:12px;color:#71717a">${escapeHtml(i.source)} · ${escapeHtml(i.tag)}</span></li>`;
+
+function newsSection(label: string, b: Block): string {
+  return b.items.length ? `${H2(label)}${P(b.summary)}<ul style="padding-left:18px;margin:0">${b.items.map(A).join("")}</ul>` : "";
+}
+
+function congressSection(c: Congress, kind: DigestKind): string {
+  if (!c.votes.length && !c.upcoming.length) return "";
+  const badge = (v: PlenaryVote) =>
+    v.approved === null ? "" : `<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:${v.approved ? "#dcfce7;color:#166534" : "#fee2e2;color:#991b1b"}">${v.approved ? "Aprovada" : "Rejeitada"}</span> `;
+  const votes = c.votes
+    .map((v) => `<li style="margin:0 0 9px;line-height:1.45">${badge(v)}<span style="font-size:12px;color:#71717a">${escapeHtml(v.house)} · ${escapeHtml(fmt({ day: "2-digit", month: "short" }, new Date(v.date.length === 16 ? `${v.date}:00-03:00` : v.date)))}</span><br>${escapeHtml(v.description.length > 200 ? v.description.slice(0, 199) + "…" : v.description)}</li>`)
+    .join("");
+  const upcoming = c.upcoming
+    .map((e) => `<li style="margin:0 0 7px"><b>${escapeHtml(fmt({ weekday: "short", day: "2-digit", month: "short" }, new Date(`${e.start.slice(0, 10)}T12:00:00-03:00`)))} ${escapeHtml(e.start.slice(11, 16))}</b> · ${escapeHtml(e.house)} — ${escapeHtml(e.type)}</li>`)
+    .join("");
+  return (
+    H2(kind === "daily" ? "No Congresso: votações recentes" : "No Congresso: votações do período") +
+    P(c.summary) +
+    (votes ? `<ul style="padding-left:18px;margin:0">${votes}</ul>` : `<p style="color:#71717a;margin:0">Nenhuma votação de plenário no período.</p>`) +
+    (upcoming ? `<p style="margin:16px 0 6px;font-weight:600">Próximas sessões deliberativas</p><ul style="padding-left:18px;margin:0">${upcoming}</ul>` : "")
+  );
 }
 
 type DigestUser = { id: string; email: string; uf: string | null; municipality: string | null; municipalityKey: string | null };
 
-async function buildAndSend(user: DigestUser, cache: Map<string, { items: Item[]; summary: string | null }>, since: Date): Promise<boolean | "empty"> {
-  async function get(key: string, label: string, scope: Scope, where: object) {
-    if (!cache.has(key)) {
-      const items = await top(scope, where, since, 6);
-      cache.set(key, { items, summary: await summarize(label, items) });
-    }
-    return cache.get(key)!;
-  }
+async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, congressCache: Map<string, Promise<Congress>>): Promise<boolean | "empty"> {
+  const since = new Date(Date.now() - PERIOD[kind].days * 86400000);
   const uf = user.uf!;
-  // as três esferas (consulta + resumo da IA) em paralelo
-  const [fed, est, mun] = await Promise.all([
-    get("fed", "Federal", "FEDERAL", {}),
-    get(`est:${uf}`, `Estadual — ${UFS[uf]}`, "ESTADUAL", { uf }),
-    user.municipalityKey
-      ? get(`mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, "MUNICIPAL", { uf, municipalityKey: user.municipalityKey })
-      : Promise.resolve({ items: [] as Item[], summary: null as string | null }),
+  const local = user.municipalityKey ? { uf, municipalityKey: user.municipalityKey } : null;
+  const needles = await followedNeedles(user.id);
+
+  const [mun, est, fed, congress, checks, follows] = await Promise.all([
+    local ? newsBlock(kind, cache, `mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, { scope: "MUNICIPAL", ...local }, since) : Promise.resolve({ items: [], summary: null } as Block),
+    newsBlock(kind, cache, `est:${uf}`, `Estadual — ${UFS[uf]}`, { scope: "ESTADUAL", uf }, since),
+    newsBlock(kind, cache, "fed", "Federal", { scope: "FEDERAL" }, since),
+    congressBlock(kind, congressCache),
+    cached(cache, `${kind}:fc:${uf}:${user.municipalityKey}`, async () => ({
+      items: await topNews(
+        { factCheck: true, OR: [{ scope: "FEDERAL" }, { scope: "ESTADUAL", uf }, ...(local ? [{ scope: "MUNICIPAL" as Scope, ...local }] : [])] },
+        since,
+        4,
+      ),
+      summary: null,
+    })),
+    needles.length
+      ? topNews({ factCheck: false, OR: needles.map((n) => ({ searchText: { contains: n } })) }, since, PERIOD[kind].take)
+      : Promise.resolve([] as Item[]),
   ]);
-  if (!fed.items.length && !est.items.length && !mun.items.length) return "empty";
+
+  if (![mun, est, fed, checks].some((b) => b.items.length) && !congress.votes.length && !follows.length) return "empty";
+
+  const intro =
+    kind === "daily"
+      ? ""
+      : `<p style="margin:0 0 4px;color:#52525b">O que mais mexeu com a política ${PERIOD[kind].noun}, na sua cidade, no seu estado e no país.</p>`;
+
   const inner =
-    section(`${SCOPE_LABEL.MUNICIPAL} · ${user.municipality ?? ""}`, mun.summary, mun.items) +
-    section(`${SCOPE_LABEL.ESTADUAL} · ${UFS[uf]}`, est.summary, est.items) +
-    section(SCOPE_LABEL.FEDERAL, fed.summary, fed.items) +
-    `<p style="margin-top:24px"><a href="${appUrl()}" style="background:#18181b;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Abrir o feed completo</a></p>`;
-  const dateLabel = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(new Date());
-  return sendEmail({
-    to: user.email,
-    subject: `🗞️ Resumo político — ${dateLabel}`,
-    html: layout(`Resumo político · ${dateLabel}`, inner),
-  });
+    intro +
+    newsSection(`Município · ${user.municipality ?? ""}`, mun) +
+    newsSection(`Estado · ${UFS[uf]}`, est) +
+    newsSection(SCOPE_LABEL.FEDERAL, fed) +
+    congressSection(congress, kind) +
+    (follows.length ? `${H2("Quem você segue")}<ul style="padding-left:18px;margin:0">${follows.map(A).join("")}</ul>` : "") +
+    (checks.items.length ? `${H2("Checagem de fatos")}<ul style="padding-left:18px;margin:0">${checks.items.map(A).join("")}</ul>` : "") +
+    `<p style="margin-top:26px"><a href="${appUrl()}" style="background:#17407f;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Abrir o feed completo</a>
+     <a href="${appUrl()}/agenda?esfera=federal" style="margin-left:8px;color:#17407f">Ver a agenda do Congresso →</a></p>`;
+
+  const now = new Date();
+  const title =
+    kind === "daily"
+      ? `Resumo político · ${fmt({ weekday: "long", day: "numeric", month: "long" }, now)}`
+      : kind === "weekly"
+        ? `Resumo da semana · ${fmt({ day: "numeric", month: "short" }, since)} a ${fmt({ day: "numeric", month: "short" }, now)}`
+        : `Resumo mensal · ${fmt({ month: "long", year: "numeric" }, new Date(Date.now() - 86400000))}`;
+  const emoji = kind === "daily" ? "🗞️" : kind === "weekly" ? "📅" : "🗓️";
+  return sendEmail({ to: user.email, subject: `${emoji} ${title}`, html: layout(title, inner) });
 }
 
-/** Envia o resumo agora para um usuário (botão "enviar teste" nas configurações). */
-export async function sendDigestNow(user: DigestUser): Promise<boolean | "empty"> {
-  return buildAndSend(user, new Map(), new Date(Date.now() - 1000 * 60 * 60 * 24));
+/** Envia agora para um usuário (botões "enviar teste" nas configurações). */
+export async function sendDigestNow(user: DigestUser, kind: DigestKind = "daily"): Promise<boolean | "empty"> {
+  return buildAndSend(user, kind, new Map(), new Map());
 }
 
-export async function sendDigests(): Promise<{ sent: number; skipped: number }> {
+const FLAG = { daily: "dailyDigest", weekly: "weeklyDigest", monthly: "monthlyDigest" } as const;
+
+export async function sendDigests(kind: DigestKind = "daily"): Promise<{ sent: number; skipped: number }> {
   const day = todayKey();
-  const since = new Date(Date.now() - 1000 * 60 * 60 * 24);
-  const users = await db.user.findMany({ where: { dailyDigest: true, uf: { not: null } } });
+  const users = await db.user.findMany({ where: { [FLAG[kind]]: true, uf: { not: null } } });
   let sent = 0;
   let skipped = 0;
-  const cache = new Map<string, { items: Item[]; summary: string | null }>();
+  const cache: Cache = new Map();
+  const congressCache = new Map<string, Promise<Congress>>();
   for (const user of users) {
-    if (await db.digestLog.findUnique({ where: { userId_day: { userId: user.id, day } } })) {
+    if (await db.digestLog.findUnique({ where: { userId_kind_day: { userId: user.id, kind, day } } })) {
       skipped++;
       continue;
     }
     try {
-      const r = await buildAndSend(user, cache, since);
+      const r = await buildAndSend(user, kind, cache, congressCache);
       if (r === true) {
-        await db.digestLog.create({ data: { userId: user.id, day } });
+        await db.digestLog.create({ data: { userId: user.id, kind, day } });
         sent++;
       } else skipped++;
     } catch (err) {
-      console.warn(`[digest] falha para ${user.email}:`, (err as Error).message);
+      console.warn(`[digest:${kind}] falha para ${user.email}:`, (err as Error).message);
       skipped++;
     }
   }

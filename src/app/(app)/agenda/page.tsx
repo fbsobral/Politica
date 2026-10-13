@@ -4,7 +4,7 @@ import { ArticleCard } from "@/components/article-card";
 import { IconPin } from "@/components/icons";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { db } from "@/lib/db";
-import { scopeWhere } from "@/lib/feed";
+import { collapseClusters, scopeWhere } from "@/lib/feed";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -111,7 +111,8 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
     orderBy: { publishedAt: "desc" },
     take: 40,
   });
-  const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: rows.map((r) => r.id) } }, select: { articleId: true } });
+  const items = collapseClusters(rows);
+  const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: items.map((r) => r.id) } }, select: { articleId: true } });
   const fav = new Set(favs.map((f) => f.articleId));
   const who = scope === "MUNICIPAL" ? `da Câmara de ${user.municipality}` : `da Assembleia Legislativa de ${UFS[user.uf]}`;
   return (
@@ -119,8 +120,8 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
       <Notice kind="info">
         Não existe uma agenda oficial única {who} em formato aberto. Aqui mostramos o que a imprensa publicou sobre <b>sessões, pautas e votações</b>, coletado pelo robô. Para a pauta oficial, consulte o site da casa legislativa.
       </Notice>
-      {rows.length ? (
-        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{rows.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id), alsoIn: [] }} />)}</div>
+      {items.length ? (
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{items.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />)}</div>
       ) : (
         <EmptyState title="Nada sobre sessões ou votações por enquanto">O robô procura essas notícias a cada hora. Ajuste as buscas em Admin → Fontes e buscas se quiser ampliar.</EmptyState>
       )}

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { sendDigestNow } from "@/lib/digest";
+import { sendDigestNow, type DigestKind } from "@/lib/digest";
 import { runJob } from "@/lib/jobs";
 import { listMunicipalities } from "@/lib/ibge";
 import { syncUf } from "@/lib/politicians/sync";
@@ -31,14 +31,19 @@ export async function savePrefs(formData: FormData) {
   const user = await getDbUser();
   await db.user.update({
     where: { id: user.id },
-    data: { dailyDigest: formData.get("dailyDigest") === "on", alertEmails: formData.get("alertEmails") === "on" },
+    data: {
+      dailyDigest: formData.get("dailyDigest") === "on",
+      weeklyDigest: formData.get("weeklyDigest") === "on",
+      monthlyDigest: formData.get("monthlyDigest") === "on",
+      alertEmails: formData.get("alertEmails") === "on",
+    },
   });
   revalidatePath("/configuracoes");
 }
 
-export async function sendTestDigest() {
+export async function sendTestDigest(kind: DigestKind = "daily") {
   const user = await getDbUser();
-  const r = await sendDigestNow(user);
+  const r = await sendDigestNow(user, kind);
   redirect(`/configuracoes?digest=${r === true ? "ok" : r === "empty" ? "vazio" : "erro"}`);
 }
 

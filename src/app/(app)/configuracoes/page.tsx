@@ -51,13 +51,18 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
         <h2 className="display mb-1 text-xl font-semibold">E-mails</h2>
         <form action={savePrefs}>
           <div className="divide-y divide-line">
-            <Toggle name="dailyDigest" defaultChecked={user.dailyDigest} title="Resumo diário às 7h" desc="O que aconteceu nas esferas municipal, estadual e federal, em poucas linhas." />
+            <Toggle name="dailyDigest" defaultChecked={user.dailyDigest} title="Resumo diário · todo dia às 7h" desc="Notícias das três esferas, votações recentes no Congresso, quem você segue e checagens." />
+            <Toggle name="weeklyDigest" defaultChecked={user.weeklyDigest} title="Resumo semanal · segunda às 7h" desc="Os assuntos que mais mexeram com a política na semana, com as votações do período." />
+            <Toggle name="monthlyDigest" defaultChecked={user.monthlyDigest} title="Resumo mensal · dia 1 às 7h" desc="Panorama do mês: principais notícias, votações e checagens." />
             <Toggle name="alertEmails" defaultChecked={user.alertEmails} title="Alertas" desc="Aviso quando surgirem notícias das suas palavras-chave e dos políticos monitorados." />
           </div>
           <SubmitButton className="btn btn-primary mt-3" pendingText="Salvando…">Salvar preferências</SubmitButton>
         </form>
-        <form action={sendTestDigest} className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-5">
-          <SubmitButton className="btn btn-secondary btn-sm" disabled={!emailEnabled()} pendingText="Gerando e enviando o resumo…">Enviar o resumo de hoje agora</SubmitButton>
+        <form className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-5">
+          <span className="w-full text-xs font-semibold text-muted">Enviar um agora para testar:</span>
+          <SubmitButton formAction={sendTestDigest.bind(null, "daily")} className="btn btn-secondary btn-sm" disabled={!emailEnabled()} pendingText="Enviando…">Diário</SubmitButton>
+          <SubmitButton formAction={sendTestDigest.bind(null, "weekly")} className="btn btn-secondary btn-sm" disabled={!emailEnabled()} pendingText="Enviando…">Semanal</SubmitButton>
+          <SubmitButton formAction={sendTestDigest.bind(null, "monthly")} className="btn btn-secondary btn-sm" disabled={!emailEnabled()} pendingText="Enviando…">Mensal</SubmitButton>
           {!emailEnabled() && <span className="text-xs text-faint">Configure RESEND_API_KEY</span>}
         </form>
         {msg && <div className="mt-3"><Notice kind={msg[0]}>{msg[1]}</Notice></div>}

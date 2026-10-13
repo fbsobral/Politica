@@ -52,3 +52,13 @@ export async function buildWhere(user: FeedUser, p: FeedParams, opts: { ignore?:
   }
   return { AND: and };
 }
+
+/** Mantém só a primeira notícia de cada assunto (clusterKey) e lista os outros veículos que cobriram. */
+export function collapseClusters<T extends { clusterKey: string; source: { name: string } }>(rows: T[]): (T & { alsoIn: string[] })[] {
+  const groups = new Map<string, T[]>();
+  for (const r of rows) groups.set(r.clusterKey, [...(groups.get(r.clusterKey) ?? []), r]);
+  return [...groups.values()].map((g) => ({
+    ...g[0],
+    alsoIn: [...new Set(g.slice(1).map((x) => x.source.name).filter((n) => n !== g[0].source.name))].slice(0, 4),
+  }));
+}

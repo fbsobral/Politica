@@ -13,7 +13,11 @@ export const JOBS = {
     return { ...r, newArticleIds: r.newArticleIds.length, alerts };
   },
   /** resumo diário por e-mail */
-  digest: () => sendDigests(),
+  digest: () => sendDigests("daily"),
+  /** resumo semanal (segunda, 7h) */
+  digestWeekly: () => sendDigests("weekly"),
+  /** resumo mensal (dia 1, 7h) */
+  digestMonthly: () => sendDigests("monthly"),
   /** atualiza deputados, senadores e eleitos das UFs em uso */
   async politicians() {
     await syncAll();

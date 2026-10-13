@@ -78,12 +78,12 @@ export type PlenaryVote = { id: string; house: "Câmara" | "Senado"; link?: stri
 export async function camaraVotes(days = 45): Promise<PlenaryVote[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   const j = await getJson<{ dados: any[] }>(
-    `${CAMARA}/votacoes?dataInicio=${fmt(new Date(Date.now() - days * 86400000))}&dataFim=${fmt(new Date())}&itens=40&ordem=DESC&ordenarPor=dataHoraRegistro`,
+    `${CAMARA}/votacoes?dataInicio=${fmt(new Date(Date.now() - days * 86400000))}&dataFim=${fmt(new Date())}&itens=100&ordem=DESC&ordenarPor=dataHoraRegistro`,
     HOUR,
   );
   return j.dados
     .filter((v) => v.siglaOrgao === "PLEN" && v.descricao)
-    .slice(0, 15)
+    .slice(0, 25)
     .map((v) => ({ id: `c${v.id}`, house: "Câmara" as const, date: v.dataHoraRegistro, description: v.descricao, approved: v.aprovacao === 1 ? true : v.aprovacao === 0 ? false : null, organ: v.siglaOrgao }));
 }
 

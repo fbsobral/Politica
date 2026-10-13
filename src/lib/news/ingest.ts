@@ -19,6 +19,20 @@ const parser = new Parser({
   },
 });
 
+/** Decodifica a resposta respeitando o charset (feeds antigos como o da Folha usam ISO-8859-1). */
+async function readXml(res: Response): Promise<string> {
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const head = new TextDecoder("latin1").decode(buf.slice(0, 300));
+  const charset = (res.headers.get("content-type")?.match(/charset=([\w-]+)/i)?.[1] ?? head.match(/encoding=["']([\w-]+)["']/i)?.[1] ?? "utf-8").toLowerCase();
+  let text: string;
+  try {
+    text = new TextDecoder(charset).decode(buf);
+  } catch {
+    text = new TextDecoder("utf-8").decode(buf);
+  }
+  return text.replace(/^[^<]+/, "");
+}
+
 type Candidate = {
   url: string;
   title: string;
@@ -73,8 +87,7 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
       signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const xml = (await res.text()).replace(/^[^<]+/, "");
-    const feed = await parser.parseString(xml);
+    const feed = await parser.parseString(await readXml(res));
     const out: Candidate[] = [];
     for (const item of feed.items as Record<string, any>[]) {
       const url: string | undefined = item.link ?? item.guid;
@@ -249,7 +262,7 @@ export async function probeFeed(url: string): Promise<{ ok: true; items: number;
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(15000) });
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
-    const feed = await parser.parseString((await res.text()).replace(/^[^<]+/, ""));
+    const feed = await parser.parseString(await readXml(res));
     if (!feed.items.length) return { ok: false, error: "O feed não tem itens" };
     return { ok: true, items: feed.items.length, title: feed.title ?? "" };
   } catch (err) {
@@ -282,7 +295,23 @@ export async function runIngest(): Promise<IngestResult> {
     const rows = await db.article.findMany({ where: { url: { in: urls.slice(i, i + 1000) } }, select: { url: true } });
     rows.forEach((r) => existing.add(r.url));
   }
-  const fresh = [...byUrl.values()].filter((c) => !existing.has(c.url));
+  // o mesmo texto do mesmo veículo chega com URLs diferentes (ex.: redirecionamentos do Google News)
+  const seenTitle = new Set<string>();
+  const fresh = [...byUrl.values()].filter((c) => {
+    if (existing.has(c.url)) return false;
+    const key = `${c.sourceName}|${normalize(c.title)}`;
+    if (seenTitle.has(key)) return false;
+    seenTitle.add(key);
+    return true;
+  });
+  if (fresh.length) {
+    const dupRows = await db.article.findMany({
+      where: { title: { in: fresh.map((c) => c.title) } },
+      select: { title: true, source: { select: { name: true } } },
+    });
+    const dbKeys = new Set(dupRows.map((r) => `${r.source.name}|${normalize(r.title)}`));
+    for (let i = fresh.length - 1; i >= 0; i--) if (dbKeys.has(`${fresh[i].sourceName}|${normalize(fresh[i].title)}`)) fresh.splice(i, 1);
+  }
 
   // veículos
   const sourceIds = new Map<string, string>();
