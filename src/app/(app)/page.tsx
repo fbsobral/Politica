@@ -89,6 +89,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       source: a.source,
       favorited: favSet.has(a.id),
       alsoIn: [...new Set(group.slice(1).map((g) => g.source.name).filter((n) => n !== a.source.name))].slice(0, 4),
+      related: group.slice(1).filter((g) => g.source.name !== a.source.name).slice(0, 5).map((g) => ({ source: g.source.name, url: g.url, title: g.title })),
     };
   });
 

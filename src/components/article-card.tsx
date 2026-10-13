@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import type { Branch, NewsCategory, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
 import { IconExternal, IconStar } from "@/components/icons";
+import { ArticleSheet } from "@/components/article-sheet";
 import { SourceAvatar } from "@/components/ui";
 import { TIER_LEGEND } from "@/lib/tier-legend";
 import { BRANCH_LABEL, NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
@@ -19,10 +20,27 @@ export type ArticleView = {
   source: { name: string; category: SourceCategory; tier?: number | null };
   favorited: boolean;
   alsoIn: string[];
+  related?: { source: string; url: string; title: string }[];
 };
 
 function timeAgo(d: Date) {
   return formatDistanceToNowStrict(d, { addSuffix: false, locale: ptBR }).replace(" minutos", " min").replace(" minuto", " min").replace(" horas", " h").replace(" hora", " h").replace(" dias", " d").replace(" dia", " d");
+}
+
+function sheetData(a: ArticleView) {
+  return {
+    url: a.url,
+    title: a.title,
+    description: a.description,
+    imageUrl: a.imageUrl,
+    publishedAt: a.publishedAt.toISOString(),
+    sourceName: a.source.name,
+    sourceType: SOURCE_CATEGORY_LABEL[a.source.category],
+    tier: a.source.tier ?? null,
+    categoryLabel: NEWS_CATEGORY_LABEL[a.category],
+    branchLabel: a.branch ? BRANCH_LABEL[a.branch] : null,
+    related: a.related ?? [],
+  };
 }
 
 function FavButton({ a, className = "" }: { a: ArticleView; className?: string }) {
@@ -79,9 +97,9 @@ export function ArticleCard({ a, index = 0 }: { a: ArticleView; index?: number }
       <div className="min-w-0 flex-1">
         <Meta a={a} />
         <h3 className="display mt-2 text-[1.075rem] font-semibold leading-snug sm:text-xl">
-          <a href={a.url} target="_blank" rel="noopener noreferrer" className="after:absolute after:inset-0 hover:underline hover:decoration-line-strong hover:underline-offset-4">
+          <ArticleSheet data={sheetData(a)} className="text-left after:absolute after:inset-0 hover:underline hover:decoration-line-strong hover:underline-offset-4">
             {a.title}
-          </a>
+          </ArticleSheet>
         </h3>
         {a.description && <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted">{a.description}</p>}
         <Tags a={a} />
@@ -112,9 +130,9 @@ export function FeaturedCard({ a }: { a: ArticleView }) {
       <div className="p-5 sm:p-6">
         <Meta a={a} />
         <h2 className="display mt-3 text-[1.35rem] font-semibold leading-tight sm:text-[1.75rem]">
-          <a href={a.url} target="_blank" rel="noopener noreferrer" className="after:absolute after:inset-0">
+          <ArticleSheet data={sheetData(a)} className="text-left after:absolute after:inset-0">
             {a.title}
-          </a>
+          </ArticleSheet>
         </h2>
         {a.description && <p className="mt-2 line-clamp-3 text-[0.9375rem] leading-relaxed text-muted">{a.description}</p>}
         <div className="flex items-end justify-between gap-2">

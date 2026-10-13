@@ -281,3 +281,10 @@ model Candidate {
 
   @@index([office, uf])
 }
+
+model Explanation {
+  key       String   @id
+  kind      String
+  text      String
+  createdAt DateTime @default(now())
+}

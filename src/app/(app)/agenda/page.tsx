@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Scope } from "@prisma/client";
 import { ArticleCard } from "@/components/article-card";
+import { Explain } from "@/components/explain";
 import { IconPin } from "@/components/icons";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { db } from "@/lib/db";
@@ -70,6 +71,7 @@ async function Federal({ casa }: { casa: string }) {
                     </div>
                     <p className="mt-1.5 text-[0.9375rem] leading-snug">{e.link ? <a href={e.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{e.description}</a> : e.description}</p>
                     {e.place && <p className="mt-1 flex items-center gap-1 text-xs text-muted"><IconPin /> {e.place}</p>}
+                    <Explain kind="event" text={`${e.house} — ${e.type}${e.organ ? ` (${e.organ})` : ""}: ${e.description}`} />
                   </div>
                 </li>
               ))}
@@ -89,6 +91,7 @@ async function Federal({ casa }: { casa: string }) {
                 {v.approved !== null && <span className={`rounded-full px-2 py-0.5 font-semibold ${v.approved ? "bg-municipal-soft text-municipal" : "bg-danger/10 text-danger"}`}>{v.approved ? "Aprovada" : "Rejeitada"}</span>}
               </div>
               <p className="line-clamp-4 text-sm leading-snug text-muted">{v.description}</p>
+              <Explain kind="vote" text={`${v.house}: ${v.description}${v.approved === true ? " (resultado: aprovada)" : v.approved === false ? " (resultado: rejeitada)" : ""}`} />
             </li>
           ))}
         </ul>
