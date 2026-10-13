@@ -1,6 +1,6 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { IconLogo } from "@/components/icons";
+import { IconBell, IconLogo, IconShield, IconStar, IconUser } from "@/components/icons";
 import { DesktopNav, MobileNav } from "@/components/nav";
 import { UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -19,11 +19,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="hidden flex-1 lg:block">
             <DesktopNav isAdmin={isAdmin} />
           </div>
-          <Link href="/configuracoes" className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-muted hover:text-ink sm:text-xs" title="Alterar localização">
-            <span className="h-1.5 w-1.5 rounded-full bg-municipal" />
-            {user.municipality} · {user.uf}
+          <Link href="/configuracoes" className="ml-auto flex max-w-[12rem] items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-muted hover:text-ink sm:text-xs" title="Alterar localização">
+            <span className="h-1.5 w-1.5 flex-none rounded-full bg-municipal" />
+            <span className="truncate">{user.municipality} · {user.uf}</span>
           </Link>
-          <UserButton />
+          <UserButton>
+            <UserButton.MenuItems>
+              <UserButton.Link label="Favoritos" labelIcon={<IconStar width={16} height={16} />} href="/favoritos" />
+              <UserButton.Link label="Alertas" labelIcon={<IconBell width={16} height={16} />} href="/alertas" />
+              <UserButton.Link label="Minha conta" labelIcon={<IconUser width={16} height={16} />} href="/configuracoes" />
+              {isAdmin && <UserButton.Link label="Administração" labelIcon={<IconShield width={16} height={16} />} href="/admin/usuarios" />}
+            </UserButton.MenuItems>
+          </UserButton>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>

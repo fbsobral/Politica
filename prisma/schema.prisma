@@ -111,6 +111,7 @@ model Article {
   municipalityKey String?
   category        NewsCategory @default(OUTROS)
   branch          Branch?
+  factCheck       Boolean      @default(false)
   clusterKey      String
   searchText      String       @default("")
   classified      Boolean      @default(false)
@@ -123,6 +124,7 @@ model Article {
   alertMatches AlertMatch[]
 
   @@index([scope, publishedAt(sort: Desc)])
+  @@index([factCheck, scope, publishedAt(sort: Desc)])
   @@index([scope, branch, publishedAt(sort: Desc)])
   @@index([scope, uf, publishedAt(sort: Desc)])
   @@index([scope, uf, municipalityKey, publishedAt(sort: Desc)])

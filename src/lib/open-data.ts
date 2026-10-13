@@ -52,7 +52,7 @@ export async function camaraSpending(deputyId: string): Promise<Spending | null>
   return null;
 }
 
-export type AgendaEvent = { id: number; start: string; type: string; description: string; situation: string; place: string | null; organ: string | null };
+export type AgendaEvent = { id: string; house: "Câmara" | "Senado"; link?: string; start: string; type: string; description: string; situation: string; place: string | null; organ: string | null };
 
 export async function camaraAgenda(days = 10): Promise<AgendaEvent[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -62,7 +62,8 @@ export async function camaraAgenda(days = 10): Promise<AgendaEvent[]> {
   return j.dados
     .filter((e) => !/cancelad/i.test(e.situacao))
     .map((e) => ({
-      id: e.id,
+      id: `c${e.id}`,
+      house: "Câmara" as const,
       start: e.dataHoraInicio,
       type: e.descricaoTipo,
       description: e.descricao,
@@ -72,7 +73,7 @@ export async function camaraAgenda(days = 10): Promise<AgendaEvent[]> {
     }));
 }
 
-export type PlenaryVote = { id: string; date: string; description: string; approved: boolean | null; organ: string };
+export type PlenaryVote = { id: string; house: "Câmara" | "Senado"; link?: string; date: string; description: string; approved: boolean | null; organ: string };
 
 export async function camaraVotes(days = 45): Promise<PlenaryVote[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -83,7 +84,7 @@ export async function camaraVotes(days = 45): Promise<PlenaryVote[]> {
   return j.dados
     .filter((v) => v.siglaOrgao === "PLEN" && v.descricao)
     .slice(0, 15)
-    .map((v) => ({ id: v.id, date: v.dataHoraRegistro, description: v.descricao, approved: v.aprovacao === 1 ? true : v.aprovacao === 0 ? false : null, organ: v.siglaOrgao }));
+    .map((v) => ({ id: `c${v.id}`, house: "Câmara" as const, date: v.dataHoraRegistro, description: v.descricao, approved: v.aprovacao === 1 ? true : v.aprovacao === 0 ? false : null, organ: v.siglaOrgao }));
 }
 
 /* ───────── Senado ───────── */
@@ -102,6 +103,70 @@ export async function senadoBills(code: string): Promise<Bill[]> {
       ementa: m.Ementa,
       year: Number(m.Ano) || null,
       url: `https://www25.senado.leg.br/web/atividade/materias/-/materia/${m.Codigo}`,
+    }));
+}
+
+const SENADO = "https://legis.senado.leg.br/dadosabertos";
+const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+const asArray = <T,>(x: T | T[] | undefined): T[] => (Array.isArray(x) ? x : x ? [x] : []);
+
+/** Sessões do Plenário e reuniões de comissões do Senado nos próximos dias. */
+export async function senadoAgenda(days = 10): Promise<AgendaEvent[]> {
+  const from = new Date();
+  const to = new Date(Date.now() + days * 86400000);
+  const [plen, com] = await Promise.allSettled([
+    getJson<any>(`${SENADO}/plenario/agenda/mes/${ymd(from)}`, HOUR),
+    getJson<any>(`${SENADO}/comissao/agenda/${ymd(from)}/${ymd(to)}`, HOUR),
+  ]);
+  const out: AgendaEvent[] = [];
+  if (plen.status === "fulfilled") {
+    for (const s of asArray<any>(plen.value.AgendaPlenario?.Sessoes?.Sessao)) {
+      if (!s.Data || s.Data < from.toISOString().slice(0, 10) || s.Data > to.toISOString().slice(0, 10)) continue;
+      if (/cancelad/i.test(s.SituacaoSessao ?? "")) continue;
+      out.push({
+        id: `s${s.CodigoSessao}`,
+        house: "Senado",
+        start: `${s.Data}T${s.Hora ?? "00:00"}`,
+        type: String(s.TipoSessao ?? "Sessão").trim().toLowerCase().replace(/^./, (c: string) => c.toUpperCase()),
+        description: s.Evento?.DescricaoEvento || (s.Casa === "CN" ? "Sessão do Congresso Nacional" : "Sessão do Plenário do Senado"),
+        situation: s.SituacaoSessao ?? "",
+        place: s.LocalSessao ?? null,
+        organ: s.Casa === "CN" ? "CN" : "PLEN",
+      });
+    }
+  }
+  if (com.status === "fulfilled") {
+    for (const r of asArray<any>(com.value.AgendaReuniao?.reunioes?.reuniao)) {
+      if (!r.dataInicio || /cancelad|suspens/i.test(r.situacao ?? "")) continue;
+      out.push({
+        id: `r${r.codigo}`,
+        house: "Senado",
+        start: String(r.dataInicio).slice(0, 16),
+        type: r.titulo ?? "Reunião de comissão",
+        description: r.colegiadoCriador?.nome ?? r.descricao ?? "",
+        situation: r.situacao ?? "",
+        place: r.local ?? null,
+        organ: r.colegiadoCriador?.sigla ?? null,
+        link: r.urlUltimaPautaSimplesPublicada || undefined,
+      });
+    }
+  }
+  if (plen.status === "rejected" && com.status === "rejected") throw new Error("Senado indisponível");
+  return out;
+}
+
+export async function senadoVotes(days = 45): Promise<PlenaryVote[]> {
+  const j = await getJson<any>(`${SENADO}/plenario/lista/votacao/${ymd(new Date(Date.now() - Math.min(days, 59) * 86400000))}/${ymd(new Date())}`, HOUR);
+  return asArray<any>(j.ListaVotacoes?.Votacoes?.Votacao)
+    .sort((a, b) => String(b.DataSessao).localeCompare(String(a.DataSessao)))
+    .slice(0, 15)
+    .map((v) => ({
+      id: `s${v.CodigoSessaoVotacao ?? v.CodigoVotacaoSve}`,
+      house: "Senado" as const,
+      date: `${v.DataSessao}T${v.HoraInicio ?? "00:00"}`,
+      description: `${v.DescricaoIdentificacaoMateria ? v.DescricaoIdentificacaoMateria + " — " : ""}${v.DescricaoVotacao}${v.TotalVotosSim ? ` (${v.TotalVotosSim} sim, ${v.TotalVotosNao} não)` : ""}`,
+      approved: v.Resultado === "A" ? true : v.Resultado === "R" ? false : null,
+      organ: "PLEN",
     }));
 }
 

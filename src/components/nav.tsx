@@ -13,11 +13,8 @@ function items(isAdmin: boolean): Item[] {
     { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
     { href: "/checagens", label: "Checagens", icon: <IconShield />, match: (p) => p.startsWith("/checagens") },
     { href: "/diario-oficial", label: "Diário Oficial", icon: <IconFeed />, match: (p) => p.startsWith("/diario-oficial") },
-    { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-    { href: "/favoritos", label: "Favoritos", icon: <IconMore />, match: (p) => p.startsWith("/favoritos") },
-    { href: "/configuracoes", label: "Conta", icon: <IconMore />, match: (p) => p.startsWith("/configuracoes") },
   ];
-  if (isAdmin) list.push({ href: "/admin/usuarios", label: "Admin", icon: <IconShield />, match: (p) => p.startsWith("/admin") });
+  void isAdmin; // Alertas, Favoritos, Conta e Admin ficam no menu do avatar
   return list;
 }
 

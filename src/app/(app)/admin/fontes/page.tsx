@@ -78,6 +78,15 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
           </section>
         ))}
 
+        <section className="card p-5 sm:p-6">
+          <h2 className="display text-xl font-semibold">Buscas · Checagem de fatos local</h2>
+          <p className="mb-4 text-xs text-muted">Alimenta a página Checagens nas esferas estadual e municipal. Placeholders: {"{estado}"}, {"{cidade}"}, {"{uf}"}.</p>
+          <div className="space-y-3.5">
+            <label className="block"><span className={label}>Estadual</span><textarea name="queryFactCheckState" defaultValue={cfg.queryFactCheckState} rows={2} className="input font-mono !text-[13px]" /></label>
+            <label className="block"><span className={label}>Municipal</span><textarea name="queryFactCheckCity" defaultValue={cfg.queryFactCheckCity} rows={2} className="input font-mono !text-[13px]" /></label>
+          </div>
+        </section>
+
         <div className="flex flex-wrap gap-2">
           <SubmitButton className="btn btn-primary" pendingText="Salvando…">Salvar configuração</SubmitButton>
           <SubmitButton formAction={resetRobotSettings} formNoValidate className="btn btn-ghost" pendingText="Restaurando…">Restaurar padrão</SubmitButton>

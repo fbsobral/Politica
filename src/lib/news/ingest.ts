@@ -217,6 +217,15 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
         });
       }
     }
+    // checagens locais (estado e cidade)
+    for (const uf of ufs) {
+      if (!cfg.queryFactCheckState.trim()) break;
+      origins.push({ label: `gnews:uf:${uf}:FC`, url: googleNewsUrl(fillTemplate(cfg.queryFactCheckState, { estado: UFS[uf], uf }), localDays), scope: "ESTADUAL", uf, municipalityKey: null, factCheck: true });
+    }
+    for (const c of cities.values()) {
+      if (!cfg.queryFactCheckCity.trim()) break;
+      origins.push({ label: `gnews:city:${c.uf}:${c.key}:FC`, url: googleNewsUrl(fillTemplate(cfg.queryFactCheckCity, { cidade: c.name, estado: UFS[c.uf], uf: c.uf }), localDays), scope: "MUNICIPAL", uf: c.uf, municipalityKey: c.key, factCheck: true });
+    }
     for (const c of cities.values()) {
       for (const [branch, p] of BRANCHES) {
         const query = q("City", p);
@@ -296,6 +305,7 @@ export async function runIngest(): Promise<IngestResult> {
     sourceIds.set(name, src.id);
   }
 
+  const srcFactCheck = new Map((await db.source.findMany({ where: { name: { in: names } }, select: { name: true, factCheck: true } })).map((x) => [x.name, x.factCheck]));
   const newArticleIds: string[] = [];
   for (const c of fresh) {
     try {
@@ -310,6 +320,7 @@ export async function runIngest(): Promise<IngestResult> {
           uf: c.uf,
           municipalityKey: c.municipalityKey,
           branch: c.branch,
+          factCheck: Boolean(c.factCheck) || (srcFactCheck.get(c.sourceName) ?? false),
           clusterKey: clusterKey(c.title),
           searchText: normalize(`${c.title} ${c.description ?? ""}`),
           origin: c.origin,
@@ -371,7 +382,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   const toRemove: string[] = [];
   for (const r of results) {
     const orig = pending.find((p) => p.id === r.id)!;
-    if (!r.political && !orig.source.factCheck) {
+    if (!r.political && !orig.source.factCheck && !orig.factCheck) {
       toRemove.push(r.id);
       continue;
     }

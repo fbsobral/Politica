@@ -1,4 +1,5 @@
 import type { Scope } from "@prisma/client";
+import Link from "next/link";
 import { SCOPE_LABEL } from "@/lib/taxonomy";
 
 /** cor estável por nome (veículos, partidos) */
@@ -89,4 +90,26 @@ export function EmptyState({ title, children, action }: { title: string; childre
 export function Notice({ kind, children }: { kind: "ok" | "erro" | "info"; children: React.ReactNode }) {
   const cls = kind === "ok" ? "bg-municipal-soft text-municipal" : kind === "erro" ? "bg-danger/10 text-danger" : "bg-brand-soft text-brand";
   return <p role={kind === "erro" ? "alert" : "status"} className={`rounded-xl px-4 py-3 text-sm font-medium ${cls}`}>{children}</p>;
+}
+
+/** Abas Municipal / Estadual / Federal como links (?esfera=...), preservando outros parâmetros. */
+export function ScopeTabs({ base, scope, params = {} }: { base: string; scope: Scope; params?: Record<string, string | undefined> }) {
+  const href = (s: Scope) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...params, pagina: undefined, esfera: s.toLowerCase() })) if (v) qs.set(k, v);
+    return `${base}?${qs}`;
+  };
+  return (
+    <div role="tablist" aria-label="Esfera" className="mb-6 grid grid-cols-3 gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid sm:min-w-[24rem]">
+      {(["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s) => {
+        const active = s === scope;
+        return (
+          <Link key={s} role="tab" aria-selected={active} href={href(s)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`}>
+            <span className={`h-2 w-2 rounded-full ${SCOPE_DOT[s]}`} />
+            {SCOPE_LABEL[s]}
+          </Link>
+        );
+      })}
+    </div>
+  );
 }
