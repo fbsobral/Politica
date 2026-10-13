@@ -1,0 +1,38 @@
+import { UserButton } from "@clerk/nextjs";
+import Link from "next/link";
+import { IconLogo } from "@/components/icons";
+import { DesktopNav, MobileNav } from "@/components/nav";
+import { UFS } from "@/lib/taxonomy";
+import { requireUser } from "@/lib/user";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const isAdmin = user.role === "ADMIN";
+  return (
+    <div className="min-h-screen pb-24 md:pb-0">
+      <header className="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2.5" aria-label="Política — início">
+            <IconLogo />
+            <span className="display text-xl font-semibold tracking-tight">Política</span>
+          </Link>
+          <div className="hidden flex-1 md:block">
+            <DesktopNav isAdmin={isAdmin} />
+          </div>
+          <Link href="/configuracoes" className="ml-auto flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-muted hover:text-ink md:ml-0 sm:text-xs" title="Alterar localização">
+            <span className="h-1.5 w-1.5 rounded-full bg-municipal" />
+            {user.municipality} · {user.uf}
+          </Link>
+          <UserButton />
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs leading-relaxed text-faint sm:px-6">
+        <p>
+          {UFS[user.uf]} · Notícias coletadas de feeds públicos a cada hora e classificadas por IA. Representantes: Câmara dos Deputados, Senado e TSE.
+        </p>
+      </footer>
+      <MobileNav isAdmin={isAdmin} />
+    </div>
+  );
+}

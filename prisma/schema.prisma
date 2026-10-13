@@ -1,0 +1,215 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Scope {
+  MUNICIPAL
+  ESTADUAL
+  FEDERAL
+}
+
+enum SourceCategory {
+  PORTAL_NACIONAL
+  JORNAL
+  REVISTA
+  TV
+  RADIO
+  AGENCIA_NOTICIAS
+  ORGAO_OFICIAL
+  REGIONAL
+  BLOG_INDEPENDENTE
+  OUTRO
+}
+
+enum NewsCategory {
+  ECONOMIA
+  SAUDE
+  SEGURANCA
+  EDUCACAO
+  ELEICOES
+  JUSTICA_CORRUPCAO
+  INFRAESTRUTURA
+  MEIO_AMBIENTE
+  SOCIAL
+  LEGISLATIVO
+  ADMINISTRACAO
+  INTERNACIONAL
+  OUTROS
+}
+
+enum PoliticianRole {
+  PRESIDENTE
+  VICE_PRESIDENTE
+  SENADOR
+  DEPUTADO_FEDERAL
+  GOVERNADOR
+  VICE_GOVERNADOR
+  DEPUTADO_ESTADUAL
+  PREFEITO
+  VICE_PREFEITO
+  VEREADOR
+}
+
+model User {
+  id               String   @id @default(cuid())
+  clerkId          String   @unique
+  email            String   @unique
+  role             Role     @default(USER)
+  name             String?
+  uf               String?
+  municipality     String?
+  municipalityKey  String?
+  dailyDigest      Boolean  @default(true)
+  alertEmails      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  follows   Follow[]
+  favorites Favorite[]
+  alerts    Alert[]
+  digests   DigestLog[]
+}
+
+model Source {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  homepage      String?
+  category      SourceCategory @default(OUTRO)
+  categoryKnown Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+
+  articles Article[]
+}
+
+model Article {
+  id              String       @id @default(cuid())
+  url             String       @unique
+  title           String
+  description     String?
+  imageUrl        String?
+  publishedAt     DateTime
+  scope           Scope
+  uf              String?
+  municipalityKey String?
+  category        NewsCategory @default(OUTROS)
+  clusterKey      String
+  searchText      String       @default("")
+  classified      Boolean      @default(false)
+  origin          String?
+  sourceId        String
+  source          Source       @relation(fields: [sourceId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  favorites    Favorite[]
+  alertMatches AlertMatch[]
+
+  @@index([scope, publishedAt(sort: Desc)])
+  @@index([scope, uf, publishedAt(sort: Desc)])
+  @@index([scope, uf, municipalityKey, publishedAt(sort: Desc)])
+  @@index([clusterKey])
+  @@index([classified])
+  @@index([sourceId])
+}
+
+model Politician {
+  id           String         @id @default(cuid())
+  externalKey  String         @unique
+  name         String
+  ballotName   String?
+  role         PoliticianRole
+  uf           String?
+  municipality String?
+  municipalityKey String?
+  party        String?
+  photoUrl     String?
+  email        String?
+  phone        String?
+  profileUrl   String?
+  mandate      String?
+  updatedAt    DateTime       @updatedAt
+
+  follows Follow[]
+  alerts  Alert[]
+
+  @@index([role, uf])
+  @@index([role, uf, municipalityKey])
+}
+
+model Follow {
+  userId       String
+  politicianId String
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  @@id([userId, politicianId])
+}
+
+model Favorite {
+  userId    String
+  articleId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, articleId])
+}
+
+model Alert {
+  id           String      @id @default(cuid())
+  userId       String
+  keyword      String?
+  politicianId String?
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  politician   Politician? @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  matches      AlertMatch[]
+
+  @@index([userId])
+}
+
+model AlertMatch {
+  id         String    @id @default(cuid())
+  alertId    String
+  articleId  String
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  alert      Alert     @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  article    Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, articleId])
+  @@index([notifiedAt])
+}
+
+model DigestLog {
+  id        String   @id @default(cuid())
+  userId    String
+  day       String
+  sentAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  job        String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean   @default(false)
+  info       String?
+
+  @@index([job, startedAt(sort: Desc)])
+}
