@@ -23,6 +23,9 @@ export const SETTING_DEFAULTS = {
   queryCityLegislativo: '("câmara municipal" OR "câmara de vereadores" OR vereador OR vereadora OR vereadores OR "presidente da câmara" OR "sessão da câmara") "{cidade}"',
   queryCityExecutivo: '(prefeito OR prefeita OR prefeitura OR "secretaria municipal" OR "gestão municipal") "{cidade}"',
   queryCityJudiciario: '("Ministério Público" OR promotoria OR Justiça OR "Tribunal de Contas" OR TCE OR "Polícia Civil") "{cidade}" (prefeitura OR prefeito OR vereador OR câmara OR eleição)',
+  /** buscas sobre eleições (Google News): nacional e por estado. Placeholders: {estado}, {uf} */
+  queryElectionFederal: '("segundo turno" OR "eleições 2026" OR "pesquisa eleitoral" OR Datafolha OR Quaest OR AtlasIntel OR debate) presidente',
+  queryElectionState: '("segundo turno" OR "pesquisa eleitoral" OR Datafolha OR Quaest OR debate OR candidato) governador "{estado}"',
   /** buscas locais de checagem de fatos (Google News). Placeholders: {estado}, {cidade}, {uf} */
   queryFactCheckState: '("checagem" OR "fato ou fake" OR "é falso" OR "boato" OR desinformação OR verificamos) "{estado}" (política OR eleição OR governo OR candidato)',
   queryFactCheckCity: '("checagem" OR "fato ou fake" OR "é falso" OR "boato" OR desinformação OR verificamos) "{cidade}" (prefeitura OR prefeito OR vereador OR eleição OR candidato)',

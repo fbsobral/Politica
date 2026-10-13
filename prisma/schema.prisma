@@ -19,6 +19,13 @@ enum Scope {
   FEDERAL
 }
 
+enum ElectionOffice {
+  PRESIDENTE
+  GOVERNADOR
+  SENADOR
+  DEPUTADO
+}
+
 enum Branch {
   LEGISLATIVO
   EXECUTIVO
@@ -114,6 +121,8 @@ model Article {
   category        NewsCategory @default(OUTROS)
   branch          Branch?
   factCheck       Boolean      @default(false)
+  cargo           ElectionOffice?
+  poll            Boolean      @default(false)
   clusterKey      String
   searchText      String       @default("")
   classified      Boolean      @default(false)
@@ -126,6 +135,8 @@ model Article {
   alertMatches AlertMatch[]
 
   @@index([scope, publishedAt(sort: Desc)])
+  @@index([cargo, publishedAt(sort: Desc)])
+  @@index([poll, publishedAt(sort: Desc)])
   @@index([factCheck, scope, publishedAt(sort: Desc)])
   @@index([scope, branch, publishedAt(sort: Desc)])
   @@index([scope, uf, publishedAt(sort: Desc)])
@@ -250,4 +261,19 @@ model FeedSource {
 model Setting {
   key   String @id
   value String
+}
+
+model Candidate {
+  id          String         @id @default(cuid())
+  externalKey String         @unique
+  name        String
+  ballotName  String
+  number      Int?
+  party       String?
+  office      ElectionOffice
+  uf          String?
+  status      String
+  updatedAt   DateTime       @updatedAt
+
+  @@index([office, uf])
 }

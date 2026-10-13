@@ -5,7 +5,7 @@ import { fillTemplate, getSettings, type Settings } from "@/lib/settings";
 import { UFS } from "@/lib/taxonomy";
 import { clusterKey, normalize, stripHtml, truncate } from "@/lib/text";
 import { classifyArticles, classifySources, setAiEnabled, type ClassifyInput } from "./classify";
-import { FACT_CHECK_FEEDS, NATIONAL_FEEDS, guessSourceCategory } from "./sources";
+import { FACT_CHECK_FEEDS, MORE_FEEDS, NATIONAL_FEEDS, guessSourceCategory } from "./sources";
 
 const parser = new Parser({
   timeout: 20000,
@@ -164,6 +164,13 @@ export async function ensureDefaultFeeds(): Promise<void> {
     });
     await db.setting.create({ data: { key: "seed_factcheck", value: "1" } });
   }
+  if (!(await db.setting.findUnique({ where: { key: "seed_more_feeds_1" } }))) {
+    await db.feedSource.createMany({
+      data: MORE_FEEDS.map((f) => ({ name: f.name, feedUrl: f.feedUrl, homepage: f.homepage, category: f.category, scope: "FEDERAL" as const, branch: f.branch })),
+      skipDuplicates: true,
+    });
+    await db.setting.create({ data: { key: "seed_more_feeds_1", value: "1" } });
+  }
   for (const f of NATIONAL_FEEDS.filter((x) => x.branch)) {
     await db.feedSource.updateMany({ where: { feedUrl: f.feedUrl, branch: null }, data: { branch: f.branch } });
   }
@@ -229,6 +236,14 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
           branch,
         });
       }
+    }
+    // eleições: nacional e por estado (inclui pesquisas)
+    if (cfg.queryElectionFederal.trim()) {
+      origins.push({ label: "gnews:elec:federal", url: googleNewsUrl(cfg.queryElectionFederal, days), scope: "FEDERAL", uf: null, municipalityKey: null });
+    }
+    for (const uf of ufs) {
+      if (!cfg.queryElectionState.trim()) break;
+      origins.push({ label: `gnews:uf:${uf}:ELEC`, url: googleNewsUrl(fillTemplate(cfg.queryElectionState, { estado: UFS[uf], uf }), localDays), scope: "ESTADUAL", uf, municipalityKey: null });
     }
     // checagens locais (estado e cidade)
     for (const uf of ufs) {
@@ -422,7 +437,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
       if (scope === "MUNICIPAL") scope = "ESTADUAL"; // sem cidade identificada, trate como estadual
       if (scope === "ESTADUAL" && !uf) scope = "FEDERAL";
     }
-    await db.article.update({ where: { id: r.id }, data: { scope, uf, category: r.category, branch: r.branch ?? orig.branch, classified: true } });
+    await db.article.update({ where: { id: r.id }, data: { scope, uf, category: r.category, branch: r.branch ?? orig.branch, cargo: r.cargo, poll: r.poll, classified: true } });
     classified++;
   }
   if (toRemove.length) await db.article.deleteMany({ where: { id: { in: toRemove } } });

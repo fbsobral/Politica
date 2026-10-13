@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { IconBell, IconShield, IconStar, IconUser } from "@/components/icons";
+import { IconBell, IconShield, IconStar, IconUser, IconVote } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/user";
 
@@ -8,6 +8,7 @@ export const metadata = { title: "Mais" };
 export default async function MaisPage() {
   const user = await requireUser();
   const items = [
+    { href: "/eleicoes", t: "Eleições", d: "Candidatos, pesquisas e notícias por cargo", i: <IconVote /> },
     { href: "/checagens", t: "Checagem de fatos", d: "Boatos e declarações verificados", i: <IconShield /> },
     { href: "/diario-oficial", t: "Diário Oficial", d: `Edições de ${user.municipality}`, i: <IconStar /> },
     { href: "/favoritos", t: "Favoritos", d: "Notícias salvas", i: <IconStar /> },

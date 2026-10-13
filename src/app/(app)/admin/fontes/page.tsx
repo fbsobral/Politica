@@ -79,6 +79,15 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
         ))}
 
         <section className="card p-5 sm:p-6">
+          <h2 className="display text-xl font-semibold">Buscas · Eleições</h2>
+          <p className="mb-4 text-xs text-muted">Alimenta a página Eleições (notícias por cargo e pesquisas). Placeholders: {"{estado}"} e {"{uf}"}.</p>
+          <div className="space-y-3.5">
+            <label className="block"><span className={label}>Nacional</span><textarea name="queryElectionFederal" defaultValue={cfg.queryElectionFederal} rows={2} className="input font-mono !text-[13px]" /></label>
+            <label className="block"><span className={label}>Por estado</span><textarea name="queryElectionState" defaultValue={cfg.queryElectionState} rows={2} className="input font-mono !text-[13px]" /></label>
+          </div>
+        </section>
+
+        <section className="card p-5 sm:p-6">
           <h2 className="display text-xl font-semibold">Buscas · Checagem de fatos local</h2>
           <p className="mb-4 text-xs text-muted">Alimenta a página Checagens nas esferas estadual e municipal. Placeholders: {"{estado}"}, {"{cidade}"}, {"{uf}"}.</p>
           <div className="space-y-3.5">

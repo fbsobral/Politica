@@ -4,6 +4,7 @@ import { sendDigests } from "@/lib/digest";
 import { runIngest } from "@/lib/news/ingest";
 import { getSettings } from "@/lib/settings";
 import { syncAll, syncMissing } from "@/lib/politicians/sync";
+import { syncCandidates } from "@/lib/politicians/tse";
 
 export const JOBS = {
   /** coleta de notícias + classificação + alertas (a cada hora) */
@@ -22,6 +23,11 @@ export const JOBS = {
   async politicians() {
     await syncAll();
     return { ok: true };
+  },
+  /** candidatos das eleições 2026 (presidente, governador, senado) */
+  async candidates() {
+    const users = await db.user.findMany({ where: { uf: { not: null } }, distinct: ["uf"], select: { uf: true } });
+    return { candidates: await syncCandidates(users.map((u) => u.uf!)) };
   },
   /** só o que falta (usado na inicialização) */
   async politiciansMissing() {

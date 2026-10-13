@@ -1,6 +1,6 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { IconBell, IconLogo, IconShield, IconStar, IconUser } from "@/components/icons";
+import { IconBell, IconLogo, IconShield, IconStar, IconUser, IconFeed } from "@/components/icons";
 import { DesktopNav, MobileNav } from "@/components/nav";
 import { UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -25,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <UserButton>
             <UserButton.MenuItems>
+              <UserButton.Link label="Diário Oficial" labelIcon={<IconFeed width={16} height={16} />} href="/diario-oficial" />
               <UserButton.Link label="Favoritos" labelIcon={<IconStar width={16} height={16} />} href="/favoritos" />
               <UserButton.Link label="Alertas" labelIcon={<IconBell width={16} height={16} />} href="/alertas" />
               <UserButton.Link label="Minha conta" labelIcon={<IconUser width={16} height={16} />} href="/configuracoes" />

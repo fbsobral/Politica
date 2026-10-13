@@ -5,6 +5,7 @@ import { FeedFilters } from "@/components/feed-filters";
 import { IconFilter, IconX } from "@/components/icons";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
 import { db } from "@/lib/db";
+import { daysToRunoff } from "@/lib/election";
 import { buildWhere, scopeWhere } from "@/lib/feed";
 import { BRANCH_LABEL, BRANCH_VALUES, NEWS_CATEGORY_LABEL, SCOPE_LABEL, SCOPE_SLUG, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -120,6 +121,13 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
         <p className="eyebrow mb-1 block first-letter:uppercase">{today}</p>
         <h1 className="display text-4xl font-semibold leading-none sm:text-5xl">{place}</h1>
       </header>
+
+      {daysToRunoff() >= 0 && (
+        <Link href="/eleicoes" className="card-flat mb-5 flex items-center justify-between gap-3 px-4 py-3 text-sm transition-shadow hover:shadow-card">
+          <span><b>{daysToRunoff() === 0 ? "Hoje é o 2º turno." : `2º turno em ${daysToRunoff()} ${daysToRunoff() === 1 ? "dia" : "dias"}.`}</b> <span className="text-muted">Candidatos, pesquisas e notícias por cargo.</span></span>
+          <span aria-hidden className="text-brand">→</span>
+        </Link>
+      )}
 
       <div role="tablist" aria-label="Esfera" className="mb-6 grid grid-cols-3 gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid sm:min-w-[28rem]">
         {(["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s, i) => {

@@ -75,3 +75,16 @@ export const FACT_CHECK_FEEDS: FeedSource[] = [
   { name: "Aos Fatos", feedUrl: "https://www.aosfatos.org/noticias/feed/", homepage: "https://www.aosfatos.org", category: "AGENCIA_NOTICIAS", factCheck: true },
   { name: "Projeto Comprova", feedUrl: "https://projetocomprova.com.br/feed/", homepage: "https://projetocomprova.com.br", category: "AGENCIA_NOTICIAS", factCheck: true },
 ];
+
+/** Veículos adicionados depois (cadastrados uma vez em bancos existentes; depois são gerenciados no painel). */
+export const MORE_FEEDS: FeedSource[] = [
+  { name: "CNN Brasil", feedUrl: "https://www.cnnbrasil.com.br/feed/", homepage: "https://www.cnnbrasil.com.br", category: "TV" },
+  { name: "O Estado de S. Paulo", feedUrl: "https://www.estadao.com.br/arc/outboundfeeds/rss/?outputType=xml", homepage: "https://www.estadao.com.br", category: "JORNAL" },
+  { name: "O Globo", feedUrl: "https://oglobo.globo.com/rss/oglobo", homepage: "https://oglobo.globo.com", category: "JORNAL" },
+  { name: "Brasil de Fato", feedUrl: "https://www.brasildefato.com.br/feed", homepage: "https://www.brasildefato.com.br", category: "BLOG_INDEPENDENTE" },
+  { name: "Terra Política", feedUrl: "https://www.terra.com.br/noticias/brasil/politica/rss.xml", homepage: "https://www.terra.com.br/noticias/brasil/politica/", category: "PORTAL_NACIONAL" },
+  { name: "Jovem Pan", feedUrl: "https://jovempan.com.br/feed", homepage: "https://jovempan.com.br", category: "RADIO" },
+  { name: "Revista Oeste", feedUrl: "https://revistaoeste.com/feed/", homepage: "https://revistaoeste.com", category: "REVISTA" },
+  { name: "The Intercept Brasil", feedUrl: "https://www.intercept.com.br/feed/", homepage: "https://www.intercept.com.br", category: "BLOG_INDEPENDENTE" },
+  { name: "Agência Gov", feedUrl: "https://agenciagov.ebc.com.br/noticias/RSS", homepage: "https://agenciagov.ebc.com.br", category: "ORGAO_OFICIAL", branch: "EXECUTIVO" },
+];

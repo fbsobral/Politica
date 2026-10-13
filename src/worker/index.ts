@@ -20,10 +20,12 @@ schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");
 schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");
 schedule("0 4 * * 0", "politicians");
 schedule("30 3 * * *", "cleanup");
+schedule("15 */6 * * *", "candidates");
 
 // ao subir: completa dados que faltam e já coleta notícias
 (async () => {
   await runJob("politiciansMissing").catch(() => undefined);
+  await runJob("candidates").catch(() => undefined);
   await runJob("ingest").catch(() => undefined);
 })();
 

@@ -5,18 +5,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { PoliticianRole } from "@prisma/client";
+import type { ElectionOffice, PoliticianRole } from "@prisma/client";
 import { db } from "@/lib/db";
 import { normalize } from "@/lib/text";
 
 const BASE = "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand";
 const MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 
-async function downloadZip(year: number): Promise<string> {
+async function downloadZip(year: number, maxAgeMs = MAX_AGE_MS): Promise<string> {
   const dir = join(tmpdir(), "politica-tse");
   await mkdir(dir, { recursive: true });
   const file = join(dir, `consulta_cand_${year}.zip`);
-  if (existsSync(file) && Date.now() - statSync(file).mtimeMs < MAX_AGE_MS && statSync(file).size > 1_000_000) return file;
+  if (existsSync(file) && Date.now() - statSync(file).mtimeMs < maxAgeMs && statSync(file).size > 1_000_000) return file;
   const res = await fetch(`${BASE}/consulta_cand_${year}.zip`);
   if (!res.ok || !res.body) throw new Error(`TSE ${year}: HTTP ${res.status}`);
   const tmp = `${file}.part`;
@@ -149,5 +149,47 @@ export async function syncMunicipal(uf: string): Promise<number> {
   const rows = collect(zip, uf, 2024, roles, "2025–2028", true);
   if (!rows.length) throw new Error(`Nenhum eleito municipal encontrado para ${uf}`);
   await save(rows, { uf, roles: Object.values(roles) });
+  return rows.length;
+}
+
+/* ───────── Candidatos das eleições 2026 (presidente, governador, senado) ───────── */
+const OFFICE_BY_CARGO: Record<string, ElectionOffice> = { PRESIDENTE: "PRESIDENTE", GOVERNADOR: "GOVERNADOR", SENADOR: "SENADOR" };
+
+/** Quem está no 2º turno ou já foi eleito (arquivo de candidaturas do TSE; o resultado muda ao longo da apuração). */
+export async function syncCandidates(ufs: string[]): Promise<number> {
+  const year = 2026;
+  const zip = await downloadZip(year, 1000 * 60 * 60 * 3);
+  const rows: { externalKey: string; name: string; ballotName: string; number: number | null; party: string | null; office: ElectionOffice; uf: string | null; status: string }[] = [];
+  for (const file of ["BR", ...new Set(ufs)]) {
+    let list: Generator<Record<string, string>>;
+    try {
+      list = readCandidates(zip, file, year);
+    } catch {
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const r of list) {
+      const office = OFFICE_BY_CARGO[r.DS_CARGO];
+      const status = r.DS_SIT_TOT_TURNO;
+      if (!office || !(/^2º TURNO/.test(status) || /^ELEITO/.test(status))) continue;
+      const key = `tse:${year}:${r.SQ_CANDIDATO}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        externalKey: key,
+        name: titleCase(r.NM_CANDIDATO),
+        ballotName: titleCase(r.NM_URNA_CANDIDATO),
+        number: Number(r.NR_CANDIDATO) || null,
+        party: r.SG_PARTIDO || null,
+        office,
+        uf: file === "BR" ? null : file,
+        status,
+      });
+    }
+  }
+  if (!rows.length) return 0;
+  for (const r of rows) await db.candidate.upsert({ where: { externalKey: r.externalKey }, create: r, update: r });
+  // quem saiu do filtro (ex.: foi derrotado no 2º turno) deixa de aparecer
+  await db.candidate.deleteMany({ where: { externalKey: { notIn: rows.map((r) => r.externalKey) } } });
   return rows.length;
 }

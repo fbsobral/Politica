@@ -1,7 +1,8 @@
-import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
+import type { Branch, ElectionOffice, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { z } from "zod";
 import { aiEnabled, ask, extractJson } from "@/lib/ai";
 import { normalize, truncate } from "@/lib/text";
+const OFFICES = ["PRESIDENTE", "GOVERNADOR", "SENADOR", "DEPUTADO"];
 import { BRANCH_VALUES, NEWS_CATEGORY_VALUES, SOURCE_CATEGORY_VALUES, UFS } from "@/lib/taxonomy";
 
 export type ClassifyInput = {
@@ -25,6 +26,8 @@ export type ClassifyOutput = {
   uf: string | null;
   category: NewsCategory;
   branch: Branch | null;
+  cargo: ElectionOffice | null;
+  poll: boolean;
 };
 
 const KEYWORDS: [NewsCategory, RegExp][] = [
@@ -54,11 +57,21 @@ const BRANCH_RULES: [Branch, RegExp][] = [
   ["EXECUTIVO", /president[ea]|planalto|\bministr|ministerio|governador|governo|prefeit|secretari|decreto|medida provisoria|palacio/],
 ];
 
+const CARGO_RULES: [ElectionOffice, RegExp][] = [
+  ["PRESIDENTE", /president[ea]\b|planalto|\blula\b|bolsonaro|corrida presidencial/],
+  ["GOVERNADOR", /governador|governo do estado|candidat[oa] ao governo/],
+  ["SENADOR", /senador|senado|vaga no senado/],
+  ["DEPUTADO", /deputad[oa]|camara dos deputados|assembleia legislativa/],
+];
+const POLL_RE = /pesquisa (eleitoral|datafolha|quaest|atlas|ipec|genial|ipespe|paraná)|datafolha|quaest|atlasintel|\bipec\b|intencao de voto|intencoes de voto|margem de erro/;
+
 export function classifyByRules(i: ClassifyInput): ClassifyOutput {
   const text = normalize(`${i.title} ${i.description ?? ""}`);
   const category = KEYWORDS.find(([, re]) => re.test(text))?.[0] ?? "OUTROS";
   const branch = i.branchHint ?? BRANCH_RULES.find(([, re]) => re.test(text))?.[0] ?? null;
-  return { id: i.id, political: true, scope: i.scopeHint, uf: null, category, branch };
+  const election = category === "ELEICOES" || /eleic|candidat|segundo turno|urna/.test(text);
+  const cargo = election ? (CARGO_RULES.find(([, re]) => re.test(text))?.[0] ?? null) : null;
+  return { id: i.id, political: true, scope: i.scopeHint, uf: null, category, branch, cargo, poll: POLL_RE.test(text) };
 }
 
 const outSchema = z.array(
@@ -70,6 +83,8 @@ const outSchema = z.array(
     uf: z.string().nullable().optional(),
     category: z.string(),
     branch: z.string().nullable().optional(),
+    cargo: z.string().nullable().optional(),
+    poll: z.boolean().nullable().optional(),
   }),
 );
 
@@ -78,10 +93,12 @@ Para cada notícia devolva:
 - political: true se trata de política, governo, legislativo, judiciário, eleições, políticas públicas ou agentes públicos; false para esporte, celebridades, crimes comuns sem relação com poder público, etc.
 - scope: "FEDERAL" (presidência, ministérios, Congresso Nacional, STF/STJ/TSE, assuntos nacionais), "ESTADUAL" (governo do estado, assembleia legislativa, secretarias estaduais) ou "MUNICIPAL" (prefeitura, câmara de vereadores, assuntos da cidade). Quando "scopeLocked" for true, mantenha exatamente o "scopeHint".
 - branch: o poder a que a notícia mais se refere: \"LEGISLATIVO\" (Congresso, Câmara, Senado, assembleias, câmaras de vereadores, leis, CPIs, parlamentares), \"EXECUTIVO\" (presidente, governadores, prefeitos, ministérios, secretarias, decretos, gestão e políticas públicas) ou \"JUDICIARIO\" (STF, STJ, TSE, tribunais, juízes, Ministério Público, Polícia Federal, processos e decisões judiciais). Use null quando não houver poder claro (ex.: eleições e campanha em geral). "branchHint", quando existir, indica a origem da busca: confirme ou corrija.
+- cargo: apenas quando a notícia trata das eleições, o cargo em disputa: \"PRESIDENTE\", \"GOVERNADOR\", \"SENADOR\" ou \"DEPUTADO\" (federal ou estadual); null se não for sobre eleição ou não houver um cargo claro.
+- poll: true se a notícia é principalmente sobre uma pesquisa eleitoral (Datafolha, Quaest, AtlasIntel, Ipec etc.) ou intenção de voto.
 - onLocation: só quando "locationHint" existir. true se o fato principal acontece nesse estado/município ou envolve o governo, o legislativo, a justiça ou políticos daquele local (inclusive vereadores, prefeito, deputados e governador dele). false se o foco claro é outro estado/município (ex.: eleição para governador do Acre quando o local é São Paulo) ou é só disputa nacional sem relação local.
 - uf: sigla do estado (ex: "SP") apenas se scope for ESTADUAL e o estado estiver explícito no texto; senão null.
 - category: uma de ${NEWS_CATEGORY_VALUES.join(", ")}.
-Responda SOMENTE com um array JSON: [{"id":"...","political":true,"onLocation":true,"scope":"FEDERAL","uf":null,"branch":"EXECUTIVO","category":"ECONOMIA"}].`;
+Responda SOMENTE com um array JSON: [{"id":"...","political":true,"onLocation":true,"scope":"FEDERAL","uf":null,"branch":"EXECUTIVO","cargo":null,"poll":false,"category":"ECONOMIA"}].`;
 
 const BATCH = 25;
 
@@ -117,7 +134,8 @@ export async function classifyArticles(items: ClassifyInput[]): Promise<Classify
           const category = (NEWS_CATEGORY_VALUES as string[]).includes(p.category) ? (p.category as NewsCategory) : classifyByRules(item).category;
           const uf = p.uf && p.uf.toUpperCase() in UFS ? p.uf.toUpperCase() : null;
           const branch = (BRANCH_VALUES as string[]).includes(p.branch ?? "") ? (p.branch as Branch) : (item.branchHint ?? null);
-          return { id: item.id, political: p.political && !(item.locationHint && p.onLocation === false), scope: item.scopeLocked ? item.scopeHint : (p.scope as Scope), uf, category, branch };
+          const cargo = (OFFICES as string[]).includes(p.cargo ?? "") ? (p.cargo as ElectionOffice) : null;
+          return { id: item.id, political: p.political && !(item.locationHint && p.onLocation === false), scope: item.scopeLocked ? item.scopeHint : (p.scope as Scope), uf, category, branch, cargo, poll: Boolean(p.poll) };
         });
       } catch (err) {
         lastErr = err as Error;

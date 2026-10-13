@@ -66,6 +66,9 @@ export const IconLogo = (p: P) => (
     <circle cx="25.5" cy="7" r="2.6" fill="var(--gold)" />
   </svg>
 );
+export const IconVote = (p: P) => (
+  <svg {...base(p)}><path d="M4 14h16v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5Z" /><path d="M8 14V9.5L12 4l4 5.5V14" /><path d="m10 9 1.6 1.6L15 7" /></svg>
+);
 export const IconCalendar = (p: P) => (
   <svg {...base(p)}><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>
 );
