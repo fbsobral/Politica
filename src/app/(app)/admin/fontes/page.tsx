@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { addFeed, deleteFeed, resetRobotSettings, saveRobotSettings, toggleFeed } from "@/app/admin-actions";
 import { AdminTabs } from "@/components/admin-tabs";
 import { Notice, PageHeader, SourceAvatar } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { db } from "@/lib/db";
 import { getSettings, type Settings } from "@/lib/settings";
 import { BRANCH_LABEL, SCOPE_LABEL, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
@@ -47,15 +48,16 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
         <section className="card p-5 sm:p-6">
           <h2 className="display mb-4 text-xl font-semibold">Geral</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block"><span className={label}>Idade máxima (dias)</span><input name="maxAgeDays" type="number" min={1} max={14} defaultValue={cfg.maxAgeDays} className="input" /></label>
-            <label className="block"><span className={label}>Guardar notícias por (dias)</span><input name="retentionDays" type="number" min={7} max={730} defaultValue={cfg.retentionDays} className="input" /></label>
-            <label className="block sm:col-span-2"><span className={label}>Modelo do Claude (vazio = padrão)</span><input name="aiModel" defaultValue={cfg.aiModel} placeholder="claude-haiku-5-5" className="input" /></label>
+            <label className="block"><span className={label}>Idade máx. nacionais (dias)</span><input name="maxAgeDays" type="number" min={0} max={365} defaultValue={cfg.maxAgeDays} className="input" /></label>
+            <label className="block"><span className={label}>Idade máx. locais (dias)</span><input name="localMaxAgeDays" type="number" min={0} max={365} defaultValue={cfg.localMaxAgeDays} className="input" /></label>
+            <label className="block"><span className={label}>Guardar histórico por (dias)</span><input name="retentionDays" type="number" min={0} max={3650} defaultValue={cfg.retentionDays} className="input" /></label>
+            <label className="block sm:col-span-2 lg:col-span-3"><span className={label}>Modelo do Claude (vazio = padrão)</span><input name="aiModel" defaultValue={cfg.aiModel} placeholder="claude-haiku-5-5" className="input" /></label>
           </div>
           <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" name="googleNews" defaultChecked={cfg.googleNews === "1"} /> Buscar no Google News</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="aiClassify" defaultChecked={cfg.aiClassify === "1"} /> Classificar com IA (senão, só regras por palavra-chave)</label>
           </div>
-          <p className="mt-3 text-xs text-faint">Horários (coleta de hora em hora, resumo às 7h) ficam nas variáveis INGEST_CRON e DIGEST_CRON do worker.</p>
+          <p className="mt-3 text-xs text-faint"><b>0 = sem limite.</b> Idade máxima: descarta itens mais velhos que isso ao coletar (0 aceita tudo que o feed devolver). Guardar por: 0 mantém todo o histórico para sempre; favoritas nunca são apagadas. Horários (coleta de hora em hora, resumo às 7h) ficam nas variáveis INGEST_CRON e DIGEST_CRON do worker.</p>
         </section>
 
         {LEVELS.map(({ level, label: lvl, hint }) => (
@@ -77,8 +79,8 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
         ))}
 
         <div className="flex flex-wrap gap-2">
-          <button className="btn btn-primary">Salvar configuração</button>
-          <button formAction={resetRobotSettings} className="btn btn-ghost" formNoValidate>Restaurar padrão</button>
+          <SubmitButton className="btn btn-primary" pendingText="Salvando…">Salvar configuração</SubmitButton>
+          <SubmitButton formAction={resetRobotSettings} formNoValidate className="btn btn-ghost" pendingText="Restaurando…">Restaurar padrão</SubmitButton>
         </div>
       </form>
 
@@ -107,7 +109,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
               <label className="block"><span className={label}>Município</span><input name="municipality" className="input" placeholder="Só se municipal" /></label>
             </div>
             <p className="text-xs text-faint">UF e município valem para feeds locais; o feed é testado antes de salvar.</p>
-            <button className="btn btn-primary w-full">Testar e adicionar</button>
+            <SubmitButton className="btn btn-primary w-full" pendingText="Testando o feed…">Testar e adicionar</SubmitButton>
           </form>
 
           <ul className="space-y-2.5">

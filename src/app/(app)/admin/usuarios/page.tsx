@@ -1,6 +1,7 @@
 import { createUser, deleteUser, setRole } from "@/app/admin-actions";
 import { AdminTabs } from "@/components/admin-tabs";
 import { Notice, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { SourceAvatar } from "@/components/ui";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/user";
@@ -40,7 +41,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
               </select>
             </label>
             <label className="block"><span className="eyebrow mb-1.5 block">Senha provisória</span><input name="password" minLength={8} placeholder="Só no modo “com senha”" autoComplete="off" className="input" /></label>
-            <button className="btn btn-primary w-full">Cadastrar</button>
+            <SubmitButton className="btn btn-primary w-full" pendingText="Cadastrando…">Cadastrar</SubmitButton>
           </form>
         </section>
 

@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
 
@@ -15,7 +16,7 @@ function adminEmails(): string[] {
  * - primeiro acesso: cria o registro; se o e-mail foi pré-cadastrado por um admin, assume esse registro (mantendo o papel);
  * - e-mails em ADMIN_EMAILS viram ADMIN automaticamente (forma de criar o primeiro admin).
  */
-export async function getDbUser(): Promise<User> {
+export const getDbUser = cache(async function getDbUser(): Promise<User> {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
   let user = await db.user.findUnique({ where: { clerkId: userId } });
@@ -32,7 +33,7 @@ export async function getDbUser(): Promise<User> {
     user = await db.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
   }
   return user;
-}
+});
 
 /** Igual a getDbUser, mas exige localização configurada. */
 export async function requireUser(): Promise<User & { uf: string; municipality: string; municipalityKey: string }> {

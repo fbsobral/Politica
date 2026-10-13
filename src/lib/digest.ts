@@ -65,11 +65,14 @@ async function buildAndSend(user: DigestUser, cache: Map<string, { items: Item[]
     return cache.get(key)!;
   }
   const uf = user.uf!;
-  const fed = await get("fed", "Federal", "FEDERAL", {});
-  const est = await get(`est:${uf}`, `Estadual — ${UFS[uf]}`, "ESTADUAL", { uf });
-  const mun = user.municipalityKey
-    ? await get(`mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, "MUNICIPAL", { uf, municipalityKey: user.municipalityKey })
-    : { items: [], summary: null };
+  // as três esferas (consulta + resumo da IA) em paralelo
+  const [fed, est, mun] = await Promise.all([
+    get("fed", "Federal", "FEDERAL", {}),
+    get(`est:${uf}`, `Estadual — ${UFS[uf]}`, "ESTADUAL", { uf }),
+    user.municipalityKey
+      ? get(`mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, "MUNICIPAL", { uf, municipalityKey: user.municipalityKey })
+      : Promise.resolve({ items: [] as Item[], summary: null as string | null }),
+  ]);
   if (!fed.items.length && !est.items.length && !mun.items.length) return "empty";
   const inner =
     section(`${SCOPE_LABEL.MUNICIPAL} · ${user.municipality ?? ""}`, mun.summary, mun.items) +

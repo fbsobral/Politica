@@ -70,7 +70,7 @@ export function ArticleCard({ a, index = 0 }: { a: ArticleView; index?: number }
   return (
     <article
       className="card rise group relative flex gap-4 p-4 transition-shadow hover:shadow-pop sm:p-5"
-      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+      
     >
       <div className="min-w-0 flex-1">
         <Meta a={a} />

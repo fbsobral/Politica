@@ -26,8 +26,9 @@ export const JOBS = {
   },
   /** remove notícias antigas (retenção configurável) que ninguém favoritou */
   async cleanup() {
-    const days = Math.max(7, Number((await getSettings()).retentionDays) || 90);
-    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * days);
+    const days = Number((await getSettings()).retentionDays) || 0;
+    if (days <= 0) return { deleted: 0, note: "retenção desligada (guarda todo o histórico)" };
+    const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * Math.max(7, days));
     const r = await db.article.deleteMany({ where: { publishedAt: { lt: cutoff }, favorites: { none: {} } } });
     return { deleted: r.count };
   },

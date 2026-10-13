@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PoliticianRole, Prisma, Scope } from "@prisma/client";
 import { loadUfData } from "@/app/actions";
 import { AutoForm } from "@/components/auto-form";
+import { SubmitButton } from "@/components/submit-button";
 import { IconSearch } from "@/components/icons";
 import { ExecutiveCard, PoliticianCard } from "@/components/politician-card";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
@@ -96,7 +97,7 @@ export default async function RepresentantesPage({ searchParams }: { searchParam
       {missingUfData && (
         <EmptyState
           title={`Carregando dados de ${UFS[user.uf]}`}
-          action={<form action={loadUfData}><button className="btn btn-primary">Carregar agora</button></form>}
+          action={<form action={loadUfData}><SubmitButton className="btn btn-primary" pendingText="Baixando dados do TSE…">Carregar agora</SubmitButton></form>}
         >
           Os eleitos são baixados do TSE na primeira vez (cerca de 30 segundos). Se esta tela não mudar, clique em carregar.
         </EmptyState>

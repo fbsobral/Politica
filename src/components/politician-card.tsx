@@ -40,7 +40,7 @@ export function FollowButton({ id, following, compact = false }: { id: string; f
 /** Cargos do Executivo e legisladores em lista: card compacto. */
 export function PoliticianCard({ p, following, showRole = false, index = 0 }: { p: Politician; following: boolean; showRole?: boolean; index?: number }) {
   return (
-    <div className="card-flat rise flex items-center gap-3 p-3 transition-shadow hover:shadow-card" style={{ animationDelay: `${Math.min(index, 10) * 25}ms` }}>
+    <div className="card-flat rise flex items-center gap-3 p-3 transition-shadow hover:shadow-card">
       <Avatar p={p} size={52} />
       <Link href={`/representantes/${p.id}`} className="min-w-0 flex-1">
         <div className="truncate text-[0.9375rem] font-semibold leading-tight hover:underline">{p.ballotName ?? p.name}</div>
@@ -57,7 +57,7 @@ export function PoliticianCard({ p, following, showRole = false, index = 0 }: { 
 /** Destaque para prefeito, governador, presidente e seus vices. */
 export function ExecutiveCard({ p, following, index = 0 }: { p: Politician; following: boolean; index?: number }) {
   return (
-    <div className="card rise relative flex items-center gap-4 overflow-hidden p-4 sm:p-5" style={{ animationDelay: `${index * 50}ms` }}>
+    <div className="card rise relative flex items-center gap-4 overflow-hidden p-4 sm:p-5">
       <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gold" />
       <Avatar p={p} size={64} />
       <div className="min-w-0 flex-1">

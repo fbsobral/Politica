@@ -2,6 +2,7 @@ import Link from "next/link";
 import { savePrefs, sendTestDigest } from "@/app/actions";
 import { LocationForm } from "@/app/onboarding/location-form";
 import { Notice, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { emailEnabled } from "@/lib/email";
 import { UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -53,10 +54,10 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
             <Toggle name="dailyDigest" defaultChecked={user.dailyDigest} title="Resumo diário às 7h" desc="O que aconteceu nas esferas municipal, estadual e federal, em poucas linhas." />
             <Toggle name="alertEmails" defaultChecked={user.alertEmails} title="Alertas" desc="Aviso quando surgirem notícias das suas palavras-chave e dos políticos monitorados." />
           </div>
-          <button className="btn btn-primary mt-3">Salvar preferências</button>
+          <SubmitButton className="btn btn-primary mt-3" pendingText="Salvando…">Salvar preferências</SubmitButton>
         </form>
         <form action={sendTestDigest} className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-5">
-          <button className="btn btn-secondary btn-sm" disabled={!emailEnabled()}>Enviar o resumo de hoje agora</button>
+          <SubmitButton className="btn btn-secondary btn-sm" disabled={!emailEnabled()} pendingText="Gerando e enviando o resumo…">Enviar o resumo de hoje agora</SubmitButton>
           {!emailEnabled() && <span className="text-xs text-faint">Configure RESEND_API_KEY</span>}
         </form>
         {msg && <div className="mt-3"><Notice kind={msg[0]}>{msg[1]}</Notice></div>}

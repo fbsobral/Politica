@@ -46,8 +46,9 @@ type Origin = {
   branch?: Branch | null;
 };
 
+// days = 0 (sem limite): o Google News só devolve os itens mais recentes (~100), então usamos uma janela de 30 dias
 function googleNewsUrl(query: string, days: number): string {
-  const q = encodeURIComponent(`${query} when:${days}d`);
+  const q = encodeURIComponent(`${query} when:${days > 0 ? days : 30}d`);
   return `https://news.google.com/rss/search?q=${q}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
 }
 
@@ -62,7 +63,8 @@ function imageOf(item: Record<string, any>): string | null {
   );
 }
 
-async function fetchOrigin(o: Origin, maxAgeMs: number): Promise<Candidate[]> {
+async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): Promise<Candidate[]> {
+  const limitMs = (o.scope === "FEDERAL" ? maxAgeMs : localMaxAgeMs) || Infinity;
   try {
     const res = await fetch(o.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)", Accept: "application/rss+xml, application/xml, text/xml, */*" },
@@ -77,7 +79,7 @@ async function fetchOrigin(o: Origin, maxAgeMs: number): Promise<Candidate[]> {
       const rawTitle: string | undefined = item.title;
       if (!url || !rawTitle) continue;
       const publishedAt = new Date(item.isoDate ?? item.pubDate ?? Date.now());
-      if (Number.isNaN(publishedAt.getTime()) || Date.now() - publishedAt.getTime() > maxAgeMs) continue;
+      if (Number.isNaN(publishedAt.getTime()) || Date.now() - publishedAt.getTime() > limitMs) continue;
 
       let title = stripHtml(rawTitle);
       let sourceName = o.fixedSource?.name ?? "";
@@ -146,7 +148,8 @@ export async function ensureDefaultFeeds(): Promise<void> {
 
 async function buildOrigins(cfg: Settings): Promise<Origin[]> {
   await ensureDefaultFeeds();
-  const days = Math.max(1, Number(cfg.maxAgeDays) || 3);
+  const days = Math.max(0, Number(cfg.maxAgeDays) || 0);
+  const localDays = Math.max(0, Number(cfg.localMaxAgeDays) || 0);
   const origins: Origin[] = [];
 
   const feeds = await db.feedSource.findMany({ where: { active: true } });
@@ -195,7 +198,7 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
         if (!query.trim()) continue;
         origins.push({
           label: `gnews:uf:${uf}:${branch}`,
-          url: googleNewsUrl(fillTemplate(query, { estado: UFS[uf], uf }), days),
+          url: googleNewsUrl(fillTemplate(query, { estado: UFS[uf], uf }), localDays),
           scope: "ESTADUAL",
           uf,
           municipalityKey: null,
@@ -209,7 +212,7 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
         if (!query.trim()) continue;
         origins.push({
           label: `gnews:city:${c.uf}:${c.key}:${branch}`,
-          url: googleNewsUrl(fillTemplate(query, { cidade: c.name, estado: UFS[c.uf], uf: c.uf }), days),
+          url: googleNewsUrl(fillTemplate(query, { cidade: c.name, estado: UFS[c.uf], uf: c.uf }), localDays),
           scope: "MUNICIPAL",
           uf: c.uf,
           municipalityKey: c.key,
@@ -244,9 +247,10 @@ export async function runIngest(): Promise<IngestResult> {
   const cfg = await getSettings();
   if (cfg.aiModel) process.env.ANTHROPIC_MODEL = cfg.aiModel;
   setAiEnabled(cfg.aiClassify === "1");
-  const maxAgeMs = Math.max(1, Number(cfg.maxAgeDays) || 3) * 24 * 60 * 60 * 1000;
+  const maxAgeMs = Math.max(0, Number(cfg.maxAgeDays) || 0) * 24 * 60 * 60 * 1000;
+  const localMaxAgeMs = Math.max(0, Number(cfg.localMaxAgeDays) || 0) * 24 * 60 * 60 * 1000;
   const origins = await buildOrigins(cfg);
-  const batches = await mapLimit(origins, 6, (o) => fetchOrigin(o, maxAgeMs));
+  const batches = await mapLimit(origins, 6, (o) => fetchOrigin(o, maxAgeMs, localMaxAgeMs));
   const all = batches.flat();
 
   // dedupe dentro do lote e contra o banco

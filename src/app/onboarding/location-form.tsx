@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { saveLocation } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export function LocationForm({ ufs, initialUf, initialCity, submitLabel = "Salvar e continuar" }: { ufs: Record<string, string>; initialUf?: string; initialCity?: string; submitLabel?: string }) {
   const [uf, setUf] = useState(initialUf ?? "");
@@ -51,9 +52,9 @@ export function LocationForm({ ufs, initialUf, initialCity, submitLabel = "Salva
           ))}
         </select>
       </label>
-      <button type="submit" className="btn btn-primary w-full">
+      <SubmitButton className="btn btn-primary w-full" pendingText="Salvando…">
         {submitLabel}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

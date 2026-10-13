@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { runJobNow } from "@/app/admin-actions";
 import { AdminTabs } from "@/components/admin-tabs";
 import { IconRobot } from "@/components/icons";
+import { SubmitButton } from "@/components/submit-button";
 import { Notice, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
 import { JOBS } from "@/lib/jobs";
@@ -42,7 +43,7 @@ export default async function RoboPage({ searchParams }: { searchParams: Promise
 
       <div className="mb-8 flex flex-wrap gap-2">
         {Object.keys(LABEL).filter((j) => j in JOBS).map((j) => (
-          <form key={j} action={runJobNow.bind(null, j)}><button className="btn btn-secondary"><IconRobot width={18} height={18} /> {LABEL[j]}</button></form>
+          <form key={j} action={runJobNow.bind(null, j)}><SubmitButton className="btn btn-secondary" pendingText="Iniciando…"><IconRobot width={18} height={18} /> {LABEL[j]}</SubmitButton></form>
         ))}
       </div>
 
