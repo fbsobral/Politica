@@ -25,6 +25,8 @@ export const getDbUser = cache(async function getDbUser(): Promise<User> {
     const email = (cu?.primaryEmailAddress?.emailAddress ?? cu?.emailAddresses[0]?.emailAddress ?? `${userId}@sem-email.local`).toLowerCase();
     const name = [cu?.firstName, cu?.lastName].filter(Boolean).join(" ") || null;
     const pending = await db.user.findUnique({ where: { email } });
+    // acesso só por convite: o e-mail precisa ter sido cadastrado por um admin (ou estar em ADMIN_EMAILS)
+    if (!pending && !adminEmails().includes(email)) redirect("/acesso-negado");
     user = pending
       ? await db.user.update({ where: { id: pending.id }, data: { clerkId: userId, name: pending.name ?? name } })
       : await db.user.create({ data: { clerkId: userId, email, name } });
