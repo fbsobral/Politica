@@ -7,6 +7,7 @@ export function AdminTabs({ active }: { active: "usuarios" | "robo" | "fontes" }
       <Link href="/admin/usuarios" className={cls("usuarios")}>Usuários</Link>
       <Link href="/admin/robo" className={cls("robo")}>Robô</Link>
       <Link href="/admin/fontes" className={cls("fontes")}>Fontes e buscas</Link>
+      <Link href="/admin/fontes#tiers" className="rounded-full border border-line-strong bg-surface px-4 py-2 text-sm font-semibold text-muted hover:text-ink">Tiers dos veículos ↓</Link>
     </div>
   );
 }

@@ -205,3 +205,38 @@ export async function saveTiers(formData: FormData) {
   revalidatePath("/admin/fontes");
   backFontes("ok", changed ? `${changed} veículo(s) atualizado(s).` : "Nenhuma mudança.");
 }
+
+function parseIds(formData: FormData): string[] {
+  return formData.getAll("sel").map(String).filter(Boolean);
+}
+
+/** Aplica o mesmo tier a vários veículos de uma vez. */
+export async function bulkApplyTiers(formData: FormData) {
+  await requireAdmin();
+  const ids = parseIds(formData);
+  const raw = String(formData.get("bulkTier") ?? "");
+  const tier = raw === "" ? null : Number(raw);
+  if (!ids.length) backFontes("erro", "Marque pelo menos um veículo.");
+  if (tier !== null && ![1, 2, 3].includes(tier)) backFontes("erro", "Tier inválido.");
+  const r = await db.source.updateMany({ where: { id: { in: ids } }, data: { tier, tierBy: tier === null ? null : "admin" } });
+  revalidatePath("/admin/fontes");
+  backFontes("ok", `${r.count} veículo(s) definidos como ${tier ? `Tier ${tier}` : "sem tier"}.`);
+}
+
+/** Confirma como definitivas as sugestões da IA dos veículos marcados. */
+export async function bulkConfirmTiers(formData: FormData) {
+  await requireAdmin();
+  const ids = parseIds(formData);
+  if (!ids.length) backFontes("erro", "Marque pelo menos um veículo.");
+  const r = await db.source.updateMany({ where: { id: { in: ids }, tierBy: "ai" }, data: { tierBy: "admin" } });
+  revalidatePath("/admin/fontes");
+  backFontes("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
+}
+
+/** Confirma TODAS as sugestões pendentes da IA. */
+export async function confirmAllAiTiers() {
+  await requireAdmin();
+  const r = await db.source.updateMany({ where: { tierBy: "ai" }, data: { tierBy: "admin" } });
+  revalidatePath("/admin/fontes");
+  backFontes("ok", `${r.count} sugestão(ões) da IA confirmada(s).`);
+}

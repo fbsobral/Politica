@@ -1,9 +1,11 @@
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { addFeed, deleteFeed, resetRobotSettings, saveRobotSettings, saveTiers, toggleFeed } from "@/app/admin-actions";
+import { addFeed, confirmAllAiTiers, deleteFeed, resetRobotSettings, saveRobotSettings, saveTiers, toggleFeed } from "@/app/admin-actions";
+import { TierControls } from "@/components/tier-controls";
 import { AdminTabs } from "@/components/admin-tabs";
 import { Notice, PageHeader, SourceAvatar } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSettings, type Settings } from "@/lib/settings";
 import { BRANCH_LABEL, SCOPE_LABEL, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
@@ -20,16 +22,31 @@ const LEVELS = [
 ] as const;
 const POWERS = ["Legislativo", "Executivo", "Judiciario"] as const;
 
-export default async function FontesPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string; vq?: string; revisar?: string }> }) {
+export default async function FontesPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string; vq?: string; revisar?: string; n?: string; ordem?: string; nivel?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
   const vq = sp.vq?.trim();
+  const limit = Math.min(1000, Math.max(80, Number(sp.n) || 80));
+  const ordem = ["tier", "tier-desc", "nome", "revisao"].includes(sp.ordem ?? "") ? sp.ordem! : "noticias";
+  const nivel = ["1", "2", "3", "none"].includes(sp.nivel ?? "") ? sp.nivel! : "";
+  const orderBy: Prisma.SourceOrderByWithRelationInput[] =
+    ordem === "tier" ? [{ tier: { sort: "asc", nulls: "last" } }, { articles: { _count: "desc" } }]
+    : ordem === "tier-desc" ? [{ tier: { sort: "desc", nulls: "last" } }, { articles: { _count: "desc" } }]
+    : ordem === "nome" ? [{ name: "asc" }]
+    : ordem === "revisao" ? [{ tierBy: { sort: "asc", nulls: "last" } }, { articles: { _count: "desc" } }]
+    : [{ articles: { _count: "desc" } }];
   const sources = await db.source.findMany({
-    where: { ...(vq ? { name: { contains: vq, mode: "insensitive" as const } } : {}), ...(sp.revisar ? { tierBy: { not: "admin" } } : {}) },
+    where: {
+      ...(vq ? { name: { contains: vq, mode: "insensitive" as const } } : {}),
+      ...(sp.revisar ? { tierBy: { not: "admin" } } : {}),
+      ...(nivel === "none" ? { tier: null } : nivel ? { tier: Number(nivel) } : {}),
+    },
     include: { _count: { select: { articles: true } } },
-    orderBy: [{ articles: { _count: "desc" } }],
-    take: 80,
+    orderBy,
+    take: limit + 1,
   });
+  const hasMore = sources.length > limit;
+  const shown = sources.slice(0, limit);
   const reviewCount = await db.source.count({ where: { tierBy: "ai" } });
   const [cfg, feeds, cities] = await Promise.all([
     getSettings(),
@@ -42,6 +59,12 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader eyebrow="Administração" title="Fontes e buscas do robô" />
       <AdminTabs active="fontes" />
+      <nav aria-label="Seções" className="scrollbar-none sticky top-14 z-20 -mx-4 mb-6 flex gap-2 overflow-x-auto border-b border-line bg-paper/90 px-4 py-2.5 backdrop-blur-xl sm:mx-0 sm:rounded-b-2xl sm:px-0">
+        {[["geral", "Geral"], ["buscas", "Buscas por esfera"], ["eleicoes", "Eleições"], ["checagens", "Checagens"], ["tiers", "Tiers dos veículos"], ["feeds", "Feeds RSS"]].map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="flex-none rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-sm font-medium text-muted hover:text-ink">{label}</a>
+        ))}
+      </nav>
+
       <div className="mb-5 space-y-2">
         {sp.ok && <Notice kind="ok">{sp.ok}</Notice>}
         {sp.erro && <Notice kind="erro">{sp.erro}</Notice>}
@@ -54,7 +77,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
       </div>
 
       <form action={saveRobotSettings} className="space-y-6">
-        <section className="card p-5 sm:p-6">
+        <section id="geral" className="card scroll-mt-32 p-5 sm:p-6">
           <h2 className="display mb-4 text-xl font-semibold">Geral</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block"><span className={label}>Coletar a cada (minutos)</span><input name="ingestIntervalMinutes" type="number" min={10} max={1440} step={5} defaultValue={cfg.ingestIntervalMinutes} className="input" /></label>
@@ -75,8 +98,8 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
           <p className="mt-3 text-xs text-faint"><b>0 = sem limite.</b> Idade máxima: descarta itens mais velhos que isso ao coletar (0 aceita tudo que o feed devolver). Guardar por: 0 mantém todo o histórico para sempre; favoritas nunca são apagadas. <b>Coletar a cada:</b> mínimo de 10 minutos (o robô confere a cada 5). Em produção com tarefas agendadas do Coolify, use uma tarefa a cada 10 minutos com <code>npm run job -- ingest --scheduled</code>. O horário dos resumos por e-mail continua nas variáveis DIGEST_CRON, WEEKLY_DIGEST_CRON e MONTHLY_DIGEST_CRON.</p>
         </section>
 
-        {LEVELS.map(({ level, label: lvl, hint }) => (
-          <section key={level} className="card p-5 sm:p-6">
+        {LEVELS.map(({ level, label: lvl, hint }, idx) => (
+          <section key={level} id={idx === 0 ? "buscas" : `buscas-${level.toLowerCase()}`} className="card scroll-mt-32 p-5 sm:p-6">
             <h2 className="display text-xl font-semibold">Buscas · {lvl}</h2>
             <p className="mb-4 text-xs text-muted">{hint} Deixe vazio para desligar aquela busca.</p>
             <div className="space-y-3.5">
@@ -93,7 +116,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
           </section>
         ))}
 
-        <section className="card p-5 sm:p-6">
+        <section id="eleicoes" className="card scroll-mt-32 p-5 sm:p-6">
           <h2 className="display text-xl font-semibold">Buscas · Eleições</h2>
           <p className="mb-4 text-xs text-muted">Alimenta a página Eleições (notícias por cargo e pesquisas). Placeholders: {"{estado}"} e {"{uf}"}.</p>
           <div className="space-y-3.5">
@@ -102,7 +125,7 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
           </div>
         </section>
 
-        <section className="card p-5 sm:p-6">
+        <section id="checagens" className="card scroll-mt-32 p-5 sm:p-6">
           <h2 className="display text-xl font-semibold">Buscas · Checagem de fatos local</h2>
           <p className="mb-4 text-xs text-muted">Alimenta a página Checagens nas esferas estadual e municipal. Placeholders: {"{estado}"}, {"{cidade}"}, {"{uf}"}.</p>
           <div className="space-y-3.5">
@@ -117,21 +140,33 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
         </div>
       </form>
 
-      <section className="mt-10">
+      <section id="tiers" className="mt-10 scroll-mt-32">
         <h2 className="display text-2xl font-semibold">Níveis (tiers) dos veículos</h2>
         <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">
           O tier mede <b>alcance e tipo</b> do veículo, não qualidade nem posição política. {([1, 2, 3] as const).map((t) => <span key={t}><b className="text-ink">{TIER_LEGEND[t].label}</b>: {TIER_LEGEND[t].desc} </span>)}
           A lista inicial é curada; veículos novos recebem uma sugestão da IA (selo <span className="chip">IA</span>) que você pode confirmar ou corrigir.
         </p>
-        <form className="mb-3 flex flex-wrap gap-2">
-          <input name="vq" defaultValue={vq} placeholder="Buscar veículo…" className="input max-w-xs" />
+        <form action="/admin/fontes#tiers" className="mb-3 flex flex-wrap gap-2">
+          <input name="vq" defaultValue={vq} placeholder="Buscar veículo…" className="input max-w-[14rem]" />
+          <select name="nivel" defaultValue={nivel} className="input !w-40" aria-label="Filtrar por tier">
+            <option value="">Todos os tiers</option><option value="1">Só Tier 1</option><option value="2">Só Tier 2</option><option value="3">Só Tier 3</option><option value="none">Sem tier</option>
+          </select>
+          <select name="ordem" defaultValue={ordem} className="input !w-56" aria-label="Ordenar por">
+            <option value="noticias">Ordenar: mais notícias</option>
+            <option value="tier">Ordenar: Tier 1 → 3</option>
+            <option value="tier-desc">Ordenar: Tier 3 → 1</option>
+            <option value="revisao">Ordenar: não revisados primeiro</option>
+            <option value="nome">Ordenar: nome (A–Z)</option>
+          </select>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="revisar" value="1" defaultChecked={Boolean(sp.revisar)} /> Só os não revisados ({reviewCount} sugeridos pela IA)</label>
-          <button className="btn btn-secondary btn-sm">Filtrar</button>
+          <button className="btn btn-secondary btn-sm">Aplicar</button>
         </form>
         <form action={saveTiers}>
+          <TierControls total={shown.length} />
           <div className="card-flat divide-y divide-line">
-            {sources.map((s) => (
+            {shown.map((s) => (
               <div key={s.id} className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
+                <input type="checkbox" name="sel" value={s.id} aria-label={`Marcar ${s.name}`} />
                 <SourceAvatar name={s.name} size={28} />
                 <div className="min-w-0 flex-1">
                   <span className="truncate text-sm font-semibold">{s.name}</span>
@@ -144,14 +179,18 @@ export default async function FontesPage({ searchParams }: { searchParams: Promi
                 </select>
               </div>
             ))}
-            {!sources.length && <p className="p-4 text-sm text-muted">Nenhum veículo encontrado.</p>}
+            {!shown.length && <p className="p-4 text-sm text-muted">Nenhum veículo encontrado.</p>}
           </div>
-          <SubmitButton className="btn btn-primary mt-3" pendingText="Salvando…">Salvar tiers</SubmitButton>
-          <span className="ml-3 text-xs text-faint">Mostrando os 80 veículos com mais notícias.</span>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <SubmitButton className="btn btn-primary" pendingText="Salvando…">Salvar alterações dos seletores</SubmitButton>
+            {reviewCount > 0 && <SubmitButton formAction={confirmAllAiTiers} className="btn btn-secondary" pendingText="Confirmando…">Confirmar TODAS as {reviewCount} sugestões da IA</SubmitButton>}
+            <span className="text-xs text-faint">Mostrando {shown.length} veículos (os com mais notícias primeiro).</span>
+            {hasMore && <a href={`?${new URLSearchParams({ ...(vq ? { vq } : {}), ...(sp.revisar ? { revisar: "1" } : {}), ...(nivel ? { nivel } : {}), ...(ordem !== "noticias" ? { ordem } : {}), n: String(limit + 120) })}#tiers`} className="text-sm text-brand underline">Mostrar mais</a>}
+          </div>
         </form>
       </section>
 
-      <section className="mt-10">
+      <section id="feeds" className="mt-10 scroll-mt-32">
         <h2 className="mb-3 flex items-center gap-2.5"><span className="display text-2xl font-semibold">Feeds RSS</span><span className="chip">{feeds.length}</span></h2>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <form action={addFeed} className="card h-fit space-y-3.5 p-5">
