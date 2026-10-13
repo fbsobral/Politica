@@ -104,7 +104,7 @@ export function ArticleSheet({ data, className, children }: { data: SheetData; c
               </div>
             ) : sum.text ? (
               <>
-                <p className="text-[0.95rem] leading-relaxed">{sum.text}</p>
+                <div className="space-y-3 text-[0.95rem] leading-relaxed">{sum.text.split(/\n{2,}|\n/).filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}</div>
                 <p className="mt-2 text-[11px] text-faint">{sum.kind === "ai" ? "Resumo gerado por IA a partir do texto publicado pelo veículo — confira a matéria completa." : "Descrição publicada pelo próprio veículo."}</p>
               </>
             ) : data.description ? (

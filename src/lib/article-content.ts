@@ -75,7 +75,7 @@ export async function fetchPageContent(url: string): Promise<PageContent | null>
       .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
       .get()
       .filter((p) => p.length > 70);
-    return { description, text: paras.join("\n").slice(0, 5000) };
+    return { description, text: paras.join("\n").slice(0, 14000) };
   } catch {
     return null;
   }
@@ -102,9 +102,14 @@ export async function summarizeArticle(id: string): Promise<ArticleSummary | nul
     try {
       const out = (
         await ask(
-          "Você resume matérias jornalísticas brasileiras para um app de acompanhamento político. Em português, escreva 2 a 4 frases objetivas e neutras com o essencial do texto (quem, o quê, quando, onde, por quê quando houver). Seja fiel ao texto: não acrescente informação que não esteja nele, não opine. Sem markdown.",
+          `Você resume matérias jornalísticas brasileiras para um app de acompanhamento político. O leitor deve conseguir ENTENDER a matéria só lendo o seu resumo, sem abrir o site.
+Escreva em português, de forma neutra e fiel, em 3 parágrafos curtos separados por linha em branco (cerca de 150 a 250 palavras no total; se o texto original for curto, seja proporcional):
+1) o fato principal: quem, o quê, quando e onde;
+2) os detalhes que sustentam a notícia: números, datas, nomes, argumentos e posições de cada lado, motivos e contexto;
+3) as consequências e os próximos passos (o que muda, o que vem a seguir), se o texto mencionar.
+Não acrescente nada que não esteja no texto, não opine e não repita o título. Sem markdown, sem listas, sem marcadores.`,
           `Título: ${a.title}\n\nTexto da matéria:\n${content.text}`,
-          400,
+          1100,
         )
       ).trim();
       if (out) {
