@@ -296,3 +296,15 @@ model Explanation {
   text      String
   createdAt DateTime @default(now())
 }
+
+model AiUsage {
+  id           String   @id @default(cuid())
+  at           DateTime @default(now())
+  kind         String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  cachedTokens Int      @default(0)
+
+  @@index([at])
+}

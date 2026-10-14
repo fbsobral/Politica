@@ -22,15 +22,20 @@ const VOTING_TERMS = ["sessao", "votacao", "votou", "votam", "vota ", "aprova", 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ esfera?: string; casa?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const scope: Scope = SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL";
+  const scope: Scope | "ALL" = sp.esfera === "todas" ? "ALL" : (SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL");
   const casa = sp.casa === "camara" || sp.casa === "senado" ? sp.casa : "";
-  const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Congresso Nacional";
+  const place = scope === "ALL" ? "Todas as esferas" : scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Congresso Nacional";
 
   return (
     <div>
-      <PageHeader eyebrow={`Agenda e votações · ${scope === "FEDERAL" ? "próximos 10 dias" : "na imprensa"}`} title={place} />
+      <PageHeader eyebrow={`Agenda e votações · ${scope === "FEDERAL" ? "próximos 10 dias" : scope === "ALL" ? "Congresso e imprensa local" : "na imprensa"}`} title={place} />
       <ScopeTabs base="/agenda" scope={scope} params={{ casa: casa || undefined }} />
-      {scope === "FEDERAL" ? <Federal casa={casa} /> : <LocalNews user={user} scope={scope} />}
+      {scope === "FEDERAL" ? <Federal casa={casa} /> : scope === "ALL" ? (
+        <div className="space-y-10">
+          <section aria-label="Congresso Nacional"><h2 className="display mb-4 text-2xl font-semibold">Congresso Nacional</h2><Federal casa={casa} /></section>
+          <section aria-label="Legislativo local"><h2 className="display mb-4 text-2xl font-semibold">Legislativo local na imprensa</h2><LocalNews user={user} scope="ALL" /></section>
+        </div>
+      ) : <LocalNews user={user} scope={scope} />}
     </div>
   );
 }
@@ -101,13 +106,13 @@ async function Federal({ casa }: { casa: string }) {
   );
 }
 
-async function LocalNews({ user, scope }: { user: { id: string; uf: string; municipalityKey: string; municipality: string }; scope: Scope }) {
+async function LocalNews({ user, scope }: { user: { id: string; uf: string; municipalityKey: string; municipality: string }; scope: Scope | "ALL" }) {
   const rows = await db.article.findMany({
     where: {
       classified: true,
       factCheck: false,
       branch: "LEGISLATIVO",
-      ...scopeWhere(user, scope),
+      ...(scope === "ALL" ? { scope: { in: ["MUNICIPAL", "ESTADUAL"] as Scope[] }, AND: [{ OR: [scopeWhere(user, "MUNICIPAL"), scopeWhere(user, "ESTADUAL")] }] } : scopeWhere(user, scope)),
       OR: VOTING_TERMS.map((t) => ({ searchText: { contains: t } })),
     },
     include: { source: { select: { name: true, category: true, tier: true } } },
@@ -117,7 +122,7 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
   const items = collapseClusters(rows);
   const favs = await db.favorite.findMany({ where: { userId: user.id, articleId: { in: items.map((r) => r.id) } }, select: { articleId: true } });
   const fav = new Set(favs.map((f) => f.articleId));
-  const who = scope === "MUNICIPAL" ? `da Câmara de ${user.municipality}` : `da Assembleia Legislativa de ${UFS[user.uf]}`;
+  const who = scope === "ALL" ? `das casas legislativas de ${user.municipality} e de ${UFS[user.uf]}` : scope === "MUNICIPAL" ? `da Câmara de ${user.municipality}` : `da Assembleia Legislativa de ${UFS[user.uf]}`;
   return (
     <div className="space-y-4">
       <Notice kind="info">
