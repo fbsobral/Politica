@@ -23,6 +23,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     db.aiUsage.groupBy({ by: ["kind"], where: { at: { gte: aiSince } }, _sum: { inputTokens: true, outputTokens: true, cachedTokens: true }, _count: true }),
     db.aiUsage.aggregate({ where: { at: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } }, _sum: { inputTokens: true, outputTokens: true } }),
   ]);
+  const pingRow = await db.setting.findUnique({ where: { key: "schedulerPing" } });
+  const ping = pingRow ? new Date(pingRow.value) : null;
+  const schedulerAlive = Boolean(ping && Date.now() - ping.getTime() < 20 * 60000);
   const [cfg, lastRun, lastOk, runs, articles24, byScope, users, pendingInvites, feedErrors, aiPending, unclassified, feeds, noTier] = await Promise.all([
     getSettings(),
     db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" } }),
@@ -63,6 +66,12 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         {sp.erro && <Notice kind="erro">{sp.erro}</Notice>}
       </div>
 
+      {!schedulerAlive && (
+        <Notice kind="erro">
+          O agendador não dá sinal {ping ? `desde ${rel(ping)}` : "(nunca deu sinal)"}, então a coleta automática não está rodando. Em produção o próprio site agenda as rotinas ao subir (a menos que EMBEDDED_WORKER=0); reinicie/faça redeploy do app. Enquanto isso, use “Coletar notícias agora”.
+        </Notice>
+      )}
+
       <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="card-flat p-4">
           <p className="eyebrow">Última coleta</p>
@@ -71,7 +80,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </div>
         <div className="card-flat p-4">
           <p className="eyebrow">Próxima coleta</p>
-          <p className="display mt-1 text-xl font-semibold">{nextAt ? (nextAt.getTime() < Date.now() ? "em instantes" : rel(nextAt)) : "—"}</p>
+          <p className={`display mt-1 text-xl font-semibold ${nextAt && nextAt.getTime() < Date.now() && !schedulerAlive ? "text-danger" : ""}`}>{nextAt ? (nextAt.getTime() < Date.now() ? (schedulerAlive ? "no próximo ciclo" : "atrasada") : rel(nextAt)) : "—"}</p>
           <p className="text-xs text-faint">a cada {interval} min · <Link href="/admin/robo" className="underline">alterar</Link></p>
         </div>
         <div className="card-flat p-4">

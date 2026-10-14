@@ -210,17 +210,21 @@ export async function sendDigests(kind: DigestKind = "daily"): Promise<{ sent: n
   const cache: Cache = new Map();
   const congressCache = new Map<string, Promise<Congress>>();
   for (const user of users) {
-    if (await db.digestLog.findUnique({ where: { userId_kind_day: { userId: user.id, kind, day } } })) {
+    // "reserva" o envio antes de enviar (a chave única impede duplicar se dois processos rodarem juntos)
+    const claim = await db.digestLog.createMany({ data: [{ userId: user.id, kind, day }], skipDuplicates: true });
+    if (claim.count === 0) {
       skipped++;
       continue;
     }
     try {
       const r = await buildAndSend(user, kind, cache, congressCache);
-      if (r === true) {
-        await db.digestLog.create({ data: { userId: user.id, kind, day } });
-        sent++;
-      } else skipped++;
+      if (r === true) sent++;
+      else {
+        skipped++;
+        await db.digestLog.deleteMany({ where: { userId: user.id, kind, day } }); // não enviou: libera para tentar depois
+      }
     } catch (err) {
+      await db.digestLog.deleteMany({ where: { userId: user.id, kind, day } });
       console.warn(`[digest:${kind}] falha para ${user.email}:`, (err as Error).message);
       skipped++;
     }

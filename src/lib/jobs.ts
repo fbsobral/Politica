@@ -72,12 +72,20 @@ const running = new Set<string>();
  * configurado no painel; execuções manuais (botão do admin, `npm run job -- ingest`) ignoram o intervalo.
  */
 export async function runJob(name: JobName, opts: { scheduled?: boolean } = {}): Promise<unknown> {
+  if (opts.scheduled && name === "ingest") {
+    // sinal de vida do agendador (aparece na Visão geral do admin)
+    await db.setting.upsert({ where: { key: "schedulerPing" }, create: { key: "schedulerPing", value: new Date().toISOString() }, update: { value: new Date().toISOString() } }).catch(() => undefined);
+  }
   if (running.has(name)) return { skipped: "já em execução" };
   if (opts.scheduled && name === "ingest") {
     const minutes = Math.min(1440, Math.max(10, Number((await getSettings()).ingestIntervalMinutes) || 60));
     const last = await db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
     // tolerância de 3 min: os agendadores disparam em minutos "redondos"
-    if (last && Date.now() - last.startedAt.getTime() < (minutes - 3) * 60000) return { skipped: `próxima coleta em até ${minutes} min` };
+    if (last && Date.now() - last.startedAt.getTime() < (minutes - 3) * 60000) {
+      const left = Math.max(1, Math.round(minutes - (Date.now() - last.startedAt.getTime()) / 60000));
+      console.log(`[job:ingest] pulado: intervalo de ${minutes} min, próxima coleta em ~${left} min`);
+      return { skipped: `próxima coleta em ~${left} min` };
+    }
   }
   running.add(name);
   const run = await db.jobRun.create({ data: { job: name } });

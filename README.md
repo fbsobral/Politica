@@ -46,10 +46,9 @@ Crie uma aplicação em clerk.com, copie `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e `
 1. No Coolify: **New Resource → Docker Compose** apontando para este repositório (`docker-compose.yml`).
 2. Em *Environment Variables* preencha: `POSTGRES_PASSWORD`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (marque como *Build Variable*), `CLERK_SECRET_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM` (domínio verificado no Resend), `APP_URL` (https do seu domínio), `CRON_SECRET`, `ADMIN_EMAILS`.
 3. Em *Domains* do serviço **web**, informe seu domínio com a porta `3000`.
-4. Deploy. O `web` aplica as migrações; o `worker` sobe junto e já faz a primeira coleta.
+4. Deploy. O `web` aplica as migrações e **agenda sozinho** a coleta de notícias, os resumos por e-mail e as demais rotinas (`src/instrumentation.ts`) — não precisa de worker nem de tarefas agendadas. Para desligar o agendador embutido (ex.: se usar um worker separado), defina `EMBEDDED_WORKER=0`. A Visão geral do admin avisa se o agendador parar de dar sinal.
 
-Alternativa ao worker: um *Scheduled Task* do Coolify chamando
-`curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://SEU_DOMINIO/api/cron/ingest` (jobs: `ingest`, `digest`, `politicians`, `cleanup`).
+Se preferir agendar por fora (Scheduled Task do Coolify): `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://SEU_DOMINIO/api/cron/ingest` ou `npm run job -- ingest --scheduled` (jobs: `ingest`, `digest`, `digestWeekly`, `digestMonthly`, `politicians`, `candidates`, `cleanup`).
 
 Se preferir o Postgres gerenciado do Coolify, remova o serviço `db` do compose e defina `DATABASE_URL` com a URL interna dele.
 
