@@ -75,7 +75,7 @@ export async function fetchPageContent(url: string): Promise<PageContent | null>
       .map((_, el) => $(el).text().replace(/\s+/g, " ").trim())
       .get()
       .filter((p) => p.length > 70);
-    return { description, text: paras.join("\n").slice(0, 14000) };
+    return { description, text: paras.join("\n").slice(0, 10000) };
   } catch {
     return null;
   }
@@ -109,7 +109,8 @@ Escreva em português, de forma neutra e fiel, em 3 parágrafos curtos separados
 3) as consequências e os próximos passos (o que muda, o que vem a seguir), se o texto mencionar.
 Não acrescente nada que não esteja no texto, não opine e não repita o título. Sem markdown, sem listas, sem marcadores.`,
           `Título: ${a.title}\n\nTexto da matéria:\n${content.text}`,
-          1100,
+          1000,
+          "summary",
         )
       ).trim();
       if (out) {

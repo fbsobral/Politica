@@ -308,3 +308,9 @@ model AiUsage {
 
   @@index([at])
 }
+
+/// Assuntos (clusterKey) que a IA já julgou "não é política": evita reclassificar os mesmos de outros veículos.
+model RejectedCluster {
+  clusterKey String   @id
+  at         DateTime @default(now())
+}

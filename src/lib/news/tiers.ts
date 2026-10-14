@@ -31,7 +31,7 @@ async function suggestTiers(names: string[]): Promise<Record<string, 1 | 2 | 3>>
 3 = blogs, sites pequenos ou locais, agregadores, esportes/entretenimento e fontes oficiais MUNICIPAIS (prefeituras, câmaras de vereadores).
 Na dúvida, use 3. Responda SOMENTE um objeto JSON {"nome do veículo": 1|2|3}.`;
   try {
-    const parsed = schema.parse(extractJson(await ask(system, JSON.stringify(names.slice(0, 80)), 2000)));
+    const parsed = schema.parse(extractJson(await ask(system, JSON.stringify(names.slice(0, 80)), 1200, "tiers")));
     for (const [name, t] of Object.entries(parsed)) if (t === 1 || t === 2 || t === 3) out[name] = t;
   } catch (err) {
     console.warn("[tiers] sugestão falhou:", (err as Error).message);
@@ -52,11 +52,12 @@ export async function applyTiers(): Promise<void> {
   for (let i = 0; i < unknown.length; i += 60) {
     const batch = unknown.slice(i, i + 60);
     const ai = await suggestTiers(batch.map((s) => s.name));
+    const answered = Object.keys(ai).length > 0;
     for (const s of batch) {
       const t = ai[s.name];
       if (t) await db.source.update({ where: { id: s.id }, data: { tier: t, tierBy: "ai" } });
-      else if (!aiEnabled()) await db.source.update({ where: { id: s.id }, data: { tier: 3, tierBy: "default" } });
-      // se a IA falhou, deixa sem tier para tentar de novo na próxima coleta
+      else if (!aiEnabled() || answered) await db.source.update({ where: { id: s.id }, data: { tier: 3, tierBy: "default" } });
+      // se a IA falhou por completo (sem resposta), deixa sem tier para tentar de novo — sem custo, pois chamada com erro não cobra
     }
   }
 }

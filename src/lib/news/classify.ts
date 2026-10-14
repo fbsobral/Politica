@@ -1,8 +1,7 @@
 import type { Branch, ElectionOffice, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { z } from "zod";
-import { aiEnabled, ask, extractJson } from "@/lib/ai";
+import { aiEnabled, ask, BudgetError, extractJson } from "@/lib/ai";
 import { normalize, truncate } from "@/lib/text";
-const OFFICES = ["PRESIDENTE", "GOVERNADOR", "SENADOR", "DEPUTADO"];
 import { BRANCH_VALUES, NEWS_CATEGORY_VALUES, SOURCE_CATEGORY_VALUES, UFS } from "@/lib/taxonomy";
 
 export type ClassifyInput = {
@@ -17,6 +16,8 @@ export type ClassifyInput = {
   branchHint?: Branch | null;
   /** local esperado (ex: "Campinas, SP" ou "estado de São Paulo") quando a busca foi local */
   locationHint?: string;
+  /** assunto (mesma história em vários veículos): itens equivalentes são classificados uma vez só */
+  clusterKey?: string;
 };
 
 export type ClassifyOutput = {
@@ -74,71 +75,89 @@ export function classifyByRules(i: ClassifyInput): ClassifyOutput {
   return { id: i.id, political: true, scope: i.scopeHint, uf: null, category, branch, cargo, poll: POLL_RE.test(text) };
 }
 
-const outSchema = z.array(
-  z.object({
-    id: z.string(),
-    political: z.boolean(),
-    onLocation: z.boolean().nullable().optional(),
-    scope: z.enum(["MUNICIPAL", "ESTADUAL", "FEDERAL"]),
-    uf: z.string().nullable().optional(),
-    category: z.string(),
-    branch: z.string().nullable().optional(),
-    cargo: z.string().nullable().optional(),
-    poll: z.boolean().nullable().optional(),
-  }),
-);
+/* ───────── Classificação com IA (formato compacto para gastar poucos tokens) ───────── */
 
-const SYSTEM = `Você classifica notícias brasileiras sobre política para um app de acompanhamento político.
-Para cada notícia devolva:
-- political: true se trata de política, governo, legislativo, judiciário, eleições, políticas públicas ou agentes públicos; false para esporte, celebridades, crimes comuns sem relação com poder público, etc.
-- scope: "FEDERAL" (presidência, ministérios, Congresso Nacional, STF/STJ/TSE, assuntos nacionais), "ESTADUAL" (governo do estado, assembleia legislativa, secretarias estaduais) ou "MUNICIPAL" (prefeitura, câmara de vereadores, assuntos da cidade). Quando "scopeLocked" for true, mantenha exatamente o "scopeHint".
-- branch: o poder a que a notícia mais se refere: \"LEGISLATIVO\" (Congresso, Câmara, Senado, assembleias, câmaras de vereadores, leis, CPIs, parlamentares), \"EXECUTIVO\" (presidente, governadores, prefeitos, ministérios, secretarias, decretos, gestão e políticas públicas) ou \"JUDICIARIO\" (STF, STJ, TSE, tribunais, juízes, Ministério Público, Polícia Federal, processos e decisões judiciais). Use null quando não houver poder claro (ex.: eleições e campanha em geral). "branchHint", quando existir, indica a origem da busca: confirme ou corrija.
-- cargo: apenas quando a notícia trata das eleições, o cargo em disputa: \"PRESIDENTE\", \"GOVERNADOR\", \"SENADOR\" ou \"DEPUTADO\" (federal ou estadual); null se não for sobre eleição ou não houver um cargo claro.
-- poll: true se a notícia é principalmente sobre uma pesquisa eleitoral (Datafolha, Quaest, AtlasIntel, Ipec etc.) ou intenção de voto.
-- onLocation: só quando "locationHint" existir. true se o fato principal acontece nesse estado/município ou envolve o governo, o legislativo, a justiça ou políticos daquele local (inclusive vereadores, prefeito, deputados e governador dele). false se o foco claro é outro estado/município (ex.: eleição para governador do Acre quando o local é São Paulo) ou é só disputa nacional sem relação local.
-- uf: sigla do estado (ex: "SP") apenas se scope for ESTADUAL e o estado estiver explícito no texto; senão null.
-- category: uma de ${NEWS_CATEGORY_VALUES.join(", ")}.
-Responda SOMENTE com um array JSON: [{"id":"...","political":true,"onLocation":true,"scope":"FEDERAL","uf":null,"branch":"EXECUTIVO","cargo":null,"poll":false,"category":"ECONOMIA"}].`;
+const SC = { M: "MUNICIPAL", E: "ESTADUAL", F: "FEDERAL" } as const;
+const BR = { L: "LEGISLATIVO", E: "EXECUTIVO", J: "JUDICIARIO" } as const;
+const CG = { P: "PRESIDENTE", G: "GOVERNADOR", S: "SENADOR", D: "DEPUTADO" } as const;
+const CAT: Record<string, NewsCategory> = { ECO: "ECONOMIA", SAU: "SAUDE", SEG: "SEGURANCA", EDU: "EDUCACAO", ELE: "ELEICOES", JUS: "JUSTICA_CORRUPCAO", INF: "INFRAESTRUTURA", AMB: "MEIO_AMBIENTE", SOC: "SOCIAL", LEG: "LEGISLATIVO", ADM: "ADMINISTRACAO", INT: "INTERNACIONAL", OUT: "OUTROS" };
+const SCOPE_CODE: Record<Scope, string> = { MUNICIPAL: "M", ESTADUAL: "E", FEDERAL: "F" };
+const BRANCH_CODE: Record<Branch, string> = { LEGISLATIVO: "L", EXECUTIVO: "E", JUDICIARIO: "J" };
 
-const BATCH = 25;
+// [i, político(0/1), noLocal(0/1), esfera, uf, categoria(código de 3 letras), poder, cargo, pesquisa(0/1)]
+const rowSchema = z.tuple([z.number(), z.number(), z.number().nullable(), z.string(), z.string().nullable(), z.string(), z.string().nullable(), z.string().nullable(), z.number().nullable()]);
 
-/** Classifica com Claude Haiku (em lotes); cai para regras se a IA estiver indisponível. */
+const SYSTEM = `Você classifica notícias brasileiras de política para um app. Entrada: array de itens [i, título, descrição, veículo, esfera_sugerida, travada, local, poder_sugerido].
+Para cada item responda uma linha [i, politico, no_local, esfera, uf, categoria, poder, cargo, pesquisa]:
+- politico: 1 se trata de política, governo, legislativo, judiciário, eleições, políticas públicas ou agentes públicos; 0 para esporte, celebridades, crimes comuns sem relação com poder público etc.
+- no_local: só vale se "local" não for vazio. 1 se o fato acontece nesse estado/município ou envolve o governo, o legislativo, a justiça ou políticos dele (vereadores, prefeito, deputados, governador); 0 se o foco claro é outro estado/município ou só disputa nacional sem relação local. Sem "local", use 1.
+- esfera: F (presidência, ministérios, Congresso, STF/STJ/TSE, assuntos nacionais), E (governo do estado, assembleia, secretarias estaduais) ou M (prefeitura, câmara de vereadores, assuntos da cidade). Se "travada"=1, repita a esfera_sugerida.
+- uf: sigla (ex. "SP") só se esfera=E e o estado estiver explícito; senão null.
+- categoria (código): ECO=economia/finanças/impostos, SAU=saúde, SEG=segurança pública, EDU=educação, ELE=eleições/candidatos/campanha/pesquisas, JUS=justiça/corrupção/investigações/processos, INF=obras/transportes/infraestrutura, AMB=meio ambiente/clima, SOC=políticas sociais/direitos/previdência, LEG=trâmite legislativo (projetos, votações, CPIs, sessões), ADM=gestão pública/administração/servidores, INT=assuntos internacionais, OUT=outros. Escolha o assunto central da notícia.
+- poder: L (Congresso, assembleias, câmaras de vereadores, leis, CPIs, parlamentares), E (presidente, governadores, prefeitos, ministérios, secretarias, decretos, gestão pública) ou J (STF, STJ, TSE, tribunais, juízes, MP, PF, processos); null se não houver poder claro (ex.: eleição em geral). "poder_sugerido" vem da origem da busca: confirme ou corrija.
+- cargo: só em notícia de eleições, o cargo em disputa: P (presidente), G (governador), S (senador) ou D (deputado federal/estadual); senão null.
+- pesquisa: 1 se for principalmente sobre pesquisa eleitoral (Datafolha, Quaest, AtlasIntel, Ipec etc.) ou intenção de voto.
+Responda SOMENTE o array JSON de linhas, sem texto extra. Ex.: [[0,1,1,"F",null,"ECO","E",null,0]]`;
+
+const BATCH = 30;
+
+/** Agrupa itens equivalentes (mesmo assunto, mesmo contexto) para classificar uma vez só e replicar o resultado. */
+function groupKey(i: ClassifyInput): string | null {
+  return i.clusterKey ? `${i.clusterKey}|${i.scopeHint}|${i.scopeLocked ? 1 : 0}|${i.locationHint ?? ""}` : null;
+}
+
+/** Classifica com Claude Haiku (em lotes, formato compacto); cai para regras se a IA estiver indisponível. */
 export async function classifyArticles(items: ClassifyInput[]): Promise<ClassifyOutput[]> {
   if (!items.length) return [];
   if (!aiOn || !aiEnabled()) return items.map(classifyByRules);
 
+  // um representante por grupo de itens equivalentes
+  const reps: ClassifyInput[] = [];
+  const members = new Map<string, ClassifyInput[]>();
+  for (const it of items) {
+    const k = groupKey(it);
+    if (k === null) {
+      reps.push(it);
+      continue;
+    }
+    const list = members.get(k);
+    if (list) list.push(it);
+    else {
+      members.set(k, [it]);
+      reps.push(it);
+    }
+  }
+
   const batches: ClassifyInput[][] = [];
-  for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));
+  for (let i = 0; i < reps.length; i += BATCH) batches.push(reps.slice(i, i + BATCH));
 
   async function runBatch(batch: ClassifyInput[]): Promise<ClassifyOutput[]> {
-    const payload = batch.map((b) => ({
-      id: b.id,
-      title: truncate(b.title, 200),
-      description: truncate(b.description ?? "", 280),
-      source: b.source,
-      scopeHint: b.scopeHint,
-      scopeLocked: b.scopeLocked,
-      locationHint: b.locationHint,
-      branchHint: b.branchHint,
-    }));
+    const payload = batch.map((b, i) => [i, truncate(b.title, 180), truncate(b.description ?? "", 140), b.source, SCOPE_CODE[b.scopeHint], b.scopeLocked ? 1 : 0, b.locationHint ?? "", b.branchHint ? BRANCH_CODE[b.branchHint] : ""]);
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       let text = "";
       try {
-        text = await ask(SYSTEM, JSON.stringify(payload), 6000);
-        const parsed = outSchema.parse(extractJson(text));
-        const byId = new Map(parsed.map((p) => [p.id, p]));
-        return batch.map((item) => {
-          const p = byId.get(item.id);
-          if (!p) return classifyByRules(item);
-          const category = (NEWS_CATEGORY_VALUES as string[]).includes(p.category) ? (p.category as NewsCategory) : classifyByRules(item).category;
-          const uf = p.uf && p.uf.toUpperCase() in UFS ? p.uf.toUpperCase() : null;
-          const branch = (BRANCH_VALUES as string[]).includes(p.branch ?? "") ? (p.branch as Branch) : (item.branchHint ?? null);
-          const cargo = (OFFICES as string[]).includes(p.cargo ?? "") ? (p.cargo as ElectionOffice) : null;
-          return { id: item.id, political: p.political && !(item.locationHint && p.onLocation === false), scope: item.scopeLocked ? item.scopeHint : (p.scope as Scope), uf, category, branch, cargo, poll: Boolean(p.poll) };
+        text = await ask(SYSTEM, JSON.stringify(payload), 40 + batch.length * 34, "classify", true);
+        const rows = z.array(z.array(z.unknown())).parse(extractJson(text));
+        const byIndex = new Map<number, z.infer<typeof rowSchema>>();
+        for (const r of rows) {
+          const parsed = rowSchema.safeParse(r);
+          if (parsed.success) byIndex.set(parsed.data[0], parsed.data);
+        }
+        return batch.map((item, i) => {
+          const r = byIndex.get(i);
+          if (!r) return classifyByRules(item);
+          const [, pol, onLoc, sc, ufRaw, catIdx, br, cg, pl] = r;
+          const category = CAT[catIdx] ?? classifyByRules(item).category;
+          const uf = ufRaw && ufRaw.toUpperCase() in UFS ? ufRaw.toUpperCase() : null;
+          const branch = br && br in BR ? BR[br as keyof typeof BR] : (item.branchHint ?? null);
+          const cargo = cg && cg in CG ? CG[cg as keyof typeof CG] : null;
+          const scope = item.scopeLocked ? item.scopeHint : sc in SC ? SC[sc as keyof typeof SC] : item.scopeHint;
+          return { id: item.id, political: pol === 1 && !(item.locationHint && onLoc === 0), scope, uf, category, branch, cargo, poll: pl === 1 };
         });
       } catch (err) {
         lastErr = err as Error;
+        if (err instanceof BudgetError) break; // sem orçamento: não adianta tentar de novo
         console.warn(`[classify] tentativa ${attempt + 1} falhou: ${lastErr.message} | resposta: ${JSON.stringify(text.slice(0, 200))}`);
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
       }
@@ -147,16 +166,24 @@ export async function classifyArticles(items: ClassifyInput[]): Promise<Classify
     return batch.map(classifyByRules);
   }
 
-  const results: ClassifyOutput[] = [];
+  const byRep = new Map<string, ClassifyOutput>();
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(4, batches.length) }, async () => {
       while (next < batches.length) {
-        const i = next++;
-        results.push(...(await runBatch(batches[i])));
+        for (const out of await runBatch(batches[next++])) byRep.set(out.id, out);
       }
     }),
   );
+
+  // replica o resultado do representante para os demais itens do grupo
+  const results: ClassifyOutput[] = [];
+  for (const it of items) {
+    const k = groupKey(it);
+    const rep = k === null ? it : members.get(k)![0];
+    const out = byRep.get(rep.id) ?? classifyByRules(it);
+    results.push({ ...out, id: it.id });
+  }
   return results;
 }
 
@@ -170,7 +197,7 @@ export async function classifySources(names: string[]): Promise<Record<string, S
 PORTAL_NACIONAL = portal/site de notícias de alcance nacional; JORNAL = jornal (impresso/digital); REVISTA; TV; RADIO; AGENCIA_NOTICIAS; ORGAO_OFICIAL = site de governo, câmara, tribunal; REGIONAL = veículo local/regional; BLOG_INDEPENDENTE = blog ou mídia independente; OUTRO.
 Responda SOMENTE um objeto JSON {"nome do veículo":"CATEGORIA"}.`;
   try {
-    const text = await ask(system, JSON.stringify(names.slice(0, 80)), 2000);
+    const text = await ask(system, JSON.stringify(names.slice(0, 80)), 1200, "sources");
     const parsed = srcSchema.parse(extractJson(text));
     for (const [name, cat] of Object.entries(parsed)) {
       if ((SOURCE_CATEGORY_VALUES as string[]).includes(cat)) out[name] = cat as SourceCategory;

@@ -18,6 +18,11 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   await requireAdmin();
   const sp = await searchParams;
   const since = new Date(Date.now() - 24 * 3600 * 1000);
+  const aiSince = new Date(Date.now() - 24 * 3600 * 1000);
+  const [aiUsage, ai7] = await Promise.all([
+    db.aiUsage.groupBy({ by: ["kind"], where: { at: { gte: aiSince } }, _sum: { inputTokens: true, outputTokens: true, cachedTokens: true }, _count: true }),
+    db.aiUsage.aggregate({ where: { at: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } }, _sum: { inputTokens: true, outputTokens: true } }),
+  ]);
   const [cfg, lastRun, lastOk, runs, articles24, byScope, users, pendingInvites, feedErrors, aiPending, unclassified, feeds, noTier] = await Promise.all([
     getSettings(),
     db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" } }),
@@ -79,6 +84,39 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <p className="display mt-1 text-xl font-semibold">{users}</p>
           <p className="text-xs text-faint">{feeds} feeds ativos · {noTier} veículos sem tier</p>
         </div>
+      </section>
+
+      <section aria-label="Uso de IA">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="display text-xl font-semibold">Uso da IA (Claude) nas últimas 24 h</h2>
+          <span className="text-xs text-faint">{Number(cfg.aiDailyTokenBudget) > 0 ? `limite diário: ${Number(cfg.aiDailyTokenBudget).toLocaleString("pt-BR")} tokens` : "sem limite diário"} · <Link href="/admin/robo#parametros" className="underline">ajustar</Link></span>
+        </div>
+        {(() => {
+          const total = aiUsage.reduce((a, u) => a + (u._sum.inputTokens ?? 0) + (u._sum.outputTokens ?? 0), 0);
+          const budget = Number(cfg.aiDailyTokenBudget) || 0;
+          const LABEL: Record<string, string> = { classify: "Classificação das notícias", summary: "Resumos de matérias", explain: "Explicações da agenda", digest: "Resumos por e-mail", sources: "Categoria de veículos", tiers: "Tiers de veículos", other: "Outros" };
+          const week = (ai7._sum.inputTokens ?? 0) + (ai7._sum.outputTokens ?? 0);
+          return (
+            <div className="card-flat p-4">
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                <p><span className="display text-2xl font-semibold">{total.toLocaleString("pt-BR")}</span> <span className="text-sm text-muted">tokens em 24 h</span></p>
+                <p className="text-sm text-muted">{week.toLocaleString("pt-BR")} em 7 dias</p>
+                {budget > 0 && <p className={`text-sm font-semibold ${total >= budget ? "text-danger" : "text-muted"}`}>{Math.min(100, Math.round((total / budget) * 100))}% do limite{total >= budget ? " — IA pausada" : ""}</p>}
+              </div>
+              {budget > 0 && <div className="mb-3 h-1.5 rounded-full bg-line"><div className={`h-full rounded-full ${total >= budget ? "bg-danger" : "bg-brand"}`} style={{ width: `${Math.min(100, (total / budget) * 100)}%` }} /></div>}
+              <ul className="divide-y divide-line text-sm">
+                {aiUsage.sort((a, b) => (b._sum.inputTokens ?? 0) + (b._sum.outputTokens ?? 0) - (a._sum.inputTokens ?? 0) - (a._sum.outputTokens ?? 0)).map((u) => (
+                  <li key={u.kind} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <span>{LABEL[u.kind] ?? u.kind} <span className="text-xs text-faint">· {u._count} chamadas</span></span>
+                    <span className="text-xs text-muted">entrada {(u._sum.inputTokens ?? 0).toLocaleString("pt-BR")} · saída {(u._sum.outputTokens ?? 0).toLocaleString("pt-BR")}{(u._sum.cachedTokens ?? 0) > 0 ? ` · cache ${(u._sum.cachedTokens ?? 0).toLocaleString("pt-BR")}` : ""}</span>
+                  </li>
+                ))}
+                {!aiUsage.length && <li className="py-2 text-muted">Nenhum uso registrado ainda.</li>}
+              </ul>
+              <p className="mt-2 text-xs text-faint">Tokens de saída custam mais que os de entrada; tokens em cache custam uma fração.</p>
+            </div>
+          );
+        })()}
       </section>
 
       <section aria-label="Pendências">

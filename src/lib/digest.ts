@@ -61,7 +61,8 @@ async function summarize(kind: DigestKind, label: string, lines: string[]): Prom
     const text = await ask(
       `Você escreve o ${PERIOD[kind].label.toLowerCase()} de um app de notícias políticas brasileiras. Em português, escreva 2 a 4 frases corridas, objetivas e neutras, resumindo os principais assuntos da lista (${PERIOD[kind].noun}). Sem listas, sem markdown, sem opinião.`,
       `Seção: ${label}\n` + lines.map((l) => `- ${l}`).join("\n"),
-      500,
+      450,
+      "digest",
     );
     return text.trim() || null;
   } catch (err) {

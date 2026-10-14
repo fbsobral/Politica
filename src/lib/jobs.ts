@@ -52,6 +52,9 @@ export const JOBS = {
   },
   /** remove notícias antigas (retenção configurável) que ninguém favoritou */
   async cleanup() {
+    // assuntos rejeitados e uso de IA antigos não precisam ficar para sempre
+    await db.rejectedCluster.deleteMany({ where: { at: { lt: new Date(Date.now() - 30 * 86400000) } } });
+    await db.aiUsage.deleteMany({ where: { at: { lt: new Date(Date.now() - 90 * 86400000) } } });
     const days = Number((await getSettings()).retentionDays) || 0;
     if (days <= 0) return { deleted: 0, note: "retenção desligada (guarda todo o histórico)" };
     const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * Math.max(7, days));

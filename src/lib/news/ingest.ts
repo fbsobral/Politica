@@ -340,6 +340,18 @@ export async function runIngest(): Promise<IngestResult> {
     for (let i = fresh.length - 1; i >= 0; i--) if (dbKeys.has(`${fresh[i].sourceName}|${normalize(fresh[i].title)}`)) fresh.splice(i, 1);
   }
 
+  // assuntos que a IA já julgou "não é política" não voltam a ser salvos nem reclassificados (cada ida e volta gastaria tokens)
+  if (fresh.length) {
+    const keysOf = fresh.map((c) => clusterKey(c.title));
+    const rej = new Set((await db.rejectedCluster.findMany({ where: { clusterKey: { in: keysOf }, at: { gte: new Date(Date.now() - 14 * 86400000) } }, select: { clusterKey: true } })).map((r) => r.clusterKey));
+    if (rej.size) {
+      for (let i = fresh.length - 1; i >= 0; i--) {
+        const c = fresh[i];
+        if (!c.factCheck && !c.municipalityKey && !isLocalOrigin(c.origin) && rej.has(keysOf[i])) fresh.splice(i, 1);
+      }
+    }
+  }
+
   // veículos
   const sourceIds = new Map<string, string>();
   const names = [...new Set(fresh.map((c) => c.sourceName))];
@@ -394,8 +406,9 @@ export async function runIngest(): Promise<IngestResult> {
   const unknownSources = await db.source.findMany({ where: { categoryKnown: false }, select: { id: true, name: true } });
   if (unknownSources.length) {
     const guessed = await classifySources(unknownSources.map((s) => s.name));
+    const answered = Object.keys(guessed).length > 0; // se a IA respondeu algo, quem ficou de fora vira OUTRO (não perguntar de novo a cada coleta)
     for (const s of unknownSources) {
-      const cat = guessed[s.name];
+      const cat = guessed[s.name] ?? (answered ? "OUTRO" : null);
       if (cat) await db.source.update({ where: { id: s.id }, data: { category: cat, categoryKnown: true } });
     }
   }
@@ -413,14 +426,55 @@ export async function runIngest(): Promise<IngestResult> {
 }
 
 /** Classifica artigos pendentes; remove os que não são política. */
-export async function classifyPending(limit = 300): Promise<{ classified: number; removed: number }> {
+export async function classifyPending(limit = 300): Promise<{ classified: number; removed: number; reused: number }> {
   const pending = await db.article.findMany({
     where: { classified: false },
     orderBy: { publishedAt: "desc" },
     take: limit,
     include: { source: { select: { name: true, factCheck: true } } },
   });
-  const inputs: ClassifyInput[] = pending.map((a) => ({
+  if (!pending.length) return { classified: 0, removed: 0, reused: 0 };
+
+  // ── economia de IA: reaproveita o julgamento de matérias do mesmo assunto (outros veículos) ──
+  const since = new Date(Date.now() - 14 * 86400000);
+  const keys = [...new Set(pending.map((a) => a.clusterKey))];
+  const [donorRows, rejectedRows] = await Promise.all([
+    db.article.findMany({
+      where: { clusterKey: { in: keys }, classified: true, publishedAt: { gte: since } },
+      select: { clusterKey: true, scope: true, uf: true, municipalityKey: true, origin: true, category: true, branch: true, cargo: true, poll: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.rejectedCluster.findMany({ where: { clusterKey: { in: keys }, at: { gte: since } }, select: { clusterKey: true } }),
+  ]);
+  const donors = new Map<string, typeof donorRows>();
+  for (const d of donorRows) donors.set(d.clusterKey, [...(donors.get(d.clusterKey) ?? []), d]);
+  const rejected = new Set(rejectedRows.map((r) => r.clusterKey));
+
+  const toAi: typeof pending = [];
+  const toRemove: string[] = [];
+  let classified = 0;
+  let reused = 0;
+  for (const a of pending) {
+    const keep = a.source.factCheck || a.factCheck;
+    if (!keep && !a.municipalityKey && !isLocalOrigin(a.origin) && rejected.has(a.clusterKey)) {
+      toRemove.push(a.id); // mesmo assunto já julgado "não é política"
+      continue;
+    }
+    const local = isLocalOrigin(a.origin);
+    const donor = donors.get(a.clusterKey)?.find((d) => isLocalOrigin(d.origin) === local && d.municipalityKey === a.municipalityKey && (!local || d.uf === a.uf));
+    if (!donor) {
+      toAi.push(a);
+      continue;
+    }
+    let scope = local ? a.scope : donor.scope;
+    const uf = local ? a.uf : donor.uf;
+    if (!local && scope === "ESTADUAL" && !uf) scope = "FEDERAL";
+    await db.article.update({ where: { id: a.id }, data: { scope, uf, category: donor.category, branch: donor.branch ?? a.branch, cargo: donor.cargo, poll: donor.poll, classified: true } });
+    classified++;
+    reused++;
+  }
+
+  const inputs: ClassifyInput[] = toAi.map((a) => ({
     id: a.id,
     title: a.title,
     description: a.description,
@@ -428,6 +482,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     scopeHint: a.scope,
     scopeLocked: isLocalOrigin(a.origin),
     branchHint: a.branch,
+    clusterKey: a.clusterKey,
     locationHint: a.municipalityKey
       ? `município de ${a.municipalityKey}, ${a.uf}`
       : isLocalOrigin(a.origin) && a.uf
@@ -435,12 +490,12 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
         : undefined,
   }));
   const results = await classifyArticles(inputs);
-  let classified = 0;
-  const toRemove: string[] = [];
+  const newlyRejected = new Set<string>();
   for (const r of results) {
-    const orig = pending.find((p) => p.id === r.id)!;
+    const orig = toAi.find((p) => p.id === r.id)!;
     if (!r.political && !orig.source.factCheck && !orig.factCheck) {
       toRemove.push(r.id);
+      if (!orig.municipalityKey && !isLocalOrigin(orig.origin)) newlyRejected.add(orig.clusterKey);
       continue;
     }
     let scope = r.scope;
@@ -453,6 +508,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     await db.article.update({ where: { id: r.id }, data: { scope, uf, category: r.category, branch: r.branch ?? orig.branch, cargo: r.cargo, poll: r.poll, classified: true } });
     classified++;
   }
+  if (newlyRejected.size) await db.rejectedCluster.createMany({ data: [...newlyRejected].map((clusterKey) => ({ clusterKey })), skipDuplicates: true });
   if (toRemove.length) await db.article.deleteMany({ where: { id: { in: toRemove } } });
-  return { classified, removed: toRemove.length };
+  return { classified, removed: toRemove.length, reused };
 }

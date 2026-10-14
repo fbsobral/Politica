@@ -102,7 +102,10 @@ export default async function RoboPage({ searchParams }: { searchParams: Promise
             <label className="block"><span className={label}>Idade máx. locais (dias)</span><input name="localMaxAgeDays" type="number" min={0} max={365} defaultValue={cfg.localMaxAgeDays} className="input" /></label>
             <label className="block"><span className={label}>Guardar histórico (dias)</span><input name="retentionDays" type="number" min={0} max={3650} defaultValue={cfg.retentionDays} className="input" /></label>
           </div>
-          <label className="block max-w-md"><span className={label}>Modelo do Claude (vazio = padrão)</span><input name="aiModel" defaultValue={cfg.aiModel} placeholder="claude-haiku-5-5" className="input" /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block"><span className={label}>Modelo do Claude (vazio = padrão)</span><input name="aiModel" defaultValue={cfg.aiModel} placeholder="claude-haiku-5-5" className="input" /></label>
+            <label className="block"><span className={label}>Limite diário de tokens da IA (0 = sem limite)</span><input name="aiDailyTokenBudget" type="number" min={0} step={10000} defaultValue={cfg.aiDailyTokenBudget} className="input" /><span className="mt-1 block text-xs text-faint">Soma de entrada e saída nas últimas 24 h. Ao atingir, o app usa regras e descrições dos veículos, sem IA, até liberar. Veja o consumo em Visão geral.</span></label>
+          </div>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" name="googleNews" defaultChecked={cfg.googleNews === "1"} /> Buscar no Google News</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="aiClassify" defaultChecked={cfg.aiClassify === "1"} /> Classificar com IA (senão, só regras)</label>

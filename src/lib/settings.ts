@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 
 export const SETTING_DEFAULTS = {
+  /** orçamento diário de tokens da IA (entrada + saída, últimas 24 h); 0 = sem limite. Ao estourar, o app usa regras/descrições sem IA. */
+  aiDailyTokenBudget: "0",
   /** intervalo entre coletas automáticas, em minutos (10 a 1440) */
   ingestIntervalMinutes: "60",
   /** idade máxima (dias) das notícias nacionais aceitas; 0 = sem limite */
@@ -57,7 +59,7 @@ export function fillTemplate(tpl: string, vars: { estado?: string; cidade?: stri
 
 /** Grupos de configurações editados em páginas diferentes do admin (cada formulário só salva o seu grupo). */
 export const SETTING_GROUPS = {
-  geral: ["ingestIntervalMinutes", "maxAgeDays", "localMaxAgeDays", "retentionDays", "aiModel", "googleNews", "aiClassify"],
+  geral: ["aiDailyTokenBudget", "ingestIntervalMinutes", "maxAgeDays", "localMaxAgeDays", "retentionDays", "aiModel", "googleNews", "aiClassify"],
   buscas: Object.keys(SETTING_DEFAULTS).filter((k) => k === "priorityOutlets" || k.startsWith("query")),
 } as const satisfies Record<string, readonly string[]>;
 export type SettingGroup = keyof typeof SETTING_GROUPS;

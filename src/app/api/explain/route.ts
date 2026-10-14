@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { aiEnabled, ask } from "@/lib/ai";
 import { db } from "@/lib/db";
+import { allow } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,9 @@ const PROMPTS: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  if (!(await auth()).userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!allow(`explain:${userId}`, 120)) return NextResponse.json({ error: "muitas solicitações" }, { status: 429 });
   const body = (await req.json().catch(() => null)) as { kind?: string; text?: string } | null;
   const kind = body?.kind ?? "";
   const text = (body?.text ?? "").trim().slice(0, 900);
@@ -24,7 +27,7 @@ export async function POST(req: Request) {
   if (!aiEnabled()) return NextResponse.json({ error: "IA indisponível" }, { status: 503 });
 
   try {
-    const out = (await ask(PROMPTS[kind], text, 400)).trim();
+    const out = (await ask(PROMPTS[kind], text, 350, "explain")).trim();
     if (!out) throw new Error("vazio");
     await db.explanation.upsert({ where: { key }, create: { key, kind, text: out }, update: {} });
     return NextResponse.json({ text: out });
