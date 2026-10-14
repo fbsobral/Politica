@@ -21,6 +21,7 @@ const GROUPS: { title: string; hint: string; jobs: { job: string; label: string;
     hint: "Coleta e classificação",
     jobs: [
       { job: "ingest", label: "Coletar notícias agora", desc: "Lê feeds e buscas, deduplica e classifica." },
+      { job: "classifyBacklog", label: "Classificar pendentes", desc: "Termina a classificação do que ficou na fila." },
       { job: "reclassifyElections", label: "Reclassificar eleições", desc: "Refaz cargo e pesquisa nas notícias eleitorais." },
     ],
   },

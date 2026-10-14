@@ -416,7 +416,7 @@ export async function runIngest(): Promise<IngestResult> {
   await applyTiers();
   let classified = 0;
   let removed = 0;
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < 6; round++) {
     const r = await classifyPending();
     classified += r.classified;
     removed += r.removed;

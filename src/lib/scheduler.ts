@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { db } from "@/lib/db";
 import { runJob, type JobName } from "@/lib/jobs";
 
 const tz = process.env.TZ || "America/Sao_Paulo";
@@ -25,6 +26,18 @@ export function startScheduler(opts: { bootDelayMs?: number } = {}) {
 
   // sempre a cada 5 min (o intervalo real da coleta vem do painel); INGEST_CRON não é mais usado
   schedule("*/5 * * * *", "ingest");
+  // a cada 5 min (com 2 min de defasagem): se sobrou notícia sem classificar, termina o serviço sem esperar a próxima coleta
+  cron.schedule(
+    "2-59/5 * * * *",
+    async () => {
+      try {
+        if ((await db.article.count({ where: { classified: false } })) > 0) await runJob("classifyBacklog");
+      } catch {
+        /* tenta de novo no próximo ciclo */
+      }
+    },
+    { timezone: tz },
+  );
   schedule(process.env.DIGEST_CRON || "0 7 * * *", "digest");
   schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");
   schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");

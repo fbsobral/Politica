@@ -24,6 +24,20 @@ export const JOBS = {
     await syncAll();
     return { ok: true };
   },
+  /** classifica notícias que ficaram pendentes (ex.: a coleta trouxe mais do que cabe numa rodada) */
+  async classifyBacklog() {
+    let classified = 0;
+    let removed = 0;
+    let reused = 0;
+    for (let round = 0; round < 6; round++) {
+      const r = await classifyPending();
+      classified += r.classified;
+      removed += r.removed;
+      reused += r.reused;
+      if (r.classified + r.removed < 300) break;
+    }
+    return { classified, removed, reused };
+  },
   /** reclassifica notícias eleitorais sem cargo (preenche cargo e pesquisa nas antigas) */
   async reclassifyElections() {
     const reopened = await db.article.updateMany({
