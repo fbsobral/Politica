@@ -120,30 +120,3 @@ export function ArticleCard({ a, index = 0 }: { a: ArticleView; index?: number }
     </article>
   );
 }
-
-/** Destaque: primeira notícia com imagem, em tamanho maior (desktop). */
-export function FeaturedCard({ a }: { a: ArticleView }) {
-  return (
-    <article className="card rise group relative overflow-hidden transition-shadow hover:shadow-pop">
-      {a.imageUrl && (
-        <div className="aspect-[16/8] w-full overflow-hidden bg-line">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={a.imageUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
-        </div>
-      )}
-      <div className="p-5 sm:p-6">
-        <Meta a={a} />
-        <h2 className="display mt-3 text-[1.35rem] font-semibold leading-tight sm:text-[1.75rem]">
-          <ArticleSheet data={sheetData(a)} className="text-left after:absolute after:inset-0">
-            {a.title}
-          </ArticleSheet>
-        </h2>
-        {a.description && <p className="mt-2 line-clamp-3 text-[0.9375rem] leading-relaxed text-muted">{a.description}</p>}
-        <div className="flex items-end justify-between gap-2">
-          <Tags a={a} />
-          <FavButton a={a} className="relative z-10" />
-        </div>
-      </div>
-    </article>
-  );
-}

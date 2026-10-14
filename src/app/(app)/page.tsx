@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
-import { ArticleCard, FeaturedCard, type ArticleView } from "@/components/article-card";
+import { ArticleCard, type ArticleView } from "@/components/article-card";
 import { FeedFilters } from "@/components/feed-filters";
 import { IconFilter, IconX } from "@/components/icons";
 import { RememberFilters } from "@/components/remember-filters";
@@ -132,7 +132,6 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   if (sp.cat) chips.push({ label: NEWS_CATEGORY_LABEL[sp.cat as NewsCategory] ?? sp.cat, clear: { cat: undefined } });
   if (sp.seguindo) chips.push({ label: "Quem eu sigo", clear: { seguindo: undefined } });
 
-  const showFeatured = !agrupar && page === 1 && views.length > 3 && Boolean(views[0].imageUrl);
 
   return (
     <div>
@@ -232,8 +231,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
             ))
           ) : (
             <div className="space-y-3.5">
-              {showFeatured && <FeaturedCard a={views[0]} />}
-              {views.slice(showFeatured ? 1 : 0).map((a, i) => <ArticleCard key={a.id} a={a} index={i} />)}
+              {views.map((a, i) => <ArticleCard key={a.id} a={a} index={i} />)}
             </div>
           )}
 
