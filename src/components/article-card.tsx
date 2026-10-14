@@ -1,10 +1,10 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Branch, NewsCategory, SourceCategory } from "@prisma/client";
+import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
 import { IconExternal, IconStar } from "@/components/icons";
 import { ArticleSheet } from "@/components/article-sheet";
-import { SourceAvatar } from "@/components/ui";
+import { ScopeBadge, SourceAvatar } from "@/components/ui";
 import { TIER_LEGEND } from "@/lib/tier-legend";
 import { BRANCH_LABEL, NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
 
@@ -20,6 +20,8 @@ export type ArticleView = {
   source: { name: string; category: SourceCategory; tier?: number | null };
   favorited: boolean;
   alsoIn: string[];
+  /** esfera da notícia; mostrada quando o feed está em "Todas" */
+  scope?: Scope;
   related?: { source: string; url: string; title: string }[];
 };
 
@@ -78,6 +80,7 @@ function Meta({ a }: { a: ArticleView }) {
 function Tags({ a }: { a: ArticleView }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
+      {a.scope && <ScopeBadge scope={a.scope} />}
       <span className="chip !bg-brand-soft !text-brand">{NEWS_CATEGORY_LABEL[a.category]}</span>
       {a.branch && <span className="chip">{BRANCH_LABEL[a.branch]}</span>}
       {a.alsoIn.length > 0 && (

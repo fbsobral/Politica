@@ -10,7 +10,7 @@ import { db } from "@/lib/db";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { daysToRunoff } from "@/lib/election";
-import { buildWhere, scopeWhere } from "@/lib/feed";
+import { buildWhere, feedScopeSlug, scopeWhere, type FeedScope } from "@/lib/feed";
 import { BRANCH_LABEL, BRANCH_VALUES, NEWS_CATEGORY_LABEL, SCOPE_LABEL, SCOPE_SLUG, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -41,7 +41,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       sp = raw;
     }
   }
-  const scope: Scope = SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL";
+  const scope: FeedScope = sp.esfera === "todas" ? "ALL" : (SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL");
   const agrupar = ["veiculo", "tipo", "categoria"].includes(sp.agrupar ?? "") ? sp.agrupar! : "";
   const page = Math.max(1, Number(sp.pagina) || 1);
   const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, nivel: sp.nivel, q: sp.q, seguindo: sp.seguindo === "1" };
@@ -59,7 +59,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
           skip: agrupar ? 0 : (page - 1) * PAGE,
         })
       : Promise.resolve([]),
-    Promise.all((["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s) => db.article.count({ where: { classified: true, ...scopeWhere(user, s) } }))),
+    Promise.all((["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s) => db.article.count({ where: { classified: true, factCheck: false, ...scopeWhere(user, s) } }))),
     db.article.groupBy({ by: ["sourceId"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["category"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["branch"], where: branchFacetWhere, _count: true }),
@@ -104,6 +104,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       branch: a.branch,
       source: a.source,
       favorited: favSet.has(a.id),
+      scope: scope === "ALL" ? a.scope : undefined,
       alsoIn: [...new Set(group.slice(1).map((g) => g.source.name).filter((n) => n !== a.source.name))].slice(0, 4),
       related: group.slice(1).filter((g) => g.source.name !== a.source.name).slice(0, 5).map((g) => ({ source: g.source.name, url: g.url, title: g.title })),
     };
@@ -119,7 +120,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     groups = [...map.entries()].map(([title, items]) => ({ title, items })).sort((a, b) => b.items.length - a.items.length);
   }
 
-  const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
+  const place = scope === "ALL" ? "Todas as esferas" : scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   const today = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.nivel, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
   const chips: { label: string; clear: SP }[] = [];
@@ -154,20 +155,21 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
         </Link>
       )}
 
-      <div role="tablist" aria-label="Esfera" className="mb-6 grid grid-cols-3 gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid sm:min-w-[28rem]">
-        {(["MUNICIPAL", "ESTADUAL", "FEDERAL"] as Scope[]).map((s, i) => {
+      <div role="tablist" aria-label="Esfera" className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid sm:min-w-[34rem]">
+        {(["ALL", "MUNICIPAL", "ESTADUAL", "FEDERAL"] as FeedScope[]).map((s, i) => {
           const active = s === scope;
+          const n = s === "ALL" ? scopeCounts.reduce((a, b) => a + b, 0) : scopeCounts[i - 1];
           return (
             <Link
               key={s}
               role="tab"
               aria-selected={active}
-              href={href({ ...sp, pagina: undefined, veiculo: undefined }, { esfera: s.toLowerCase() })}
+              href={href({ ...sp, pagina: undefined, veiculo: undefined }, { esfera: feedScopeSlug(s) })}
               className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`}
             >
-              <span className={`h-2 w-2 rounded-full ${SCOPE_DOT[s]}`} />
-              {SCOPE_LABEL[s]}
-              <span className={`hidden text-xs font-medium sm:inline ${active ? "opacity-70" : "text-faint"}`}>{scopeCounts[i]}</span>
+              {s === "ALL" ? <span className="h-2 w-2 rounded-full bg-gradient-to-br from-municipal via-estadual to-federal" /> : <span className={`h-2 w-2 rounded-full ${SCOPE_DOT[s]}`} />}
+              {s === "ALL" ? "Todas" : SCOPE_LABEL[s]}
+              <span className={`hidden text-xs font-medium sm:inline ${active ? "opacity-70" : "text-faint"}`}>{n}</span>
             </Link>
           );
         })}

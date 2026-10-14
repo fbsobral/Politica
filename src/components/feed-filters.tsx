@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { NewsCategory, Scope, SourceCategory } from "@prisma/client";
+import { feedScopeSlug, type FeedScope } from "@/lib/feed";
 import { AutoForm } from "@/components/auto-form";
 import { IconSearch } from "@/components/icons";
 import { NEWS_CATEGORY_LABEL, SOURCE_CATEGORY_LABEL } from "@/lib/taxonomy";
 import { NIVEL_OPTIONS, TIER_LEGEND } from "@/lib/tier-legend";
 
 export type FilterData = {
-  scope: Scope;
+  scope: FeedScope;
   sp: Record<string, string | undefined>;
   tipos: [SourceCategory, number][];
   sources: { id: string; name: string; n: number }[];
@@ -25,7 +26,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
   const id = (n: string) => `${idPrefix}-${n}`;
   return (
     <AutoForm className="space-y-5">
-      <input type="hidden" name="esfera" value={scope.toLowerCase()} />
+      <input type="hidden" name="esfera" value={feedScopeSlug(scope)} />
       {sp.poder && <input type="hidden" name="poder" value={sp.poder} />}
 
       <div className="relative">
@@ -107,7 +108,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
       </noscript>
 
       {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.nivel || sp.q || sp.seguindo || sp.agrupar) && (
-        <Link href={`/?esfera=${scope.toLowerCase()}`} className="btn btn-ghost btn-sm w-full">Limpar filtros</Link>
+        <Link href={`/?esfera=${feedScopeSlug(scope)}`} className="btn btn-ghost btn-sm w-full">Limpar filtros</Link>
       )}
     </AutoForm>
   );
