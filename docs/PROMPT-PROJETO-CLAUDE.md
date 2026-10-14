@@ -102,7 +102,6 @@ EMAIL_FROM="Política <politica@seudominio.com>"   # domínio verificado no Rese
 APP_URL=https://seu-dominio.com
 CRON_SECRET=                          # protege POST /api/cron/[job]
 ADMIN_EMAILS=voce@email.com           # vira ADMIN no primeiro acesso (separe por vírgula)
-INGEST_CRON="*/5 * * * *"             # worker confere a cada 5 min; o intervalo real vem do painel
 DIGEST_CRON="0 7 * * *"  WEEKLY_DIGEST_CRON="0 7 * * 1"  MONTHLY_DIGEST_CRON="0 7 1 * *"
 TZ=America/Sao_Paulo
 ```

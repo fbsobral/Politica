@@ -23,7 +23,8 @@ export function startScheduler(opts: { bootDelayMs?: number } = {}) {
   if (g.__politicaScheduler) return;
   g.__politicaScheduler = true;
 
-  schedule(process.env.INGEST_CRON || "*/5 * * * *", "ingest");
+  // sempre a cada 5 min (o intervalo real da coleta vem do painel); INGEST_CRON não é mais usado
+  schedule("*/5 * * * *", "ingest");
   schedule(process.env.DIGEST_CRON || "0 7 * * *", "digest");
   schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");
   schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");
