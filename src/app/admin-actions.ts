@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/email";
-import { JOBS, runJob, type JobName } from "@/lib/jobs";
+import { runJobDetached } from "@/lib/job-runner";
+import { JOBS, type JobName } from "@/lib/jobs";
 import { requireAdmin } from "@/lib/user";
 
 const createSchema = z.object({
@@ -100,7 +101,7 @@ export async function deleteUser(userId: string) {
 export async function runJobNow(job: string) {
   await requireAdmin();
   if (!(job in JOBS)) return;
-  runJob(job as JobName).catch(() => undefined); // em segundo plano
+  runJobDetached(job as JobName).catch(() => undefined); // em segundo plano, em processo separado
   revalidatePath("/admin/robo");
   redirect("/admin/robo?iniciado=" + encodeURIComponent(job));
 }

@@ -1,6 +1,7 @@
 import type { Prisma, Scope } from "@prisma/client";
 import { aiEnabled, ask } from "@/lib/ai";
 import { db } from "@/lib/db";
+import * as email from "@/lib/email";
 import { appUrl, escapeHtml, layout, sendEmail } from "@/lib/email";
 import { followedNeedles } from "@/lib/feed";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
@@ -202,11 +203,13 @@ export async function sendDigestNow(user: DigestUser, kind: DigestKind = "daily"
 
 const FLAG = { daily: "dailyDigest", weekly: "weeklyDigest", monthly: "monthlyDigest" } as const;
 
-export async function sendDigests(kind: DigestKind = "daily"): Promise<{ sent: number; skipped: number }> {
+export async function sendDigests(kind: DigestKind = "daily"): Promise<{ sent: number; skipped: number; failed: number; errors?: string[] }> {
   const day = todayKey();
   const users = await db.user.findMany({ where: { [FLAG[kind]]: true, uf: { not: null } } });
   let sent = 0;
   let skipped = 0;
+  let failed = 0;
+  const errors: string[] = [];
   const cache: Cache = new Map();
   const congressCache = new Map<string, Promise<Congress>>();
   for (const user of users) {
@@ -220,14 +223,19 @@ export async function sendDigests(kind: DigestKind = "daily"): Promise<{ sent: n
       const r = await buildAndSend(user, kind, cache, congressCache);
       if (r === true) sent++;
       else {
-        skipped++;
+        if (r === "empty") skipped++;
+        else {
+          failed++;
+          errors.push(`${user.email}: ${email.lastEmailError ?? "falha no envio"}`);
+        }
         await db.digestLog.deleteMany({ where: { userId: user.id, kind, day } }); // não enviou: libera para tentar depois
       }
     } catch (err) {
       await db.digestLog.deleteMany({ where: { userId: user.id, kind, day } });
       console.warn(`[digest:${kind}] falha para ${user.email}:`, (err as Error).message);
-      skipped++;
+      failed++;
+      errors.push(`${user.email}: ${(err as Error).message}`);
     }
   }
-  return { sent, skipped };
+  return { sent, skipped, failed, ...(errors.length ? { errors: errors.slice(0, 3) } : {}) };
 }

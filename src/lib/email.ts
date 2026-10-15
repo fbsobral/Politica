@@ -10,8 +10,12 @@ export function appUrl(): string {
   return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
+/** Motivo da última falha de envio (para diagnóstico nos resumos). */
+export let lastEmailError: string | null = null;
+
 export async function sendEmail(opts: { to: string; subject: string; html: string }): Promise<boolean> {
   if (!emailEnabled()) {
+    lastEmailError = "RESEND_API_KEY ausente";
     console.log(`[email] RESEND_API_KEY ausente — e-mail "${opts.subject}" para ${opts.to} não enviado`);
     return false;
   }
@@ -23,6 +27,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
     html: opts.html,
   });
   if (error) {
+    lastEmailError = error.message;
     console.warn("[email] erro Resend:", error.message);
     return false;
   }

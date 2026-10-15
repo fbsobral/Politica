@@ -85,19 +85,28 @@ const running = new Set<string>();
  * `scheduled`: chamada por um agendador (cron do worker ou tarefa do Coolify). A coleta respeita o intervalo
  * configurado no painel; execuções manuais (botão do admin, `npm run job -- ingest`) ignoram o intervalo.
  */
+/** Sinal de vida do agendador (aparece na Visão geral do admin). */
+export async function pingScheduler(): Promise<void> {
+  const now = new Date().toISOString();
+  await db.setting.upsert({ where: { key: "schedulerPing" }, create: { key: "schedulerPing", value: now }, update: { value: now } }).catch(() => undefined);
+}
+
+/** Minutos que faltam para a próxima coleta (0 = já está na hora). Tolerância de 3 min: os agendadores disparam em minutos "redondos". */
+export async function minutesUntilIngest(): Promise<number> {
+  const minutes = Math.min(1440, Math.max(10, Number((await getSettings()).ingestIntervalMinutes) || 60));
+  const last = await db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
+  if (!last) return 0;
+  const left = minutes - (Date.now() - last.startedAt.getTime()) / 60000;
+  return left <= 3 ? 0 : Math.round(left);
+}
+
 export async function runJob(name: JobName, opts: { scheduled?: boolean } = {}): Promise<unknown> {
-  if (opts.scheduled && name === "ingest") {
-    // sinal de vida do agendador (aparece na Visão geral do admin)
-    await db.setting.upsert({ where: { key: "schedulerPing" }, create: { key: "schedulerPing", value: new Date().toISOString() }, update: { value: new Date().toISOString() } }).catch(() => undefined);
-  }
+  if (opts.scheduled && name === "ingest") await pingScheduler();
   if (running.has(name)) return { skipped: "já em execução" };
   if (opts.scheduled && name === "ingest") {
-    const minutes = Math.min(1440, Math.max(10, Number((await getSettings()).ingestIntervalMinutes) || 60));
-    const last = await db.jobRun.findFirst({ where: { job: "ingest" }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
-    // tolerância de 3 min: os agendadores disparam em minutos "redondos"
-    if (last && Date.now() - last.startedAt.getTime() < (minutes - 3) * 60000) {
-      const left = Math.max(1, Math.round(minutes - (Date.now() - last.startedAt.getTime()) / 60000));
-      console.log(`[job:ingest] pulado: intervalo de ${minutes} min, próxima coleta em ~${left} min`);
+    const left = await minutesUntilIngest();
+    if (left > 0) {
+      console.log(`[job:ingest] pulado: próxima coleta em ~${left} min`);
       return { skipped: `próxima coleta em ~${left} min` };
     }
   }
