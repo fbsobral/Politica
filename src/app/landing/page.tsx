@@ -49,7 +49,18 @@ export default async function Landing() {
 
   const cta = "btn btn-primary !px-6 !py-3 !text-base";
   return (
-    <div className="min-h-screen overflow-x-clip">
+    <div className="relative isolate min-h-screen overflow-x-clip">
+      {/* brilho do topo: ocupa a largura toda da tela e some suavemente para baixo (sem borda cortada) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[46rem]"
+        style={{
+          backgroundImage:
+            "radial-gradient(55% 60% at 50% 0%, color-mix(in srgb, var(--gold) 20%, transparent), transparent 72%), radial-gradient(38% 46% at 88% 14%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 72%), radial-gradient(34% 40% at 10% 18%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 72%)",
+          maskImage: "linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%)",
+        }}
+      />
       {/* topo */}
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Política — início">
@@ -70,7 +81,6 @@ export default async function Landing() {
       <main>
         {/* hero */}
         <section className="relative mx-auto max-w-6xl px-4 pb-16 pt-10 text-center sm:px-6 sm:pt-16">
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem]" style={{ backgroundImage: "radial-gradient(60% 70% at 50% 0%, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%), radial-gradient(40% 50% at 85% 20%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 70%)" }} />
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted shadow-card">
             <span className="h-1.5 w-1.5 rounded-full bg-municipal" /> Robô atualizando as notícias toda hora
           </span>
