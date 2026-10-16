@@ -192,14 +192,14 @@ export default async function Landing() {
         </section>
 
         {/* chamada final: faixa azul da marca, de ponta a ponta */}
-        <section className="relative overflow-hidden bg-brand text-brand-ink" style={{ backgroundImage: "radial-gradient(circle at 88% -10%, color-mix(in srgb, var(--gold) 55%, transparent), transparent 42%), radial-gradient(circle at 5% 120%, color-mix(in srgb, var(--brand-ink) 14%, transparent), transparent 45%)" }}>
+        <section className="panel-navy relative overflow-hidden">
           <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 sm:py-24">
-            <p className="eyebrow !text-brand-ink/70">Comece agora</p>
+            <p className="eyebrow !text-white/70">Comece agora</p>
             <h2 className="display mt-3 text-4xl font-semibold leading-[1.05] sm:text-6xl">Acompanhe a política com <em className="font-normal italic">clareza.</em></h2>
             <p className="mx-auto mt-5 max-w-xl text-lg opacity-85">Crie sua conta, escolha sua cidade e receba a política no seu ritmo — no feed e no e-mail.</p>
             <div className="mt-9 flex flex-wrap justify-center gap-3">
-              <Link href="/sign-up" className="btn !bg-brand-ink !px-7 !py-3.5 !text-base !text-brand hover:!opacity-90">Criar minha conta</Link>
-              <Link href="/sign-in" className="btn !border !border-brand-ink/40 !px-7 !py-3.5 !text-base !text-brand-ink hover:!bg-brand-ink/10">Já tenho conta</Link>
+              <Link href="/sign-up" className="btn !bg-white !px-7 !py-3.5 !text-base !text-[#17407f] hover:!bg-white/90">Criar minha conta</Link>
+              <Link href="/sign-in" className="btn !border !border-white/40 !px-7 !py-3.5 !text-base !text-white hover:!bg-white/10">Já tenho conta</Link>
             </div>
             <p className="mt-4 text-xs opacity-70">Leva menos de um minuto.</p>
           </div>

@@ -223,6 +223,16 @@ body {
     background: color-mix(in srgb, var(--ink) 6%, transparent);
     color: var(--muted);
   }
+  /* painel azul profundo (igual no claro e no escuro): base marinho + brilho azul vivo no canto direito */
+  .panel-navy {
+    color: #fff;
+    background-color: #0b2150;
+    background-image:
+      radial-gradient(60% 55% at 108% -8%, rgba(74, 128, 240, 0.62), transparent 62%),
+      radial-gradient(45% 40% at 96% 100%, rgba(40, 96, 214, 0.28), transparent 70%),
+      radial-gradient(50% 45% at -6% 104%, rgba(23, 64, 127, 0.55), transparent 70%),
+      linear-gradient(160deg, #17407f 0%, #0d2a5c 52%, #061633 100%);
+  }
   .skeleton {
     background: linear-gradient(90deg, var(--line) 25%, var(--surface-2) 50%, var(--line) 75%);
     background-size: 200% 100%;
