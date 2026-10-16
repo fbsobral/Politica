@@ -1,4 +1,6 @@
 import { createUser, deleteUser, setRole } from "@/app/admin-actions";
+import { saveRobotSettings } from "@/app/admin-actions";
+import { isSignupOpen } from "@/lib/settings";
 import { Notice, PageHeader } from "@/components/ui";
 import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit-button";
@@ -12,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function UsuariosPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const me = await requireAdmin();
   const sp = await searchParams;
-  const users = await db.user.findMany({ orderBy: { createdAt: "desc" } });
+  const [users, signupOpen] = await Promise.all([db.user.findMany({ orderBy: { createdAt: "desc" } }), isSignupOpen()]);
 
   return (
     <div>
@@ -21,6 +23,19 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
         {sp.ok && <Notice kind="ok">{sp.ok}</Notice>}
         {sp.erro && <Notice kind="erro">{sp.erro}</Notice>}
       </div>
+
+      <form action={saveRobotSettings} className="card-flat mb-6 flex flex-wrap items-center justify-between gap-4 p-4">
+        <input type="hidden" name="_back" value="/admin/usuarios" />
+        <input type="hidden" name="__cb_signupOpen" value="1" />
+        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+          <input type="checkbox" name="signupOpen" defaultChecked={signupOpen} className="mt-1" />
+          <span>
+            <b className="block">Cadastro aberto ao público</b>
+            <span className="text-sm text-muted">Qualquer pessoa pode criar conta pela página inicial. Desmarcado, só entra quem for convidado por aqui. Para valer também no Clerk, deixe o <i>Access mode</i> dele como <b>Open</b> (aberto) ou <b>Invite-only</b> (convite), respectivamente.</span>
+          </span>
+        </label>
+        <SubmitButton className="btn btn-secondary btn-sm" pendingText="Salvando…">Salvar</SubmitButton>
+      </form>
 
       <div className="grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
         <section className="card h-fit p-5">

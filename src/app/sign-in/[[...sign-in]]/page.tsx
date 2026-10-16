@@ -1,10 +1,16 @@
 import { SignIn } from "@clerk/nextjs";
 import { AuthShell } from "@/components/auth-shell";
+import { isSignupOpen } from "@/lib/settings";
 
-export default function Page() {
+export default async function Page() {
+  const open = await isSignupOpen();
   return (
     <AuthShell>
-      <SignIn fallbackRedirectUrl="/" appearance={{ variables: { colorPrimary: "#17407f", borderRadius: "0.75rem", fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }, elements: { footerAction: { display: "none" } } }} />
+      <SignIn
+        fallbackRedirectUrl="/"
+        signUpUrl="/sign-up"
+        appearance={{ variables: { colorPrimary: "#17407f", borderRadius: "0.75rem", fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }, elements: open ? {} : { footerAction: { display: "none" } } }}
+      />
     </AuthShell>
   );
 }

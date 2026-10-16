@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 
 export const SETTING_DEFAULTS = {
+  /** "1" = qualquer pessoa pode criar conta; "0" = só por convite (ajuste também o Access mode no Clerk) */
+  signupOpen: "1",
   /** orçamento diário de tokens da IA (entrada + saída, últimas 24 h); 0 = sem limite. Ao estourar, o app usa regras/descrições sem IA. */
   aiDailyTokenBudget: "0",
   /** intervalo entre coletas automáticas, em minutos (10 a 1440) */
@@ -63,3 +65,9 @@ export const SETTING_GROUPS = {
   buscas: Object.keys(SETTING_DEFAULTS).filter((k) => k === "priorityOutlets" || k.startsWith("query")),
 } as const satisfies Record<string, readonly string[]>;
 export type SettingGroup = keyof typeof SETTING_GROUPS;
+
+/** Cadastro aberto? (padrão: sim) */
+export async function isSignupOpen(): Promise<boolean> {
+  const row = await db.setting.findUnique({ where: { key: "signupOpen" } });
+  return (row?.value ?? SETTING_DEFAULTS.signupOpen) !== "0";
+}

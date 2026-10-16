@@ -16,6 +16,10 @@ Feed de notícias políticas (municipal, estadual, federal) + diretório de repr
 - **Checagem de fatos:** Agência Lupa, Aos Fatos e Projeto Comprova lidos pelo robô, em página própria.
 - **Diário Oficial:** edições do seu município via [Querido Diário](https://queridodiario.ok.org.br), com busca por texto.
 
+## Página inicial e cadastro
+
+Visitantes veem uma **página de apresentação** em `/` (rota interna `/landing`, via rewrite no `src/middleware.ts`) com botões **Entrar** e **Criar conta**. O cadastro é **aberto**: em Admin → Usuários dá para fechar (só convite). Para valer também no Clerk, ajuste *Access mode* (Open ou Invite‑only) no painel do Clerk.
+
 ## Administração e papéis
 
 Dois papéis: **USER** e **ADMIN**. Defina `ADMIN_EMAILS` (vírgula) no ambiente: quem entrar com esses e-mails vira admin automaticamente (é assim que nasce o primeiro admin). Admins têm o menu **Admin**:
