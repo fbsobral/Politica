@@ -1,23 +1,61 @@
+import Link from "next/link";
+import { AuthAside } from "@/components/auth-aside";
 import { IconLogo } from "@/components/icons";
 
-export function AuthShell({ children }: { children: React.ReactNode }) {
+type Mode = "entrar" | "cadastrar";
+
+const COPY: Record<Mode, { headline: React.ReactNode; title: string; sub: string; switchText: string; switchHref: string; switchLabel: string }> = {
+  entrar: {
+    headline: <>A política da sua cidade ao Planalto, <em className="font-normal italic">num só lugar.</em></>,
+    title: "Que bom te ver de novo",
+    sub: "Entre para acompanhar as notícias, os representantes e os resumos da sua cidade.",
+    switchText: "Ainda não tem conta?",
+    switchHref: "/sign-up",
+    switchLabel: "Criar conta",
+  },
+  cadastrar: {
+    headline: <>Acompanhe a política com <em className="font-normal italic">clareza.</em></>,
+    title: "Crie sua conta",
+    sub: "Leva menos de um minuto: depois é só escolher a sua cidade.",
+    switchText: "Já tem conta?",
+    switchHref: "/sign-in",
+    switchLabel: "Entrar",
+  },
+};
+
+/** Tela dividida ao meio: marca e benefícios à esquerda, formulário à direita. */
+export function AuthShell({ children, mode = "entrar", showSwitch = true, bare = false }: { children: React.ReactNode; mode?: Mode; showSwitch?: boolean; bare?: boolean }) {
+  const c = COPY[mode];
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-brand p-12 text-brand-ink lg:flex lg:flex-col lg:justify-between" style={{ backgroundImage: "radial-gradient(circle at 90% 8%, color-mix(in srgb, var(--gold) 60%, transparent), transparent 38%), linear-gradient(160deg, var(--brand), color-mix(in srgb, var(--brand) 60%, #000))" }}>
-        <div className="flex items-center gap-2.5"><IconLogo /><span className="display text-xl font-semibold">Política</span></div>
-        <div>
-          <h2 className="display text-5xl font-semibold leading-[1.05]">Saiba o que acontece na política — onde você mora.</h2>
-          <ul className="mt-6 space-y-2.5 text-lg opacity-85">
-            <li>• Feed municipal, estadual e federal</li>
-            <li>• Prefeito, governador, deputados e senadores</li>
-            <li>• Alertas e resumo diário por e-mail</li>
-          </ul>
+    <main className="grid min-h-screen lg:grid-cols-2">
+      <AuthAside headline={c.headline} />
+
+      <section className="relative flex flex-col px-5 py-6 sm:px-10">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 lg:invisible" aria-label="Política — página inicial">
+            <IconLogo />
+            <span className="display text-xl font-semibold">Política</span>
+          </Link>
+          {showSwitch && !bare && (
+            <p className="text-sm text-muted">
+              {c.switchText}{" "}
+              <Link href={c.switchHref} className="font-semibold text-brand underline-offset-4 hover:underline">{c.switchLabel}</Link>
+            </p>
+          )}
         </div>
-        <p className="text-sm opacity-60">Câmara · Senado · TSE · IBGE</p>
-      </aside>
-      <section className="flex flex-col items-center justify-center gap-6 p-5 sm:p-10">
-        <div className="flex items-center gap-2.5 lg:hidden"><IconLogo /><span className="display text-xl font-semibold">Política</span></div>
-        {children}
+
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
+          {!bare && (
+            <>
+              <h1 className="display text-3xl font-semibold leading-tight sm:text-4xl">{c.title}</h1>
+              <p className="mb-7 mt-2 text-muted">{c.sub}</p>
+            </>
+          )}
+          {children}
+          <Link href="/" className="mt-6 text-center text-sm text-muted hover:text-ink">← Voltar para o início</Link>
+        </div>
+
+        <p className="text-center text-xs text-faint">Ao continuar, você concorda em receber os e-mails que escolher em Configurações. Resumos por IA podem conter imprecisões.</p>
       </section>
     </main>
   );

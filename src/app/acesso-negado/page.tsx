@@ -5,7 +5,7 @@ export const metadata = { title: "Acesso não liberado" };
 
 export default function AcessoNegado() {
   return (
-    <AuthShell>
+    <AuthShell bare>
       <div className="card w-full max-w-md p-6 text-center">
         <h1 className="display text-2xl font-semibold">Acesso não liberado</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">

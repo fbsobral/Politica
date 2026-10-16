@@ -1,4 +1,5 @@
 import { IconLogo } from "@/components/icons";
+import { AuthAside } from "@/components/auth-aside";
 import { Notice } from "@/components/ui";
 import { UFS } from "@/lib/taxonomy";
 import { getDbUser } from "@/lib/user";
@@ -10,15 +11,8 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const user = await getDbUser();
   const sp = await searchParams;
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-brand p-12 text-brand-ink lg:flex lg:flex-col lg:justify-between" style={{ backgroundImage: "radial-gradient(circle at 90% 8%, color-mix(in srgb, var(--gold) 60%, transparent), transparent 38%), linear-gradient(160deg, var(--brand), color-mix(in srgb, var(--brand) 60%, #000))" }}>
-        <div className="flex items-center gap-2.5"><IconLogo /><span className="display text-xl font-semibold">Política</span></div>
-        <div>
-          <h2 className="display text-5xl font-semibold leading-[1.05]">A política da sua cidade, do seu estado e do país, num só lugar.</h2>
-          <p className="mt-5 max-w-md text-lg opacity-80">Notícias atualizadas a cada hora, organizadas por veículo e assunto, e os rostos de quem decide por você.</p>
-        </div>
-        <p className="text-sm opacity-60">Câmara · Senado · TSE · IBGE</p>
-      </aside>
+    <main className="grid min-h-screen lg:grid-cols-2">
+      <AuthAside headline={<>A política da sua cidade, do seu estado e do país, <em className="font-normal italic">num só lugar.</em></>} />
       <section className="flex items-center justify-center p-5 sm:p-10">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden"><IconLogo /><span className="display text-xl font-semibold">Política</span></div>

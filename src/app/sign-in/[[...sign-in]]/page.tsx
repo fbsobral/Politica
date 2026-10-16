@@ -1,15 +1,16 @@
 import { SignIn } from "@clerk/nextjs";
 import { AuthShell } from "@/components/auth-shell";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 import { isSignupOpen } from "@/lib/settings";
 
 export default async function Page() {
   const open = await isSignupOpen();
   return (
-    <AuthShell>
+    <AuthShell mode="entrar" showSwitch={open}>
       <SignIn
         fallbackRedirectUrl="/"
         signUpUrl="/sign-up"
-        appearance={{ variables: { colorPrimary: "#17407f", borderRadius: "0.75rem", fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }, elements: open ? {} : { footerAction: { display: "none" } } }}
+        appearance={clerkAppearance({ hideFooterAction: true })}
       />
     </AuthShell>
   );
