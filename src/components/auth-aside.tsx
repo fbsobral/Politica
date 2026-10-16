@@ -11,7 +11,7 @@ const POINTS = [
 /** Metade esquerda das telas de entrada: identidade da marca, benefícios e um mini preview do produto. */
 export function AuthAside({ headline }: { headline: React.ReactNode }) {
   return (
-    <aside className="panel-navy relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between xl:p-16">
+    <aside className="panel-navy relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between lg:gap-10 xl:p-16">
       {/* grade sutil de fundo */}
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08]" style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "44px 44px", maskImage: "radial-gradient(70% 60% at 30% 40%, #000, transparent)" }} />
 
@@ -21,9 +21,9 @@ export function AuthAside({ headline }: { headline: React.ReactNode }) {
       </Link>
 
       <div className="relative max-w-xl">
-        <h2 className="display text-4xl font-semibold leading-[1.05] xl:text-[3.4rem]">{headline}</h2>
+        <h2 className="display text-4xl font-semibold leading-[1.06] xl:text-[3.1rem]">{headline}</h2>
 
-        <ul className="mt-8 space-y-4">
+        <ul className="mt-7 space-y-3.5">
           {POINTS.map((p) => (
             <li key={p.t} className="flex items-start gap-3.5">
               <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-white/20 bg-white/10">{p.icon}</span>
@@ -36,7 +36,7 @@ export function AuthAside({ headline }: { headline: React.ReactNode }) {
         </ul>
 
         {/* mini preview do produto */}
-        <div aria-hidden className="mt-10 max-w-md rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+        <div aria-hidden className="mt-9 hidden max-w-md rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm [@media(min-height:900px)]:block">
           <div className="flex items-center gap-2 text-[11px] opacity-80">
             <span className="rounded-full bg-white px-2.5 py-0.5 font-semibold text-[#17407f]">Todas</span>
             <span>Municipal</span><span>Estadual</span><span>Federal</span>
@@ -54,7 +54,7 @@ export function AuthAside({ headline }: { headline: React.ReactNode }) {
         </div>
       </div>
 
-      <p className="relative text-sm opacity-65">Dados abertos: Câmara · Senado · TSE · IBGE</p>
+      <p className="relative pt-2 text-sm opacity-65">Dados abertos: Câmara · Senado · TSE · IBGE</p>
     </aside>
   );
 }
