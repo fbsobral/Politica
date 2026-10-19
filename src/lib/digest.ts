@@ -193,7 +193,7 @@ async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, co
         ? `Resumo da semana · ${fmt({ day: "numeric", month: "short" }, since)} a ${fmt({ day: "numeric", month: "short" }, now)}`
         : `Resumo mensal · ${fmt({ month: "long", year: "numeric" }, new Date(Date.now() - 86400000))}`;
   const emoji = kind === "daily" ? "🗞️" : kind === "weekly" ? "📅" : "🗓️";
-  return sendEmail({ to: user.email, subject: `${emoji} ${title}`, html: layout(title, inner) });
+  return sendEmail({ to: user.email, subject: `${emoji} ${title}`, html: layout(title, inner, user.email) });
 }
 
 /** Envia agora para um usuário (botões "enviar teste" nas configurações). */

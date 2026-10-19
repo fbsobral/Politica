@@ -69,6 +69,7 @@ export async function processAlerts(articleIds: string[]): Promise<{ matches: nu
     const html = layout(
       `${seen.size} ${seen.size === 1 ? "nova notícia" : "novas notícias"} nos seus alertas`,
       `<ul style="padding-left:18px;margin:0">${items}</ul><p><a href="${appUrl()}/alertas" style="color:#1d4ed8">Gerenciar alertas</a></p>`,
+      user.email,
     );
     const ok = await sendEmail({ to: user.email, subject: `🔔 ${seen.size} ${seen.size === 1 ? "notícia" : "notícias"} nos seus alertas`, html });
     if (ok) {

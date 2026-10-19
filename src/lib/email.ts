@@ -38,7 +38,7 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export function layout(title: string, inner: string): string {
+export function layout(title: string, inner: string, to?: string): string {
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b">
 <div style="max-width:620px;margin:0 auto;padding:24px 16px">
   <div style="background:#fff;border-radius:12px;padding:24px;border:1px solid #e4e4e7">
@@ -46,7 +46,7 @@ export function layout(title: string, inner: string): string {
     ${inner}
   </div>
   <p style="font-size:12px;color:#71717a;text-align:center;margin-top:16px">
-    <a href="${appUrl()}/configuracoes" style="color:#71717a">Gerenciar e-mails</a>
+    ${to ? `Enviado para ${escapeHtml(to)} · ` : ""}<a href="${appUrl()}/configuracoes" style="color:#71717a">Gerenciar e-mails</a>
   </p>
 </div></body></html>`;
 }
