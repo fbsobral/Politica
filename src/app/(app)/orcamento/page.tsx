@@ -19,18 +19,39 @@ function perCapita(b: BudgetData, value: number): number | null {
   return pop ? value / pop : null;
 }
 
-function Bars({ items, scope, explain }: { items: Slice[]; scope: BudgetScope; explain?: boolean }) {
+function Bars({ items, scope, explain, child }: { items: Slice[]; scope: BudgetScope; explain?: boolean; child?: boolean }) {
   const max = Math.max(...items.map((i) => i.value), 1);
+  const bar = (i: Slice) => (
+    <>
+      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+        <span className={`min-w-0 truncate ${child ? "text-[13px]" : "font-medium"}`}>{i.name}</span>
+        <span className="flex-none text-xs text-muted">
+          <b className="text-ink">{brlShort(i.value)}</b> · {pct(i.share, i.share < 0.1 ? 1 : 0)}
+          {child && i.shareOfParent !== undefined && <span className="text-faint"> ({pct(i.shareOfParent, 0)} do grupo)</span>}
+        </span>
+      </div>
+      <div className={`${child ? "h-1.5" : "h-2"} overflow-hidden rounded-full bg-line`}><div className={`h-full rounded-full ${BAR[scope]} ${child ? "opacity-70" : ""}`} style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }} /></div>
+    </>
+  );
   return (
-    <ul className="space-y-3">
+    <ul className={child ? "space-y-2.5" : "space-y-3"}>
       {items.map((i) => (
         <li key={i.code}>
-          <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate font-medium">{i.name}</span>
-            <span className="flex-none text-xs text-muted"><b className="text-ink">{brlShort(i.value)}</b> · {pct(i.share, i.share < 0.1 ? 1 : 0)}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-line"><div className={`h-full rounded-full ${BAR[scope]}`} style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }} /></div>
-          {explain && i.code !== "outros" && (
+          {i.children && i.children.length > 0 ? (
+            <details className="group">
+              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                {bar(i)}
+                <span className="mt-1 inline-block text-[11px] font-semibold text-brand group-open:hidden">▸ ver {i.children.length} subcategorias</span>
+                <span className="mt-1 hidden text-[11px] font-semibold text-brand group-open:inline-block">▾ ocultar subcategorias</span>
+              </summary>
+              <div className="mt-2 border-l-2 border-line pl-3">
+                <Bars items={i.children} scope={scope} child />
+              </div>
+            </details>
+          ) : (
+            bar(i)
+          )}
+          {explain && !child && i.code !== "outros" && (
             <Explain kind="budget" label="O que é isso?" text={`Função orçamentária "${i.name}" no orçamento do ${scope === "MUNICIPAL" ? "município" : scope === "ESTADUAL" ? "estado" : "governo federal"}.`} />
           )}
         </li>

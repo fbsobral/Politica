@@ -14,7 +14,7 @@ const UF_CODE: Record<string, number> = {
 
 type Item = { exercicio: number; instituicao: string; cod_ibge: number; uf: string; populacao: number | null; anexo: string; rotulo: string; coluna: string; cod_conta: string; conta: string; valor: number };
 
-export type Slice = { code: string; name: string; value: number; share: number };
+export type Slice = { code: string; name: string; value: number; share: number; /** participação dentro do item pai */ shareOfParent?: number; children?: Slice[] };
 
 export type Annual = {
   year: number;
@@ -50,16 +50,32 @@ async function siconfi(path: string, params: Record<string, string | number>): P
 
 const clean = (conta: string) => conta.replace(/^\d+(\.\d+)*\s*-?\s*/, "").trim();
 
-function slices(rows: { code: string; name: string; value: number }[], total: number, take = 12): Slice[] {
-  const positive = rows.filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
-  const top = positive.slice(0, take);
-  const rest = positive.slice(take).reduce((a, r) => a + r.value, 0);
-  const out = top.map((r) => ({ ...r, share: total > 0 ? r.value / total : 0 }));
-  if (rest > 0) out.push({ code: "outros", name: "Outras", value: rest, share: total > 0 ? rest / total : 0 });
-  return out;
+function childrenOf(rows: Raw[], parent: string, total: number, parentValue: number, limit = 14): Slice[] {
+  const kids = rows.filter((r) => r.parent === parent && r.value > 0).sort((a, b) => b.value - a.value);
+  const top = kids.slice(0, limit).map((r) => ({
+    code: r.code,
+    name: r.name,
+    value: r.value,
+    share: total > 0 ? r.value / total : 0,
+    shareOfParent: parentValue > 0 ? r.value / parentValue : 0,
+    children: childrenOf(rows, r.code, total, r.value, limit),
+  }));
+  const rest = kids.slice(limit).reduce((acc, r) => acc + r.value, 0);
+  if (rest > 0) top.push({ code: `${parent}:outros`, name: "Outros", value: rest, share: total > 0 ? rest / total : 0, shareOfParent: parentValue > 0 ? rest / parentValue : 0, children: [] });
+  return top.map((t) => (t.children?.length ? t : { ...t, children: undefined }));
 }
 
-type Raw = { code: string; name: string; value: number };
+/** Itens de primeiro nível (sem pai) com seus filhos, maior primeiro; o resto vira "Outras". */
+function slices(rows: Raw[], total: number, take = 12): Slice[] {
+  const roots = rows.filter((r) => !r.parent && r.value > 0).sort((a, b) => b.value - a.value);
+  const top = roots.slice(0, take);
+  const rest = roots.slice(take).reduce((acc, r) => acc + r.value, 0);
+  const out: Slice[] = top.map((r) => ({ code: r.code, name: r.name, value: r.value, share: total > 0 ? r.value / total : 0, children: childrenOf(rows, r.code, total, r.value) }));
+  if (rest > 0) out.push({ code: "outros", name: "Outras", value: rest, share: total > 0 ? rest / total : 0 });
+  return out.map((o) => (o.children?.length ? o : { ...o, children: undefined }));
+}
+
+type Raw = { code: string; name: string; value: number; parent?: string };
 type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[] };
 
 /** Interpreta os anexos I-E (despesa por função) e I-C (receita) do DCA, nos formatos antigo (até 2017) e novo. */
@@ -69,18 +85,48 @@ function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
   const fn: Raw[] = empenhada.filter((i) => /^\d{2} - /.test(i.conta)).map((i) => ({ code: i.conta.slice(0, 2), name: clean(i.conta), value: i.valor }));
   const fnSum = fn.reduce((a, r) => a + r.value, 0);
   const expenseTotal = empenhada.find((i) => /^Despesas \(?Exceto Intraor/i.test(i.conta))?.valor ?? fnSum;
+  // subfunções (NN.NNN) e o agregado "FUnn - Demais Subfunções"
+  const subs: Raw[] = empenhada.filter((i) => /^\d{2}\.\d{3} - /.test(i.conta)).map((i) => ({ code: i.conta.slice(0, 6), name: clean(i.conta), value: i.valor, parent: i.conta.slice(0, 2) }));
+  const demais: Raw[] = empenhada.filter((i) => /^FU\d{2} - /.test(i.conta)).map((i) => ({ code: `${i.conta.slice(2, 4)}.out`, name: "Demais subfunções", value: i.valor, parent: i.conta.slice(2, 4) }));
+  const fnCodes = new Set(fn.map((f) => f.code));
+  const expense = [...fn, ...[...subs, ...demais].filter((r) => fnCodes.has(r.parent!))];
 
   const realizada = rev.filter((i) => i.coluna === "Receitas Brutas Realizadas");
-  const origins: Raw[] = realizada
-    .filter((i) => /^RO\d\.[1-9](\.0+)+$/.test(i.cod_conta))
-    .map((i) => ({ code: i.cod_conta.slice(0, 5), name: clean(i.conta), value: i.valor }));
   const cat = (c: string) => realizada.find((i) => /^RO\d\.0(\.0+)+$/.test(i.cod_conta) && i.cod_conta.startsWith(c))?.valor ?? 0;
   const revenueTotal =
     realizada.find((i) => i.cod_conta === "ReceitasExcetoIntraOrcamentarias")?.valor ??
     realizada.find((i) => i.cod_conta === "TotalReceitas")?.valor ??
     cat("RO1") + cat("RO2");
 
-  return { year, name: exp[0].instituicao ?? null, pop: exp[0].populacao ?? null, expenseTotal, expense: fn, revenueTotal, revenue: origins };
+  // árvore da receita: origem (RO1.1) → grupos → tributo (IPTU, ISS...). Níveis fundos têm código instável entre anos: usamos o caminho de nomes.
+  type N = { id: string; segs: number[]; depth: number; name: string; value: number };
+  const nodes: N[] = realizada
+    .filter((i) => /^RO\d(\.\d+)+$/.test(i.cod_conta) && i.valor !== 0)
+    .map((i) => {
+      const segs = i.cod_conta.slice(2).split(".").map(Number);
+      let d = segs.length;
+      while (d > 0 && segs[d - 1] === 0) d--;
+      return { id: segs.slice(0, d).join("."), segs, depth: d, name: clean(i.conta), value: i.valor };
+    })
+    .filter((n) => n.depth >= 2);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const keyOf = new Map<string, string>();
+  const key = (n: N): string => {
+    const hit = keyOf.get(n.id);
+    if (hit) return hit;
+    let parent: N | undefined;
+    for (let d = n.depth - 1; d >= 2 && !parent; d--) parent = byId.get(n.segs.slice(0, d).join("."));
+    const k = n.depth === 2 ? `RO${n.id}` : `${parent ? key(parent) : "RO" + n.segs.slice(0, 2).join(".")}>${n.name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, " ").trim()}`;
+    keyOf.set(n.id, k);
+    return k;
+  };
+  const revenue: Raw[] = nodes.map((n) => {
+    let parent: N | undefined;
+    for (let d = n.depth - 1; d >= 2 && !parent; d--) parent = byId.get(n.segs.slice(0, d).join("."));
+    return { code: key(n), name: n.name, value: n.value, parent: parent ? key(parent) : undefined };
+  });
+
+  return { year, name: exp[0].instituicao ?? null, pop: exp[0].populacao ?? null, expenseTotal, expense, revenueTotal, revenue };
 }
 
 async function fetchDca(id: number, year: number): Promise<DcaYear> {
@@ -95,7 +141,7 @@ async function fetchAnnual(id: number, year: number): Promise<{ annual: Annual |
   const d = await fetchDca(id, year);
   if (d.empty) return { annual: null, pop: null, name: null };
   return {
-    annual: { year, expenseTotal: d.expenseTotal, expense: slices(d.expense, d.expenseTotal), revenueTotal: d.revenueTotal, revenue: slices(d.revenue, d.revenueTotal, 8) },
+    annual: { year, expenseTotal: d.expenseTotal, expense: slices(d.expense, d.expenseTotal), revenueTotal: d.revenueTotal, revenue: slices(d.revenue, d.revenueTotal, 10) },
     pop: d.pop,
     name: d.name,
   };
@@ -131,7 +177,7 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
 export async function getBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }, opts: { force?: boolean } = {}): Promise<BudgetData | null> {
   const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
   if (!id) return null;
-  const key = `budget:v2:${id}`;
+  const key = `budget:v3:${id}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && !opts.force && Date.now() - hit.fetchedAt.getTime() < DAY) return hit.data as unknown as BudgetData;
 
@@ -179,7 +225,7 @@ export const pct = (n: number, digits = 1) => `${(n * 100).toLocaleString("pt-BR
 
 /* ───────── Histórico de 10 anos ───────── */
 
-export type Series = { code: string; name: string; values: Record<number, number> };
+export type Series = { code: string; name: string; parent?: string; values: Record<number, number> };
 
 export type BudgetHistory = {
   scope: BudgetScope;
@@ -217,7 +263,7 @@ async function ipcaByYear(): Promise<Record<number, number>> {
 }
 
 async function dcaCached(id: number, year: number, ttlDays: number, force: boolean): Promise<DcaYear> {
-  const key = `budget:dca:v3:${id}:${year}`;
+  const key = `budget:dca:v4:${id}:${year}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as DcaYear | undefined;
   const ttl = (d?.empty ? 7 : ttlDays) * DAY;
@@ -232,13 +278,57 @@ async function dcaCached(id: number, year: number, ttlDays: number, force: boole
   }
 }
 
+/** Tributos e transferências conhecidos: o código/nome muda entre os anos (nova classificação em 2018), então as séries são montadas por nome. */
+const CANON: { key: string; name: string; parent: string; re: RegExp }[] = [
+  { key: "iptu", name: "IPTU (propriedade urbana)", parent: "RO1.1", re: /propriedade predial e territorial urbana/ },
+  { key: "iss", name: "ISS (serviços)", parent: "RO1.1", re: /^impostos? sobre servicos|^imposto sobre servicos/ },
+  { key: "itbi", name: "ITBI (transmissão de imóveis)", parent: "RO1.1", re: /transmissao .?inter vivos/ },
+  { key: "icms", name: "ICMS", parent: "RO1.1", re: /^(?!.*cota).*circulacao de mercadorias e sobre prest|^icms$/ },
+  { key: "ipva", name: "IPVA (veículos)", parent: "RO1.1", re: /propriedade de veiculos automotores/ },
+  { key: "itcmd", name: "ITCMD (heranças e doações)", parent: "RO1.1", re: /causa mortis/ },
+  { key: "ir", name: "Imposto de Renda", parent: "RO1.1", re: /^impostos? sobre a renda e proventos/ },
+  { key: "ipi", name: "IPI", parent: "RO1.1", re: /^imposto sobre produtos industrializados/ },
+  { key: "iof", name: "IOF", parent: "RO1.1", re: /operacoes de credito, cambio e seguro/ },
+  { key: "cofins", name: "COFINS", parent: "RO1.2", re: /cofins|financiamento da seguridade social/ },
+  { key: "pis", name: "PIS/PASEP", parent: "RO1.2", re: /pis\/pasep|^contribuicao para o pis|programa de integracao social/ },
+  { key: "csll", name: "CSLL (lucro líquido)", parent: "RO1.2", re: /lucro liquido/ },
+  { key: "prev", name: "Contribuições previdenciárias", parent: "RO1.2", re: /^contribuicoes? (sociais )?(previdenciarias|do regime geral|para o regime)|contribuicoes previdenciarias/ },
+  { key: "fpm", name: "FPM (fundo dos municípios)", parent: "RO1.7", re: /fundo de participacao dos municipios/ },
+  { key: "fpe", name: "FPE (fundo dos estados)", parent: "RO1.7", re: /fundo de participacao dos estados/ },
+  { key: "cp-icms", name: "Cota-parte do ICMS", parent: "RO1.7", re: /cota-?parte do icms|cota parte do icms/ },
+  { key: "cp-ipva", name: "Cota-parte do IPVA", parent: "RO1.7", re: /cota-?parte do ipva|cota parte do ipva/ },
+  { key: "fundeb", name: "FUNDEB (transferências)", parent: "RO1.7", re: /^transferencias? de recursos do fundeb|fundo de manutencao e desenvolvimento da educacao basica/ },
+  { key: "sus", name: "SUS (transferências)", parent: "RO1.7", re: /transferencias? de recursos do sistema unico de saude|^transferencias? do sus/ },
+  { key: "royalties", name: "Royalties e compensações", parent: "RO1.7", re: /compensacao financeira|royalt/ },
+];
+const EXCLUDE_CANON = /divida ativa|multas|juros de mora|restitui|deducoes|retificadora/;
+const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+
+/** Monta as séries canônicas de um ano: soma os nós de mais alto nível que casam com cada regra. */
+function canonicalRows(rows: Raw[]): Raw[] {
+  const byCode = new Map(rows.map((r) => [r.code, r]));
+  const out: Raw[] = [];
+  for (const c of CANON) {
+    const match = (r: Raw) => c.re.test(norm(r.name)) && !EXCLUDE_CANON.test(norm(r.name)) && !!r.parent;
+    const hits = rows.filter(match);
+    const top = hits.filter((r) => {
+      for (let p = r.parent ? byCode.get(r.parent) : undefined; p; p = p.parent ? byCode.get(p.parent) : undefined) if (match(p)) return false;
+      return true;
+    });
+    const value = top.reduce((a, r) => a + r.value, 0);
+    if (value > 0) out.push({ code: `tax:${c.key}`, name: c.name, value, parent: c.parent });
+  }
+  return out;
+}
+
 function toSeries(perYear: { year: number; rows: Raw[] }[]): Series[] {
   const map = new Map<string, Series>();
   for (const { year, rows } of perYear) {
     for (const r of rows) {
-      const s = map.get(r.code) ?? { code: r.code, name: r.name, values: {} };
+      const s = map.get(r.code) ?? { code: r.code, name: r.name, parent: r.parent, values: {} };
       s.values[year] = (s.values[year] ?? 0) + r.value;
       s.name = r.name; // o nome do ano mais recente prevalece (anos vêm em ordem crescente)
+      s.parent = r.parent ?? s.parent;
       map.set(r.code, s);
     }
   }
@@ -295,7 +385,7 @@ export async function getBudgetHistory(scope: BudgetScope, user: { uf: string; m
     entity: probe.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""),
     years: have,
     expense: toSeries(have.map((y) => ({ year: y, rows: data.get(y)!.expense }))),
-    revenue: toSeries(rev.map((y) => ({ year: y, rows: data.get(y)!.revenue }))),
+    revenue: toSeries(rev.map((y) => ({ year: y, rows: [...data.get(y)!.revenue.filter((r) => !r.parent), ...canonicalRows(data.get(y)!.revenue)] }))).filter((x) => !x.code.startsWith("tax:") || (x.values[rev[rev.length - 1]] ?? 0) > 0),
     totals: {
       expense: Object.fromEntries(have.map((y) => [y, data.get(y)!.expenseTotal])),
       revenue: Object.fromEntries(rev.map((y) => [y, data.get(y)!.revenueTotal])),

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type Series = { code: string; name: string; values: Record<number, number> };
+type Series = { code: string; name: string; parent?: string; values: Record<number, number> };
 export type HistoryProps = {
   scope: "MUNICIPAL" | "ESTADUAL" | "FEDERAL";
   entity: string;
@@ -50,15 +50,24 @@ export function BudgetChart(props: HistoryProps) {
   const [to, setTo] = useState(years[years.length - 1]);
   const [hover, setHover] = useState<number | null>(null);
 
-  const list = metric === "expense" ? props.expense : props.revenue;
-  const totals = metric === "expense" ? props.totals.expense : props.totals.revenue;
+  const all = metric === "expense" ? props.expense : props.revenue;
+  // "detalhar": mostra as subcategorias de uma categoria (ex.: as subfunções de Saúde, ou os tributos de uma origem)
+  const [drillBy, setDrillBy] = useState<Record<Metric, string | null>>({ expense: null, revenue: null });
+  const drillCode = drillBy[metric];
+  const parentSeries = drillCode ? (all.find((s) => s.code === drillCode) ?? null) : null;
+  const list = parentSeries ? all.filter((s) => s.parent === parentSeries.code) : all.filter((s) => !s.parent);
+  const withKids = all.filter((s) => all.some((c) => c.parent === s.code));
+  const totalLabel = parentSeries ? `${parentSeries.name} (total)` : metric === "expense" ? "Despesa total" : "Receita total";
+  const totals = parentSeries ? parentSeries.values : metric === "expense" ? props.totals.expense : props.totals.revenue;
   const metricYears = useMemo(() => years.filter((y) => totals[y] !== undefined), [years, totals]);
 
   const latest = metricYears[metricYears.length - 1];
   const defaultSel = useMemo(() => [TOTAL, ...list.slice(0, 4).map((s) => s.code)], [list]);
-  const [selByMetric, setSelByMetric] = useState<Record<Metric, string[] | null>>({ expense: null, revenue: null });
-  const selected = selByMetric[metric] ?? defaultSel;
-  const setSelected = (v: string[]) => setSelByMetric((s) => ({ ...s, [metric]: v }));
+  const selKey = `${metric}:${drillCode ?? ""}`;
+  const [selByKey, setSelByKey] = useState<Record<string, string[]>>({});
+  const selected = selByKey[selKey] ?? defaultSel;
+  const setSelected = (v: string[]) => setSelByKey((st) => ({ ...st, [selKey]: v }));
+  const drill = (code: string | null) => setDrillBy((d) => ({ ...d, [metric]: code }));
 
   const yrs = metricYears.filter((y) => y >= from && y <= to);
 
@@ -67,7 +76,7 @@ export function BudgetChart(props: HistoryProps) {
 
   const lines = useMemo(() => {
     const all: { code: string; name: string; color: string; values: Record<number, number | null> }[] = [];
-    const defs = [{ code: TOTAL, name: metric === "expense" ? "Despesa total" : "Receita total", get: (y: number) => totals[y] }, ...list.map((s) => ({ code: s.code, name: s.name, get: (y: number) => s.values[y] }))];
+    const defs = [{ code: TOTAL, name: totalLabel, get: (y: number) => totals[y] }, ...list.map((s) => ({ code: s.code, name: s.name, get: (y: number) => s.values[y] }))];
     for (const d of defs) {
       const values: Record<number, number | null> = {};
       for (const y of yrs) {
@@ -84,7 +93,7 @@ export function BudgetChart(props: HistoryProps) {
     }
     return all;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metric, mode, unit, from, to, list, totals]);
+  }, [metric, mode, unit, from, to, list, totals, totalLabel]);
 
   const visible = lines.filter((l) => selected.includes(l.code) && !(unit === "share" && l.code === TOTAL)).map((l, i) => ({ ...l, color: COLORS[i % COLORS.length] }));
   const maxVal = niceMax(Math.max(...visible.flatMap((l) => yrs.map((y) => l.values[y] ?? 0)), 0));
@@ -138,6 +147,13 @@ export function BudgetChart(props: HistoryProps) {
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-muted">
+          Detalhar
+          <select value={drillCode ?? ""} onChange={(e) => drill(e.target.value || null)} className="input !w-56 !py-1.5" aria-label="Ver as subcategorias de uma categoria">
+            <option value="">Categorias principais</option>
+            {withKids.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-muted">
           Categoria
           <select
             value={selected.length === 1 ? selected[0] : ""}
@@ -146,11 +162,18 @@ export function BudgetChart(props: HistoryProps) {
             aria-label="Mostrar só uma categoria"
           >
             <option value="">Principais (padrão)</option>
-            <option value={TOTAL}>{metric === "expense" ? "Despesa total" : "Receita total"}</option>
+            <option value={TOTAL}>{totalLabel}</option>
             {list.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
           </select>
         </label>
       </div>
+
+      {parentSeries && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft/70 px-3 py-2 text-sm">
+          <span>Mostrando as subcategorias de <b>{parentSeries.name}</b>.</span>
+          <button type="button" onClick={() => drill(null)} className="font-semibold text-brand underline-offset-4 hover:underline">← Voltar às categorias principais</button>
+        </div>
+      )}
 
       {/* gráfico */}
       <div className="card relative p-3 sm:p-5">
@@ -203,7 +226,7 @@ export function BudgetChart(props: HistoryProps) {
 
       {/* legenda: clique liga/desliga; “só” isola */}
       <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Categorias no gráfico">
-        {[{ code: TOTAL, name: metric === "expense" ? "Despesa total" : "Receita total" }, ...list].map((s) => {
+        {[{ code: TOTAL, name: totalLabel }, ...list].map((s) => {
           const idx = visible.findIndex((v) => v.code === s.code);
           const on = selected.includes(s.code);
           const disabled = unit === "share" && s.code === TOTAL;
@@ -241,7 +264,7 @@ export function BudgetChart(props: HistoryProps) {
       )}
       <p className="mt-3 text-xs leading-relaxed text-faint">
         {mode === "real" ? `Valores corrigidos pela inflação (IPCA médio anual) para os preços de ${years[years.length - 1]}.` : "Valores nominais, sem correção pela inflação — o crescimento aparente inclui a alta de preços."}{" "}
-        {unit === "percap" && scope === "FEDERAL" ? "Por habitante usa a população estimada do Brasil. " : ""}Fonte: Tesouro Nacional (Siconfi/DCA) e IBGE (IPCA).
+        {unit === "percap" && scope === "FEDERAL" ? "Por habitante usa a população estimada do Brasil. " : ""}{unit === "share" && parentSeries ? `A porcentagem é calculada sobre ${parentSeries.name}. ` : ""}Fonte: Tesouro Nacional (Siconfi/DCA) e IBGE (IPCA).
       </p>
     </div>
   );
