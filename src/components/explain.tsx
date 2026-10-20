@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Spinner } from "@/components/submit-button";
 
 /** "Saiba mais" recolhido: busca a explicação (gerada por IA e guardada em cache) só ao abrir. */
-export function Explain({ kind, text }: { kind: "vote" | "event"; text: string }) {
+export function Explain({ kind, text, label = "Saiba mais" }: { kind: "vote" | "event" | "budget"; text: string; label?: string }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [answer, setAnswer] = useState("");
 
@@ -29,7 +29,7 @@ export function Explain({ kind, text }: { kind: "vote" | "event"; text: string }
       }}
     >
       <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-brand [&::-webkit-details-marker]:hidden">
-        <span className="transition-transform group-open:rotate-90" aria-hidden>▸</span> Saiba mais
+        <span className="transition-transform group-open:rotate-90" aria-hidden>▸</span> {label}
       </summary>
       <div className="mt-2 rounded-xl bg-brand-soft/60 p-3 text-sm leading-relaxed">
         {state === "loading" && <span className="flex items-center gap-2 text-muted"><Spinner /> Explicando…</span>}

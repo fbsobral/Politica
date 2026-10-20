@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { EmailMock, FeedMock, PeopleMock } from "@/components/landing-mocks";
-import { IconBell, IconCalendar, IconFeed, IconLogo, IconMail, IconPeople, IconSearch, IconShield, IconVote } from "@/components/icons";
+import { IconBell, IconCalendar, IconCoins, IconFeed, IconLogo, IconPeople, IconSearch, IconShield, IconVote } from "@/components/icons";
 
 export const metadata: Metadata = {
   title: "Política — a política da sua cidade ao Planalto, num só lugar",
@@ -24,8 +24,8 @@ const FEATURES = [
   { icon: <IconCalendar />, title: "Agenda e votações do Congresso", text: "Sessões e comissões da Câmara e do Senado, resultado das votações e uma explicação em linguagem simples do que estava em jogo." },
   { icon: <IconVote />, title: "Eleições, sem ruído", text: "Candidatos, pesquisas, calendário e notícias por cargo — presidente, governador, senado e deputados do seu estado." },
   { icon: <IconShield />, title: "Checagem de fatos", text: "Boatos e declarações verificados por agências independentes, por esfera: nacional, do seu estado e da sua cidade." },
-  { icon: <IconBell />, title: "Alertas sob medida", text: "Palavras-chave e políticos que você segue: quando surgir uma notícia nova, você é avisado por e-mail." },
-  { icon: <IconMail />, title: "Resumos no e-mail", text: "Diário, semanal ou mensal, com o que importa na sua cidade, no estado e no país — e as votações do Congresso." },
+  { icon: <IconBell />, title: "Alertas e resumos no e-mail", text: "Palavras-chave e políticos que você segue geram alertas; e o resumo diário, semanal ou mensal traz o que importa na sua cidade, no estado e no país — com as votações do Congresso." },
+  { icon: <IconCoins />, title: "Orçamento público", text: "Para onde vai o dinheiro da sua cidade, do estado e da União: despesa por função, receitas, gasto por habitante e previsto x realizado." },
   { icon: <IconFeed />, title: "Diário Oficial da sua cidade", text: "Edições recentes e busca por texto nos diários oficiais do município." },
 ];
 

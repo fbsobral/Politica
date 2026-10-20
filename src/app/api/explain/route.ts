@@ -8,6 +8,7 @@ import { allow } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 
 const PROMPTS: Record<string, string> = {
+  budget: `Você explica a cidadãos leigos o orçamento público brasileiro. A partir do texto abaixo (uma função orçamentária e o nível de governo), escreva 2 a 3 frases simples e neutras em português: que tipo de gasto entra nessa função e por que importa para o cidadão. Explique o conceito em geral; NÃO invente detalhes sobre o município, estado ou governo específico e não dê opinião. Sem markdown.`,
   vote: `Você explica a cidadãos leigos o que foi uma votação no Congresso Nacional do Brasil. A partir do texto abaixo, escreva 2 a 4 frases simples e neutras em português: o que estava sendo votado, para que serve e o que o resultado significa. Defina siglas (PL, PLP, PEC, PDL, MPV, REQ...) em palavras comuns. Não invente detalhes que não estejam no texto e não dê opinião. Sem markdown.`,
   event: `Você explica a cidadãos leigos o que é um evento da agenda do Congresso Nacional (sessão, audiência pública, reunião de comissão). A partir do texto abaixo, escreva 2 a 3 frases simples e neutras em português: o que é esse tipo de evento, o que será discutido e por que importa. Defina siglas. Não invente detalhes que não estejam no texto e não dê opinião. Sem markdown.`,
 };

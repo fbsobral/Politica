@@ -31,6 +31,7 @@ const GROUPS: { title: string; hint: string; jobs: { job: string; label: string;
     jobs: [
       { job: "politicians", label: "Atualizar representantes", desc: "Deputados, senadores e eleitos do TSE." },
       { job: "candidates", label: "Atualizar candidatos (TSE)", desc: "Presidente, governador e senado." },
+      { job: "budget", label: "Atualizar orçamento", desc: "Siconfi: município, estado e União." },
     ],
   },
   {

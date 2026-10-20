@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote } from "./icons";
+import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote, IconCoins } from "./icons";
 
 type Item = { href: string; label: string; short?: string; icon: React.ReactNode; match: (p: string) => boolean };
 
@@ -12,6 +12,7 @@ function items(isAdmin: boolean): Item[] {
     { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
     { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
     { href: "/eleicoes", label: "Eleições", icon: <IconVote />, match: (p) => p.startsWith("/eleicoes") },
+    { href: "/orcamento", label: "Orçamento", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
     { href: "/checagens", label: "Checagens", icon: <IconShield />, match: (p) => p.startsWith("/checagens") },
   ];
   void isAdmin; // Alertas, Favoritos, Conta e Admin ficam no menu do avatar
@@ -23,7 +24,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/eleicoes", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/eleicoes", "/orcamento", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 export function DesktopNav({ isAdmin }: { isAdmin: boolean }) {

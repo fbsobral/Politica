@@ -60,6 +60,7 @@ export function startScheduler(opts: { bootDelayMs?: number } = {}) {
   schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");
   schedule("0 4 * * 0", "politicians");
   schedule("30 3 * * *", "cleanup");
+  schedule("0 5 * * 1", "budget");
   schedule("15 */6 * * *", "candidates");
 
   // fila de classificação: se sobrou notícia sem classificar, termina o serviço sem esperar a próxima coleta

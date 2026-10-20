@@ -314,3 +314,10 @@ model RejectedCluster {
   clusterKey String   @id
   at         DateTime @default(now())
 }
+
+/// Cache dos dados de orçamento (Siconfi/Tesouro Nacional) por ente, ano e tipo.
+model BudgetCache {
+  key       String   @id
+  data      Json
+  fetchedAt DateTime @default(now())
+}
