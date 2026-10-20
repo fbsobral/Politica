@@ -180,7 +180,7 @@ async function History({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
   const h = await getBudgetHistory(scope, user);
   if (!h) return <EmptyState title="Série histórica indisponível">Não consegui montar os últimos anos agora. Tente novamente em alguns minutos.</EmptyState>;
-  return <BudgetChart scope={h.scope} entity={h.entity} years={h.years} expense={h.expense} revenue={h.revenue} nature={h.nature} totals={h.totals} population={h.population} deflator={h.deflator} />;
+  return <BudgetChart scope={h.scope} entity={h.entity} years={h.years} expense={h.expense} revenue={h.revenue} nature={h.nature} totals={h.totals} population={h.population} deflator={h.deflator} partial={h.partial} />;
 }
 
 function Compare({ list }: { list: { scope: BudgetScope; b: BudgetData | null }[] }) {

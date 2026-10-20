@@ -252,9 +252,144 @@ export function brlShort(v: number): string {
 export const pct = (n: number, digits = 1) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: digits })}%`;
 
 
+/* ───────── Ano corrente parcial (RREO) e projeção ───────── */
+
+const normName = (n: string) => n.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const NATURE_BY_ROTULO: Record<string, string> = {
+  PessoalEEncargosSociais: "nat:3.1",
+  JurosEEncargosDaDivida: "nat:3.2",
+  OutrasDespesasCorrentes: "nat:3.3",
+  Investimentos: "nat:4.4",
+  InversoesFinanceiras: "nat:4.5",
+  AmortizacaoDaDivida: "nat:4.6",
+};
+
+/** Acumulado até o bimestre, por nome normalizado (função, origem da receita) e por grupo de natureza. */
+type Cum = { expenseTotal: number; revenueTotal: number; expense: Record<string, number>; revenue: Record<string, number>; nature: Record<string, number> };
+
+async function fetchRreoCum(id: number, year: number, period: number): Promise<Cum | null> {
+  const get = (anexo: string) => siconfi("rreo", { an_exercicio: year, nr_periodo: period, co_tipo_demonstrativo: "RREO", no_anexo: anexo, id_ente: id });
+  const [a1, a2] = await Promise.all([get("RREO-Anexo 01"), get("RREO-Anexo 02").catch(() => [] as Item[])]);
+  if (!a1.length) return null;
+  const cum: Cum = { expenseTotal: 0, revenueTotal: 0, expense: {}, revenue: {}, nature: {} };
+  for (const i of a1) {
+    if (/^At. o Bimestre \(c\)/i.test(i.coluna)) {
+      if (i.cod_conta === "ReceitasExcetoIntraOrcamentarias") cum.revenueTotal = i.valor;
+      const k = normName(i.conta);
+      if (!(k in cum.revenue)) cum.revenue[k] = i.valor;
+    } else if (/^DESPESAS EMPENHADAS AT. O BIME/i.test(i.coluna)) {
+      if (i.cod_conta === "DespesasExcetoIntraOrcamentarias") cum.expenseTotal = i.valor;
+      const code = NATURE_BY_ROTULO[i.cod_conta];
+      if (code) cum.nature[code] = i.valor;
+    }
+  }
+  for (const i of a2) {
+    if (!/^DESPESAS EMPENHADAS AT. O BIME/i.test(i.coluna) || /^DESPESAS \(/i.test(i.conta) || /^FU\d{2} - /.test(i.conta)) continue;
+    const k = normName(i.conta);
+    if (!(k in cum.expense)) cum.expense[k] = i.valor; // a função vem antes das suas subfunções
+  }
+  return cum;
+}
+
+async function rreoCached(id: number, year: number, period: number, ttlDays: number): Promise<Cum | null> {
+  const key = `budget:rreo:v1:${id}:${year}:${period}`;
+  const hit = await db.budgetCache.findUnique({ where: { key } });
+  const d = hit?.data as unknown as (Cum & { empty?: boolean }) | undefined;
+  if (hit && d && Date.now() - hit.fetchedAt.getTime() < (d.empty ? 1 : ttlDays) * DAY) return d.empty ? null : d;
+  try {
+    const fresh = await fetchRreoCum(id, year, period);
+    const data = fresh ?? { empty: true };
+    await db.budgetCache.upsert({ where: { key }, create: { key, data: data as never }, update: { data: data as never, fetchedAt: new Date() } });
+    return fresh;
+  } catch (err) {
+    console.warn("[budget:rreo]", id, year, period, (err as Error).message);
+    return d && !d.empty ? d : null;
+  }
+}
+
+/** Projeta o ano a partir do acumulado: divide pela fração que costuma estar acumulada no mesmo bimestre (mediana dos anos anteriores). */
+function projectYear(current: number, priors: { c: number; f: number }[], period: number): { value: number; seasonal: boolean } {
+  const ratios = priors.filter((p) => p.c > 0 && p.f > 0).map((p) => p.c / p.f).filter((r) => r > 0.05 && r <= 1.2).sort((a, b) => a - b);
+  if (ratios.length >= 2) {
+    const med = ratios[Math.floor(ratios.length / 2)];
+    // anos muito dispersos = série irregular (envio atrasado, evento atípico): não confia na sazonalidade
+    if ((ratios[ratios.length - 1] - ratios[0]) / med < 0.35) return { value: current / med, seasonal: true };
+  }
+  return { value: (current * 6) / period, seasonal: false };
+}
+
+async function buildPartial(
+  id: number,
+  now: number,
+  have: number[],
+  series: { expense: Series[]; revenue: Series[]; nature: Series[] },
+  totals: { expense: Record<number, number>; revenue: Record<number, number>; nature: Record<number, number> },
+): Promise<PartialYear | null> {
+  let period = 0;
+  let cur: Cum | null = null;
+  for (let p = 6; p >= 1 && !cur; p--) {
+    const c = await rreoCached(id, now, p, 1);
+    if (c && (c.expenseTotal > 0 || c.revenueTotal > 0)) {
+      cur = c;
+      period = p;
+    }
+  }
+  if (!cur) return null;
+  const priorYears = have.filter((y) => y < now).slice(-3);
+  const priorCum = new Map<number, Cum>();
+  for (const y of priorYears) {
+    const c = await rreoCached(id, y, period, 90);
+    if (c) priorCum.set(y, c);
+  }
+
+  const actual: Record<string, number> = {};
+  const projected: Record<string, number> = {};
+  let seasonalTotals = true;
+  const put = (key: string, current: number | undefined, prior: (c: Cum) => number | undefined, past: Record<number, number>, isTotal: boolean) => {
+    if (current === undefined || current <= 0) return;
+    const priors = priorYears.flatMap((y) => {
+      const c = priorCum.get(y);
+      const cv = c ? prior(c) : undefined;
+      return cv !== undefined && past[y] !== undefined ? [{ c: cv, f: past[y] }] : [];
+    });
+    const p = projectYear(current, priors, period);
+    if (isTotal && !p.seasonal) seasonalTotals = false;
+    actual[key] = current;
+    projected[key] = Math.max(current, p.value);
+  };
+
+  put("total:expense", cur.expenseTotal, (c) => c.expenseTotal, totals.expense, true);
+  put("total:revenue", cur.revenueTotal, (c) => c.revenueTotal, totals.revenue, true);
+  for (const s of series.expense.filter((x) => !x.parent)) put(s.code, cur.expense[normName(s.name)], (c) => c.expense[normName(s.name)], s.values, false);
+  for (const s of series.revenue.filter((x) => !x.parent)) put(s.code, cur.revenue[normName(s.name)], (c) => c.revenue[normName(s.name)], s.values, false);
+  for (const s of series.nature) put(s.code, cur.nature[s.code], (c) => c.nature[s.code], s.values, false);
+  // a natureza é outro corte da mesma despesa: o total e as fatias seguem a projeção da despesa total
+  if (actual["total:expense"] !== undefined) {
+    actual["total:nature"] = actual["total:expense"];
+    projected["total:nature"] = projected["total:expense"];
+    const codes = series.nature.map((x) => x.code).filter((c) => projected[c] !== undefined);
+    const sum = codes.reduce((a, c) => a + projected[c], 0);
+    if (sum > 0) for (const c of codes) projected[c] *= projected["total:nature"] / sum;
+  }
+
+  if (actual["total:expense"] === undefined && actual["total:revenue"] === undefined) return null;
+  return { year: now, period, method: seasonalTotals ? "sazonal" : "linear", actual, projected };
+}
+
 /* ───────── Histórico de 10 anos ───────── */
 
 export type Series = { code: string; name: string; parent?: string; values: Record<number, number> };
+
+export type PartialYear = {
+  year: number;
+  period: number; // bimestre
+  /** "sazonal": projeta pelo que já estava acumulado nos anos anteriores no mesmo bimestre; "linear": só proporcional (menos confiável) */
+  method: "sazonal" | "linear";
+  /** chaves: código da série, "total:expense", "total:revenue" ou "total:nature" */
+  actual: Record<string, number>;
+  projected: Record<string, number>;
+};
 
 export type BudgetHistory = {
   scope: BudgetScope;
@@ -263,6 +398,8 @@ export type BudgetHistory = {
   expense: Series[];
   revenue: Series[];
   nature: Series[];
+  /** ano corrente: acumulado até o último bimestre publicado e projeção; null se não houver dados */
+  partial: PartialYear | null;
   totals: { expense: Record<number, number>; revenue: Record<number, number>; nature: Record<number, number> };
   population: Record<number, number>;
   /** fator para converter o valor nominal de cada ano para os preços do último ano (IPCA) */
@@ -272,7 +409,7 @@ export type BudgetHistory = {
 
 /** Média anual do IPCA (número-índice, IBGE/SIDRA 1737) por ano; cache de 30 dias. */
 async function ipcaByYear(): Promise<Record<number, number>> {
-  const key = "ipca:v1";
+  const key = "ipca:v2";
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && Date.now() - hit.fetchedAt.getTime() < 30 * DAY) return hit.data as unknown as Record<number, number>;
   try {
@@ -283,7 +420,7 @@ async function ipcaByYear(): Promise<Record<number, number>> {
     const byYear: Record<number, number[]> = {};
     for (const [ym, v] of Object.entries(serie)) (byYear[Number(ym.slice(0, 4))] ??= []).push(Number(v));
     const avg: Record<number, number> = {};
-    for (const [y, list] of Object.entries(byYear)) if (list.length >= 11) avg[Number(y)] = list.reduce((a, b) => a + b, 0) / list.length;
+    for (const [y, list] of Object.entries(byYear)) if (list.length >= 11 || (Number(y) === new Date().getFullYear() && list.length >= 1)) avg[Number(y)] = list.reduce((a, b) => a + b, 0) / list.length;
     await db.budgetCache.upsert({ where: { key }, create: { key, data: avg as never }, update: { data: avg as never, fetchedAt: new Date() } });
     return avg;
   } catch (err) {
@@ -411,18 +548,33 @@ export async function getBudgetHistory(scope: BudgetScope, user: { uf: string; m
   }
   const rev = have.filter((y) => (data.get(y)?.revenue.length ?? 0) > 0 || (data.get(y)?.revenueTotal ?? 0) > 0);
   const natYears = have.filter((y) => (data.get(y)?.nature?.length ?? 0) > 0);
+  const expenseS = toSeries(have.map((y) => ({ year: y, rows: data.get(y)!.expense })));
+  const revenueS = toSeries(rev.map((y) => ({ year: y, rows: [...data.get(y)!.revenue.filter((r) => !r.parent), ...canonicalRows(data.get(y)!.revenue)] }))).filter((x) => !x.code.startsWith("tax:") || (x.values[rev[rev.length - 1]] ?? 0) > 0);
+  const natureS = toSeries(natYears.map((y) => ({ year: y, rows: data.get(y)!.nature! })));
+  const totals = {
+    nature: Object.fromEntries(natYears.map((y) => [y, data.get(y)!.nature!.reduce((a, r) => a + r.value, 0)])) as Record<number, number>,
+    expense: Object.fromEntries(have.map((y) => [y, data.get(y)!.expenseTotal])) as Record<number, number>,
+    revenue: Object.fromEntries(rev.map((y) => [y, data.get(y)!.revenueTotal])) as Record<number, number>,
+  };
+  let partial: PartialYear | null = null;
+  try {
+    partial = await buildPartial(id, now, have, { expense: expenseS, revenue: revenueS, nature: natureS }, totals);
+  } catch (err) {
+    console.warn("[budget:partial]", (err as Error).message);
+  }
+  if (partial) {
+    if (ipca[now] && base) deflator[now] = base / ipca[now];
+    if (carry) population[now] = carry;
+  }
   return {
     scope,
     entity: probe.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""),
     years: have,
-    expense: toSeries(have.map((y) => ({ year: y, rows: data.get(y)!.expense }))),
-    revenue: toSeries(rev.map((y) => ({ year: y, rows: [...data.get(y)!.revenue.filter((r) => !r.parent), ...canonicalRows(data.get(y)!.revenue)] }))).filter((x) => !x.code.startsWith("tax:") || (x.values[rev[rev.length - 1]] ?? 0) > 0),
-    nature: toSeries(natYears.map((y) => ({ year: y, rows: data.get(y)!.nature! }))),
-    totals: {
-      nature: Object.fromEntries(natYears.map((y) => [y, data.get(y)!.nature!.reduce((a, r) => a + r.value, 0)])),
-      expense: Object.fromEntries(have.map((y) => [y, data.get(y)!.expenseTotal])),
-      revenue: Object.fromEntries(rev.map((y) => [y, data.get(y)!.revenueTotal])),
-    },
+    expense: expenseS,
+    revenue: revenueS,
+    nature: natureS,
+    partial,
+    totals,
     population,
     deflator,
     fetchedAt: new Date().toISOString(),

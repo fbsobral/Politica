@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { PartialYear } from "@/lib/budget";
 
 type Series = { code: string; name: string; parent?: string; values: Record<number, number> };
 export type HistoryProps = {
@@ -13,11 +14,14 @@ export type HistoryProps = {
   totals: { expense: Record<number, number>; revenue: Record<number, number>; nature: Record<number, number> };
   population: Record<number, number>;
   deflator: Record<number, number>;
+  partial: PartialYear | null;
 };
 
 type Metric = "expense" | "revenue" | "nature";
 type Mode = "real" | "nominal";
 type Unit = "brl" | "percap" | "share";
+
+const PERIODO: Record<number, string> = { 1: "fevereiro", 2: "abril", 3: "junho", 4: "agosto", 5: "outubro", 6: "dezembro" };
 
 const COLORS = ["#17407f", "#e0a800", "#0e8a5f", "#d9480f", "#7048e8", "#d6336c", "#0c8599", "#6b7280", "#2b8a3e", "#a61e4d"];
 const TOTAL = "__total";
@@ -59,13 +63,26 @@ function Chip({ s, selected, visible, disabled, toggle, only, extra, dashed }: {
 }
 
 /** Evolução de 10 anos: linhas por categoria, com filtros de período, categoria, métrica, valores reais/nominais e unidade. */
-export function BudgetChart(props: HistoryProps) {
-  const { years, scope } = props;
+export function BudgetChart(raw: HistoryProps) {
+  const { scope, partial } = raw;
+  // ano corrente: fora, só o acumulado até agora ou o acumulado + projeção (extrapolação sazonal)
+  const [pmode, setPmode] = useState<"off" | "actual" | "proj">(partial ? "proj" : "off");
+  const props = useMemo<HistoryProps>(() => {
+    if (!partial || pmode === "off") return raw;
+    const src = pmode === "proj" ? partial.projected : partial.actual;
+    const y = partial.year;
+    const add = (list: Series[]) => list.map((s) => (src[s.code] !== undefined ? { ...s, values: { ...s.values, [y]: src[s.code] } } : s));
+    const tot = (k: "expense" | "revenue" | "nature") => (src[`total:${k}`] !== undefined ? { ...raw.totals[k], [y]: src[`total:${k}`] } : raw.totals[k]);
+    return { ...raw, years: [...raw.years, y], expense: add(raw.expense), revenue: add(raw.revenue), nature: add(raw.nature), totals: { expense: tot("expense"), revenue: tot("revenue"), nature: tot("nature") } };
+  }, [raw, partial, pmode]);
+  const { years } = props;
+  const partialYear = partial && pmode !== "off" ? partial.year : null;
+  const yLabel = (y: number) => (y === partialYear ? `${y}${pmode === "proj" ? " (proj.)" : " (parc.)"}` : String(y));
   const [metric, setMetric] = useState<Metric>("expense");
   const [mode, setMode] = useState<Mode>(Object.keys(props.deflator).length ? "real" : "nominal");
   const [unit, setUnit] = useState<Unit>("brl");
-  const [from, setFrom] = useState(years[0]);
-  const [to, setTo] = useState(years[years.length - 1]);
+  const [fromSel, setFromSel] = useState<number | null>(null);
+  const [toSel, setToSel] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
 
   const all = metric === "expense" ? props.expense : metric === "revenue" ? props.revenue : props.nature;
@@ -79,6 +96,10 @@ export function BudgetChart(props: HistoryProps) {
   const metricYears = useMemo(() => years.filter((y) => totals[y] !== undefined), [years, totals]);
 
   const latest = metricYears[metricYears.length - 1];
+  const to = toSel === null ? latest : Math.min(toSel, latest);
+  const from = Math.min(Math.max(fromSel ?? metricYears[0], metricYears[0]), to);
+  const setFrom = setFromSel;
+  const setTo = setToSel;
   const defaultSel = useMemo(() => [TOTAL, ...list.slice(0, 4).map((s) => s.code)], [list]);
   const [selByKey, setSelByKey] = useState<Record<string, string[]>>({});
   const selected = selByKey[metric] ?? defaultSel;
@@ -155,14 +176,21 @@ export function BudgetChart(props: HistoryProps) {
           <button type="button" onClick={() => setMode("real")} disabled={!Object.keys(props.deflator).length} className={seg(mode === "real")} title="Corrigidos pela inflação (IPCA) para os preços de hoje">Corrigidos (IPCA)</button>
           <button type="button" onClick={() => setMode("nominal")} className={seg(mode === "nominal")}>Nominais</button>
         </div>
+        {partial && (
+          <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label={`Ano corrente (${partial.year})`}>
+            <button type="button" onClick={() => setPmode("off")} className={seg(pmode === "off")} title="Só anos fechados">Fechados</button>
+            <button type="button" onClick={() => setPmode("actual")} className={seg(pmode === "actual")} title={`Acumulado de ${partial.year} até o ${partial.period}º bimestre`}>+ {partial.year} parcial</button>
+            <button type="button" onClick={() => setPmode("proj")} className={seg(pmode === "proj")} title={`Projeção de ${partial.year} fechado`}>+ {partial.year} projeção</button>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm text-muted">
           De
-          <select value={from} onChange={(e) => { const v = Number(e.target.value); setFrom(v); if (v >= to) setTo(Math.min(latest, v + 1)); }} className="input !w-24 !py-1.5">
-            {metricYears.slice(0, -1).map((y) => <option key={y}>{y}</option>)}
+          <select value={from} onChange={(e) => { const v = Number(e.target.value); setFrom(v); if (v >= to) setTo(Math.min(latest, v + 1)); }} className="input !w-36 !py-1.5">
+            {metricYears.slice(0, -1).map((y) => <option key={y} value={y}>{yLabel(y)}</option>)}
           </select>
           até
-          <select value={to} onChange={(e) => { const v = Number(e.target.value); setTo(v); if (v <= from) setFrom(Math.max(metricYears[0], v - 1)); }} className="input !w-24 !py-1.5">
-            {metricYears.slice(1).map((y) => <option key={y}>{y}</option>)}
+          <select value={to} onChange={(e) => { const v = Number(e.target.value); setTo(v); if (v <= from) setFrom(Math.max(metricYears[0], v - 1)); }} className="input !w-36 !py-1.5">
+            {metricYears.slice(1).map((y) => <option key={y} value={y}>{yLabel(y)}</option>)}
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-muted">
@@ -189,6 +217,18 @@ export function BudgetChart(props: HistoryProps) {
           </select>        </label>
       </div>
 
+      {partial && pmode !== "off" && (
+        <p className="mb-3 rounded-xl bg-brand-soft/70 px-3 py-2 text-xs leading-relaxed text-muted">
+          <b className="text-ink">{partial.year}*</b>{" "}
+          {pmode === "actual"
+            ? `é o acumulado até o ${partial.period}º bimestre (${PERIODO[partial.period]}), por isso aparece abaixo dos anos fechados.`
+            : partial.method === "sazonal"
+              ? `é uma projeção: o acumulado até ${PERIODO[partial.period]} dividido pela fração que costumava estar acumulada nesse ponto nos anos anteriores. Subcategorias não têm dado parcial.`
+              : `é uma estimativa menos confiável: o histórico desta localidade é irregular, então o acumulado até ${PERIODO[partial.period]} foi apenas proporcionalizado para 12 meses.`}
+          {" "}Vem do relatório bimestral (RREO) do Tesouro, em valores correntes.
+        </p>
+      )}
+
       {/* gráfico */}
       <div className="card relative p-3 sm:p-5">
         {visible.length === 0 ? (
@@ -202,16 +242,23 @@ export function BudgetChart(props: HistoryProps) {
               </g>
             ))}
             {yrs.map((y) => (
-              <text key={y} x={x(y)} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--faint)">{y}</text>
+              <text key={y} x={x(y)} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--faint)">{y === partialYear ? `${y}*` : y}</text>
             ))}
             {hoverYear !== null && <line x1={x(hoverYear)} x2={x(hoverYear)} y1={m.t} y2={H - m.b} stroke="var(--line-strong)" />}
             {visible.map((l) => {
-              const pts = yrs.filter((y) => l.values[y] != null).map((y) => `${x(y)},${yv(l.values[y] as number)}`);
+              const have = yrs.filter((y) => l.values[y] != null);
+              const closed = have.filter((y) => y !== partialYear);
+              const pt = (y: number) => `${x(y)},${yv(l.values[y] as number)}`;
+              const lastClosed = closed[closed.length - 1];
+              const hasPartial = partialYear !== null && have.includes(partialYear);
               return (
                 <g key={l.code}>
-                  <polyline points={pts.join(" ")} fill="none" stroke={l.color} strokeWidth={l.code === TOTAL ? 3 : 2.2} strokeDasharray={l.sub ? "7 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
-                  {yrs.filter((y) => l.values[y] != null).map((y) => (
-                    <circle key={y} cx={x(y)} cy={yv(l.values[y] as number)} r={hoverYear === y ? 5 : 3} fill="var(--surface)" stroke={l.color} strokeWidth="2" />
+                  <polyline points={closed.map(pt).join(" ")} fill="none" stroke={l.color} strokeWidth={l.code === TOTAL ? 3 : 2.2} strokeDasharray={l.sub ? "7 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
+                  {hasPartial && lastClosed !== undefined && (
+                    <polyline points={`${pt(lastClosed)} ${pt(partialYear!)}`} fill="none" stroke={l.color} strokeWidth={l.code === TOTAL ? 3 : 2.2} strokeDasharray="2 5" strokeOpacity="0.8" strokeLinecap="round" />
+                  )}
+                  {have.map((y) => (
+                    <circle key={y} cx={x(y)} cy={yv(l.values[y] as number)} r={hoverYear === y ? 5 : 3} fill={y === partialYear ? l.color : "var(--surface)"} fillOpacity={y === partialYear ? 0.25 : 1} stroke={l.color} strokeWidth="2" strokeDasharray={y === partialYear ? "2 2" : undefined} />
                   ))}
                 </g>
               );
@@ -225,7 +272,7 @@ export function BudgetChart(props: HistoryProps) {
 
         {hoverYear !== null && visible.length > 0 && (
           <div className="pointer-events-none absolute right-4 top-4 max-w-[16rem] rounded-xl border border-line bg-surface/95 p-3 text-xs shadow-pop backdrop-blur">
-            <p className="mb-1.5 font-bold">{hoverYear}</p>
+            <p className="mb-1.5 font-bold">{yLabel(hoverYear)}</p>
             <ul className="space-y-1">
               {[...visible].sort((a, b) => (b.values[hoverYear] ?? 0) - (a.values[hoverYear] ?? 0)).map((l) => (
                 <li key={l.code} className="flex items-center justify-between gap-3">
