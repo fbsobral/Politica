@@ -22,6 +22,8 @@ export type Annual = {
   expense: Slice[]; // por função, maior primeiro
   revenueTotal: number;
   revenue: Slice[]; // por origem, maior primeiro
+  /** despesa por natureza econômica (pessoal, juros, investimentos…); vazio se o município não declarou */
+  nature: Slice[];
 };
 
 export type Current = {
@@ -76,7 +78,7 @@ function slices(rows: Raw[], total: number, take = 12): Slice[] {
 }
 
 type Raw = { code: string; name: string; value: number; parent?: string };
-type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[] };
+type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[]; nature?: Raw[] };
 
 /** Interpreta os anexos I-E (despesa por função) e I-C (receita) do DCA, nos formatos antigo (até 2017) e novo. */
 function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
@@ -129,19 +131,46 @@ function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
   return { year, name: exp[0].instituicao ?? null, pop: exp[0].populacao ?? null, expenseTotal, expense, revenueTotal, revenue };
 }
 
+/** Grupos de natureza da despesa (DCA Anexo I-D): 3.x correntes e 4.x capital. */
+const NATURE_NAMES: Record<string, string> = {
+  "3.1": "Pessoal e encargos sociais",
+  "3.2": "Juros e encargos da dívida",
+  "3.3": "Outras despesas correntes",
+  "4.4": "Investimentos",
+  "4.5": "Inversões financeiras",
+  "4.6": "Amortização da dívida",
+};
+
+function parseNature(items: Item[]): Raw[] {
+  const out: Raw[] = [];
+  for (const i of items) {
+    if (i.coluna !== "Despesas Empenhadas") continue;
+    const m = /^([34]\.\d)\.00\.00\.00 - /.exec(i.conta);
+    if (m && NATURE_NAMES[m[1]]) out.push({ code: `nat:${m[1]}`, name: NATURE_NAMES[m[1]], value: i.valor });
+  }
+  return out;
+}
+
 async function fetchDca(id: number, year: number): Promise<DcaYear> {
-  const [exp, rev] = await Promise.all([
+  const [exp, rev, nat] = await Promise.all([
     siconfi("dca", { an_exercicio: year, no_anexo: "DCA-Anexo I-E", id_ente: id }),
     siconfi("dca", { an_exercicio: year, no_anexo: "DCA-Anexo I-C", id_ente: id }),
+    siconfi("dca", { an_exercicio: year, no_anexo: "DCA-Anexo I-D", id_ente: id }).catch(() => [] as Item[]),
   ]);
-  return parseDca(exp, rev, year);
+  return { ...parseDca(exp, rev, year), nature: parseNature(nat) };
+}
+
+function natureSlices(rows: Raw[]): Slice[] {
+  const total = rows.reduce((a, r) => a + r.value, 0);
+  if (total <= 0) return [];
+  return rows.filter((r) => r.value > 0).sort((a, b) => b.value - a.value).map((r) => ({ code: r.code, name: r.name, value: r.value, share: r.value / total }));
 }
 
 async function fetchAnnual(id: number, year: number): Promise<{ annual: Annual | null; pop: number | null; name: string | null }> {
   const d = await fetchDca(id, year);
   if (d.empty) return { annual: null, pop: null, name: null };
   return {
-    annual: { year, expenseTotal: d.expenseTotal, expense: slices(d.expense, d.expenseTotal), revenueTotal: d.revenueTotal, revenue: slices(d.revenue, d.revenueTotal, 10) },
+    annual: { year, expenseTotal: d.expenseTotal, expense: slices(d.expense, d.expenseTotal), revenueTotal: d.revenueTotal, revenue: slices(d.revenue, d.revenueTotal, 10), nature: natureSlices(d.nature ?? []) },
     pop: d.pop,
     name: d.name,
   };
@@ -177,7 +206,7 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
 export async function getBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }, opts: { force?: boolean } = {}): Promise<BudgetData | null> {
   const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
   if (!id) return null;
-  const key = `budget:v3:${id}`;
+  const key = `budget:v4:${id}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && !opts.force && Date.now() - hit.fetchedAt.getTime() < DAY) return hit.data as unknown as BudgetData;
 
@@ -233,7 +262,8 @@ export type BudgetHistory = {
   years: number[];
   expense: Series[];
   revenue: Series[];
-  totals: { expense: Record<number, number>; revenue: Record<number, number> };
+  nature: Series[];
+  totals: { expense: Record<number, number>; revenue: Record<number, number>; nature: Record<number, number> };
   population: Record<number, number>;
   /** fator para converter o valor nominal de cada ano para os preços do último ano (IPCA) */
   deflator: Record<number, number>;
@@ -263,7 +293,7 @@ async function ipcaByYear(): Promise<Record<number, number>> {
 }
 
 async function dcaCached(id: number, year: number, ttlDays: number, force: boolean): Promise<DcaYear> {
-  const key = `budget:dca:v4:${id}:${year}`;
+  const key = `budget:dca:v5:${id}:${year}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as DcaYear | undefined;
   const ttl = (d?.empty ? 7 : ttlDays) * DAY;
@@ -380,13 +410,16 @@ export async function getBudgetHistory(scope: BudgetScope, user: { uf: string; m
     if (carry) population[y] = carry;
   }
   const rev = have.filter((y) => (data.get(y)?.revenue.length ?? 0) > 0 || (data.get(y)?.revenueTotal ?? 0) > 0);
+  const natYears = have.filter((y) => (data.get(y)?.nature?.length ?? 0) > 0);
   return {
     scope,
     entity: probe.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""),
     years: have,
     expense: toSeries(have.map((y) => ({ year: y, rows: data.get(y)!.expense }))),
     revenue: toSeries(rev.map((y) => ({ year: y, rows: [...data.get(y)!.revenue.filter((r) => !r.parent), ...canonicalRows(data.get(y)!.revenue)] }))).filter((x) => !x.code.startsWith("tax:") || (x.values[rev[rev.length - 1]] ?? 0) > 0),
+    nature: toSeries(natYears.map((y) => ({ year: y, rows: data.get(y)!.nature! }))),
     totals: {
+      nature: Object.fromEntries(natYears.map((y) => [y, data.get(y)!.nature!.reduce((a, r) => a + r.value, 0)])),
       expense: Object.fromEntries(have.map((y) => [y, data.get(y)!.expenseTotal])),
       revenue: Object.fromEntries(rev.map((y) => [y, data.get(y)!.revenueTotal])),
     },

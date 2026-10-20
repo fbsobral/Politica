@@ -9,12 +9,13 @@ export type HistoryProps = {
   years: number[];
   expense: Series[];
   revenue: Series[];
-  totals: { expense: Record<number, number>; revenue: Record<number, number> };
+  nature: Series[];
+  totals: { expense: Record<number, number>; revenue: Record<number, number>; nature: Record<number, number> };
   population: Record<number, number>;
   deflator: Record<number, number>;
 };
 
-type Metric = "expense" | "revenue";
+type Metric = "expense" | "revenue" | "nature";
 type Mode = "real" | "nominal";
 type Unit = "brl" | "percap" | "share";
 
@@ -40,6 +41,23 @@ function niceMax(v: number): number {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
 }
 
+type VisibleLine = { code: string; color: string };
+
+function Chip({ s, selected, visible, disabled, toggle, only, extra, dashed }: { s: Series; selected: string[]; visible: VisibleLine[]; disabled?: boolean; toggle: (c: string) => void; only: (c: string) => void; extra?: React.ReactNode; dashed?: boolean }) {
+  const idx = visible.findIndex((v) => v.code === s.code);
+  const on = selected.includes(s.code);
+  return (
+    <span className={`inline-flex items-center overflow-hidden rounded-full border text-xs ${on && !disabled ? "border-line-strong bg-surface" : "border-line bg-surface-2 text-faint"} ${disabled ? "opacity-40" : ""}`}>
+      <button type="button" disabled={disabled} onClick={() => toggle(s.code)} className="flex items-center gap-1.5 px-2.5 py-1 font-medium" aria-pressed={on}>
+        <span className={`h-2.5 w-2.5 rounded-full border ${dashed ? "border-dashed" : ""}`} style={{ background: on && idx >= 0 ? visible[idx].color : "transparent", borderColor: on && idx >= 0 ? visible[idx].color : "var(--line-strong)" }} />
+        {s.name}
+      </button>
+      <button type="button" disabled={disabled} onClick={() => only(s.code)} className="border-l border-line px-2 py-1 text-faint hover:text-ink" title="Mostrar só esta categoria">só</button>
+      {extra}
+    </span>
+  );
+}
+
 /** Evolução de 10 anos: linhas por categoria, com filtros de período, categoria, métrica, valores reais/nominais e unidade. */
 export function BudgetChart(props: HistoryProps) {
   const { years, scope } = props;
@@ -50,24 +68,24 @@ export function BudgetChart(props: HistoryProps) {
   const [to, setTo] = useState(years[years.length - 1]);
   const [hover, setHover] = useState<number | null>(null);
 
-  const all = metric === "expense" ? props.expense : props.revenue;
-  // "detalhar": mostra as subcategorias de uma categoria (ex.: as subfunções de Saúde, ou os tributos de uma origem)
-  const [drillBy, setDrillBy] = useState<Record<Metric, string | null>>({ expense: null, revenue: null });
-  const drillCode = drillBy[metric];
-  const parentSeries = drillCode ? (all.find((s) => s.code === drillCode) ?? null) : null;
-  const list = parentSeries ? all.filter((s) => s.parent === parentSeries.code) : all.filter((s) => !s.parent);
-  const withKids = all.filter((s) => all.some((c) => c.parent === s.code));
-  const totalLabel = parentSeries ? `${parentSeries.name} (total)` : metric === "expense" ? "Despesa total" : "Receita total";
-  const totals = parentSeries ? parentSeries.values : metric === "expense" ? props.totals.expense : props.totals.revenue;
+  const all = metric === "expense" ? props.expense : metric === "revenue" ? props.revenue : props.nature;
+  const list = useMemo(() => all.filter((s) => !s.parent), [all]);
+  const kidsOf = (code: string) => all.filter((s) => s.parent === code);
+  const byCode = useMemo(() => new Map(all.map((s) => [s.code, s])), [all]);
+  // nome completo de uma subcategoria: "Saúde › Atenção básica"
+  const fullName = (s: Series) => (s.parent && byCode.get(s.parent) ? `${byCode.get(s.parent)!.name} › ${s.name}` : s.name);
+  const totalLabel = metric === "revenue" ? "Receita total" : "Despesa total";
+  const totals = props.totals[metric];
   const metricYears = useMemo(() => years.filter((y) => totals[y] !== undefined), [years, totals]);
 
   const latest = metricYears[metricYears.length - 1];
   const defaultSel = useMemo(() => [TOTAL, ...list.slice(0, 4).map((s) => s.code)], [list]);
-  const selKey = `${metric}:${drillCode ?? ""}`;
   const [selByKey, setSelByKey] = useState<Record<string, string[]>>({});
-  const selected = selByKey[selKey] ?? defaultSel;
-  const setSelected = (v: string[]) => setSelByKey((st) => ({ ...st, [selKey]: v }));
-  const drill = (code: string | null) => setDrillBy((d) => ({ ...d, [metric]: code }));
+  const selected = selByKey[metric] ?? defaultSel;
+  const setSelected = (v: string[]) => setSelByKey((st) => ({ ...st, [metric]: v }));
+  // categorias com as subcategorias abertas na legenda
+  const [openKids, setOpenKids] = useState<Record<string, boolean>>({});
+  const toggleOpen = (code: string) => setOpenKids((o) => ({ ...o, [code]: !o[code] }));
 
   const yrs = metricYears.filter((y) => y >= from && y <= to);
 
@@ -75,8 +93,8 @@ export function BudgetChart(props: HistoryProps) {
   const pop = (y: number) => (scope === "FEDERAL" ? BRAZIL_POP : props.population[y]);
 
   const lines = useMemo(() => {
-    const all: { code: string; name: string; color: string; values: Record<number, number | null> }[] = [];
-    const defs = [{ code: TOTAL, name: totalLabel, get: (y: number) => totals[y] }, ...list.map((s) => ({ code: s.code, name: s.name, get: (y: number) => s.values[y] }))];
+    const out: { code: string; name: string; sub: boolean; color: string; values: Record<number, number | null> }[] = [];
+    const defs = [{ code: TOTAL, name: totalLabel, sub: false, get: (y: number) => totals[y] }, ...all.map((s) => ({ code: s.code, name: fullName(s), sub: !!s.parent, get: (y: number) => s.values[y] }))];
     for (const d of defs) {
       const values: Record<number, number | null> = {};
       for (const y of yrs) {
@@ -89,11 +107,11 @@ export function BudgetChart(props: HistoryProps) {
         else if (unit === "percap") values[y] = pop(y) ? adjust(y, raw) / pop(y) : null;
         else values[y] = adjust(y, raw);
       }
-      all.push({ code: d.code, name: d.name, color: "", values });
+      out.push({ code: d.code, name: d.name, sub: d.sub, color: "", values });
     }
-    return all;
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metric, mode, unit, from, to, list, totals, totalLabel]);
+  }, [metric, mode, unit, from, to, all, totals, totalLabel]);
 
   const visible = lines.filter((l) => selected.includes(l.code) && !(unit === "share" && l.code === TOTAL)).map((l, i) => ({ ...l, color: COLORS[i % COLORS.length] }));
   const maxVal = niceMax(Math.max(...visible.flatMap((l) => yrs.map((y) => l.values[y] ?? 0)), 0));
@@ -126,6 +144,7 @@ export function BudgetChart(props: HistoryProps) {
         <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="O que mostrar">
           <button type="button" onClick={() => setMetric("expense")} className={seg(metric === "expense")}>Para onde vai</button>
           <button type="button" onClick={() => setMetric("revenue")} className={seg(metric === "revenue")}>De onde vem</button>
+          {props.nature.length > 0 && <button type="button" onClick={() => setMetric("nature")} className={seg(metric === "nature")}>Em que se gasta</button>}
         </div>
         <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Unidade">
           <button type="button" onClick={() => setUnit("brl")} className={seg(unit === "brl")}>R$</button>
@@ -147,13 +166,6 @@ export function BudgetChart(props: HistoryProps) {
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm text-muted">
-          Detalhar
-          <select value={drillCode ?? ""} onChange={(e) => drill(e.target.value || null)} className="input !w-56 !py-1.5" aria-label="Ver as subcategorias de uma categoria">
-            <option value="">Categorias principais</option>
-            {withKids.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted">
           Categoria
           <select
             value={selected.length === 1 ? selected[0] : ""}
@@ -163,17 +175,19 @@ export function BudgetChart(props: HistoryProps) {
           >
             <option value="">Principais (padrão)</option>
             <option value={TOTAL}>{totalLabel}</option>
-            {list.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-          </select>
-        </label>
+            {list.map((s) => {
+              const kids = kidsOf(s.code);
+              return kids.length ? (
+                <optgroup key={s.code} label={s.name}>
+                  <option value={s.code}>{s.name} (total)</option>
+                  {kids.map((k) => <option key={k.code} value={k.code}>— {k.name}</option>)}
+                </optgroup>
+              ) : (
+                <option key={s.code} value={s.code}>{s.name}</option>
+              );
+            })}
+          </select>        </label>
       </div>
-
-      {parentSeries && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-brand-soft/70 px-3 py-2 text-sm">
-          <span>Mostrando as subcategorias de <b>{parentSeries.name}</b>.</span>
-          <button type="button" onClick={() => drill(null)} className="font-semibold text-brand underline-offset-4 hover:underline">← Voltar às categorias principais</button>
-        </div>
-      )}
 
       {/* gráfico */}
       <div className="card relative p-3 sm:p-5">
@@ -195,7 +209,7 @@ export function BudgetChart(props: HistoryProps) {
               const pts = yrs.filter((y) => l.values[y] != null).map((y) => `${x(y)},${yv(l.values[y] as number)}`);
               return (
                 <g key={l.code}>
-                  <polyline points={pts.join(" ")} fill="none" stroke={l.color} strokeWidth={l.code === TOTAL ? 3 : 2.2} strokeLinejoin="round" strokeLinecap="round" />
+                  <polyline points={pts.join(" ")} fill="none" stroke={l.color} strokeWidth={l.code === TOTAL ? 3 : 2.2} strokeDasharray={l.sub ? "7 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
                   {yrs.filter((y) => l.values[y] != null).map((y) => (
                     <circle key={y} cx={x(y)} cy={yv(l.values[y] as number)} r={hoverYear === y ? 5 : 3} fill="var(--surface)" stroke={l.color} strokeWidth="2" />
                   ))}
@@ -224,20 +238,40 @@ export function BudgetChart(props: HistoryProps) {
         )}
       </div>
 
-      {/* legenda: clique liga/desliga; “só” isola */}
-      <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Categorias no gráfico">
-        {[{ code: TOTAL, name: totalLabel }, ...list].map((s) => {
-          const idx = visible.findIndex((v) => v.code === s.code);
-          const on = selected.includes(s.code);
-          const disabled = unit === "share" && s.code === TOTAL;
+      {/* legenda: clique liga/desliga; “só” isola; a seta abre as subcategorias, que entram no gráfico em linha tracejada */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <button type="button" onClick={() => setSelected([TOTAL, ...list.map((s) => s.code)])} className="font-semibold text-brand underline-offset-4 hover:underline">Selecionar tudo</button>
+        <button type="button" onClick={() => setSelected([])} className="font-semibold text-muted underline-offset-4 hover:underline">Limpar</button>
+        <button type="button" onClick={() => setSelected(defaultSel)} className="text-faint underline-offset-4 hover:underline">Restaurar padrão</button>
+        {selected.length > COLORS.length && <span className="text-faint">Com muitas linhas, as cores se repetem.</span>}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Categorias no gráfico">
+        {[{ code: TOTAL, name: totalLabel } as Series, ...list].map((s) => {
+          const kids = s.code === TOTAL ? [] : kidsOf(s.code);
+          const selKids = kids.filter((k) => selected.includes(k.code)).length;
+          const isOpen = !!openKids[s.code];
           return (
-            <span key={s.code} className={`inline-flex items-center overflow-hidden rounded-full border text-xs ${on && !disabled ? "border-line-strong bg-surface" : "border-line bg-surface-2 text-faint"} ${disabled ? "opacity-40" : ""}`}>
-              <button type="button" disabled={disabled} onClick={() => toggle(s.code)} className="flex items-center gap-1.5 px-2.5 py-1 font-medium" aria-pressed={on}>
-                <span className="h-2.5 w-2.5 rounded-full border" style={{ background: on && idx >= 0 ? visible[idx].color : "transparent", borderColor: on && idx >= 0 ? visible[idx].color : "var(--line-strong)" }} />
-                {s.name}
-              </button>
-              <button type="button" disabled={disabled} onClick={() => selectOne(s.code)} className="border-l border-line px-2 py-1 text-faint hover:text-ink" title="Mostrar só esta categoria">só</button>
-            </span>
+            <div key={s.code} className={isOpen ? "w-full" : undefined}>
+              <Chip s={s} selected={selected} visible={visible} disabled={unit === "share" && s.code === TOTAL} toggle={toggle} only={selectOne}
+                extra={kids.length > 0 && (
+                  <button type="button" onClick={() => toggleOpen(s.code)} aria-expanded={isOpen} className="border-l border-line px-2 py-1 font-semibold text-brand hover:bg-brand-soft/60" title={isOpen ? "Ocultar subcategorias" : "Ver subcategorias"}>
+                    {isOpen ? "▾" : "▸"} {selKids > 0 ? `${selKids}/` : ""}{kids.length}
+                  </button>
+                )}
+              />
+              {isOpen && kids.length > 0 && (
+                <div className="mb-1 ml-3 mt-1.5 border-l-2 border-line pl-3">
+                  <div className="mb-1.5 flex flex-wrap gap-x-3 text-[11px]">
+                    <span className="text-faint">Subcategorias de {s.name} (linha tracejada)</span>
+                    <button type="button" onClick={() => setSelected([...selected.filter((c) => !kids.some((k) => k.code === c)), ...kids.map((k) => k.code)])} className="font-semibold text-brand hover:underline">todas</button>
+                    <button type="button" onClick={() => setSelected(selected.filter((c) => !kids.some((k) => k.code === c)))} className="font-semibold text-muted hover:underline">nenhuma</button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {kids.map((k) => <Chip key={k.code} s={k} selected={selected} visible={visible} toggle={toggle} only={selectOne} dashed />)}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -264,7 +298,7 @@ export function BudgetChart(props: HistoryProps) {
       )}
       <p className="mt-3 text-xs leading-relaxed text-faint">
         {mode === "real" ? `Valores corrigidos pela inflação (IPCA médio anual) para os preços de ${years[years.length - 1]}.` : "Valores nominais, sem correção pela inflação — o crescimento aparente inclui a alta de preços."}{" "}
-        {unit === "percap" && scope === "FEDERAL" ? "Por habitante usa a população estimada do Brasil. " : ""}{unit === "share" && parentSeries ? `A porcentagem é calculada sobre ${parentSeries.name}. ` : ""}Fonte: Tesouro Nacional (Siconfi/DCA) e IBGE (IPCA).
+        {unit === "percap" && scope === "FEDERAL" ? "Por habitante usa a população estimada do Brasil. " : ""}{unit === "share" ? "A porcentagem é sempre sobre o total, inclusive nas subcategorias. " : ""}Fonte: Tesouro Nacional (Siconfi/DCA) e IBGE (IPCA).
       </p>
     </div>
   );

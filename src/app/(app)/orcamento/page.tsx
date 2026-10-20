@@ -19,7 +19,10 @@ function perCapita(b: BudgetData, value: number): number | null {
   return pop ? value / pop : null;
 }
 
-function Bars({ items, scope, explain, child }: { items: Slice[]; scope: BudgetScope; explain?: boolean; child?: boolean }) {
+type Kind = "expense" | "revenue" | "nature";
+const KIND_LABEL: Record<Kind, string> = { expense: "Função orçamentária", revenue: "Fonte de receita", nature: "Tipo de gasto" };
+
+function Bars({ items, scope, explain, child, parent }: { items: Slice[]; scope: BudgetScope; explain?: Kind; child?: boolean; parent?: string }) {
   const max = Math.max(...items.map((i) => i.value), 1);
   const bar = (i: Slice) => (
     <>
@@ -45,14 +48,14 @@ function Bars({ items, scope, explain, child }: { items: Slice[]; scope: BudgetS
                 <span className="mt-1 hidden text-[11px] font-semibold text-brand group-open:inline-block">▾ ocultar subcategorias</span>
               </summary>
               <div className="mt-2 border-l-2 border-line pl-3">
-                <Bars items={i.children} scope={scope} child />
+                <Bars items={i.children} scope={scope} child explain={explain} parent={i.name} />
               </div>
             </details>
           ) : (
             bar(i)
           )}
-          {explain && !child && i.code !== "outros" && (
-            <Explain kind="budget" label="O que é isso?" text={`Função orçamentária "${i.name}" no orçamento do ${scope === "MUNICIPAL" ? "município" : scope === "ESTADUAL" ? "estado" : "governo federal"}.`} />
+          {explain && i.code !== "outros" && !i.code.endsWith(".out") && (
+            <Explain kind="budget" label="O que é isso?" text={`${child ? (explain === "expense" ? "Subfunção" : "Item de receita") : KIND_LABEL[explain]} "${i.name}"${parent ? `, dentro de "${parent}"` : ""}, no orçamento do ${scope === "MUNICIPAL" ? "município" : scope === "ESTADUAL" ? "estado" : "governo federal"}.`} />
           )}
         </li>
       ))}
@@ -97,6 +100,15 @@ function Detail({ b }: { b: BudgetData }) {
         <Kpi label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]})` : "sem dados do ano corrente"} />
       </section>
 
+      <section aria-label="Evolução em 10 anos">
+        <p className="eyebrow">Série histórica</p>
+        <h2 className="display text-2xl font-semibold">Evolução nos últimos 10 anos</h2>
+        <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Compare como a receita e a despesa mudaram ao longo do tempo. Filtre o período, escolha uma categoria e veja os valores corrigidos pela inflação ou por habitante.</p>
+        <Suspense fallback={<div className="skeleton h-[26rem]" aria-busy="true" />}>
+          <History scope={b.scope} />
+        </Suspense>
+      </section>
+
       {a && (a.expense.length > 0 || a.revenue.length > 0) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* mesmo destaque para os dois lados: de onde vem e para onde vai */}
@@ -114,7 +126,7 @@ function Detail({ b }: { b: BudgetData }) {
                 </div>
               ) : null;
             })()}
-            {a.revenue.length > 0 ? <Bars items={a.revenue} scope={b.scope} /> : <p className="text-sm text-muted">Sem detalhamento da receita para este ano.</p>}
+            {a.revenue.length > 0 ? <Bars items={a.revenue} scope={b.scope} explain="revenue" /> : <p className="text-sm text-muted">Sem detalhamento da receita para este ano.</p>}
             {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida. Por isso o total é muito maior do que a arrecadação de impostos e contribuições.</p>}
             {b.scope === "MUNICIPAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios.</p>}
           </section>
@@ -133,10 +145,19 @@ function Detail({ b }: { b: BudgetData }) {
                 </div>
               ) : null;
             })()}
-            {a.expense.length > 0 ? <Bars items={a.expense} scope={b.scope} explain /> : <p className="text-sm text-muted">Sem detalhamento da despesa para este ano.</p>}
+            {a.expense.length > 0 ? <Bars items={a.expense} scope={b.scope} explain="expense" /> : <p className="text-sm text-muted">Sem detalhamento da despesa para este ano.</p>}
             {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">“Encargos Especiais” inclui o pagamento de juros e do principal da dívida pública e transferências obrigatórias a estados e municípios.</p>}
           </section>
         </div>
+      )}
+
+      {a && a.nature?.length > 0 && (
+        <section aria-label="Em que se gasta" className="card p-5 sm:p-6">
+          <h2 className="display text-xl font-semibold">Em que se gasta</h2>
+          <p className="mb-4 text-xs text-muted">A mesma despesa de {a.year} vista pelo tipo de gasto, e não pela área.</p>
+          <Bars items={a.nature} scope={b.scope} explain="nature" />
+          <p className="mt-4 text-xs leading-relaxed text-faint">“Pessoal” inclui salários, encargos e também aposentadorias e pensões pagas pelo regime próprio. Investimentos são obras e equipamentos; o restante é custeio da máquina e dívida.</p>
+        </section>
       )}
 
       {c && (
@@ -150,15 +171,6 @@ function Detail({ b }: { b: BudgetData }) {
         </section>
       )}
 
-      <section aria-label="Evolução em 10 anos">
-        <p className="eyebrow">Série histórica</p>
-        <h2 className="display text-2xl font-semibold">Evolução nos últimos 10 anos</h2>
-        <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Compare como a receita e a despesa mudaram ao longo do tempo. Filtre o período, escolha uma categoria e veja os valores corrigidos pela inflação ou por habitante.</p>
-        <Suspense fallback={<div className="skeleton h-[26rem]" aria-busy="true" />}>
-          <History scope={b.scope} />
-        </Suspense>
-      </section>
-
       {!a && !c && <EmptyState title="Sem dados para esta esfera">O Tesouro Nacional ainda não tem os demonstrativos deste ente, ou a fonte não respondeu agora. Tente de novo mais tarde.</EmptyState>}
     </div>
   );
@@ -168,7 +180,7 @@ async function History({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
   const h = await getBudgetHistory(scope, user);
   if (!h) return <EmptyState title="Série histórica indisponível">Não consegui montar os últimos anos agora. Tente novamente em alguns minutos.</EmptyState>;
-  return <BudgetChart scope={h.scope} entity={h.entity} years={h.years} expense={h.expense} revenue={h.revenue} totals={h.totals} population={h.population} deflator={h.deflator} />;
+  return <BudgetChart scope={h.scope} entity={h.entity} years={h.years} expense={h.expense} revenue={h.revenue} nature={h.nature} totals={h.totals} population={h.population} deflator={h.deflator} />;
 }
 
 function Compare({ list }: { list: { scope: BudgetScope; b: BudgetData | null }[] }) {
@@ -198,24 +210,25 @@ function Compare({ list }: { list: { scope: BudgetScope; b: BudgetData | null }[
   );
 }
 
-export default async function OrcamentoPage({ searchParams }: { searchParams: Promise<{ esfera?: string }> }) {
-  const user = await requireUser();
-  const sp = await searchParams;
-  const all = sp.esfera === "todas";
-  const scope: BudgetScope = (SCOPE_SLUG[sp.esfera ?? "municipal"] as BudgetScope | undefined) ?? "MUNICIPAL";
+type DbUser = Awaited<ReturnType<typeof requireUser>>;
 
-  const results = all
-    ? await Promise.all(SCOPES.map(async (s) => ({ scope: s, b: await getBudget(s, user) })))
-    : null;
+function Skeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Carregando orçamento">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-24" />)}</div>
+      <div className="skeleton h-[28rem]" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2"><div className="skeleton h-80" /><div className="skeleton h-80" /></div>
+      <p className="text-center text-sm text-muted">Buscando os dados no Tesouro Nacional… na primeira vez pode levar alguns segundos.</p>
+    </div>
+  );
+}
+
+async function Content({ user, all, scope }: { user: DbUser; all: boolean; scope: BudgetScope }) {
+  const results = all ? await Promise.all(SCOPES.map(async (s) => ({ scope: s, b: await getBudget(s, user) }))) : null;
   const one = !all ? await getBudget(scope, user) : null;
   const updated = (all ? results!.map((r) => r.b?.fetchedAt).filter(Boolean) : [one?.fetchedAt]).filter(Boolean) as string[];
-  const place = all ? "Todas as esferas" : scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
-
   return (
-    <div>
-      <PageHeader eyebrow="Orçamento público · Tesouro Nacional (Siconfi)" title={place} />
-      <ScopeTabs base="/orcamento" scope={all ? "ALL" : scope} />
-
+    <>
       {all ? <Compare list={results!} /> : one ? <Detail b={one} /> : <EmptyState title="Dados indisponíveis">Não consegui buscar os demonstrativos no Tesouro Nacional agora. Tente novamente em alguns minutos.</EmptyState>}
 
       <div className="mt-8 max-w-3xl">
@@ -224,6 +237,25 @@ export default async function OrcamentoPage({ searchParams }: { searchParams: Pr
           {updated.length > 0 && <> Dados consultados em {new Date(updated.sort()[0]).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.</>}
         </Notice>
       </div>
+    </>
+  );
+}
+
+export default async function OrcamentoPage({ searchParams }: { searchParams: Promise<{ esfera?: string }> }) {
+  const user = await requireUser();
+  const sp = await searchParams;
+  const all = sp.esfera === "todas";
+  const scope: BudgetScope = (SCOPE_SLUG[sp.esfera ?? "municipal"] as BudgetScope | undefined) ?? "MUNICIPAL";
+  const place = all ? "Todas as esferas" : scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
+
+  // cabeçalho e abas aparecem na hora; os dados (lentos) carregam dentro do Suspense, que reinicia a cada esfera
+  return (
+    <div>
+      <PageHeader eyebrow="Orçamento público · Tesouro Nacional (Siconfi)" title={place} />
+      <ScopeTabs base="/orcamento" scope={all ? "ALL" : scope} />
+      <Suspense key={all ? "todas" : scope} fallback={<Skeleton />}>
+        <Content user={user} all={all} scope={scope} />
+      </Suspense>
     </div>
   );
 }
