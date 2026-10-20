@@ -48,7 +48,7 @@ async function siconfi(path: string, params: Record<string, string | number>): P
   return json.items ?? [];
 }
 
-const clean = (conta: string) => conta.replace(/^\d+(\.\d+)* - /, "").trim();
+const clean = (conta: string) => conta.replace(/^\d+(\.\d+)*\s*-?\s*/, "").trim();
 
 function slices(rows: { code: string; name: string; value: number }[], total: number, take = 12): Slice[] {
   const positive = rows.filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
@@ -59,32 +59,45 @@ function slices(rows: { code: string; name: string; value: number }[], total: nu
   return out;
 }
 
-async function fetchAnnual(id: number, year: number): Promise<{ annual: Annual | null; pop: number | null; name: string | null }> {
+type Raw = { code: string; name: string; value: number };
+type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[] };
+
+/** Interpreta os anexos I-E (despesa por função) e I-C (receita) do DCA, nos formatos antigo (até 2017) e novo. */
+function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
+  if (!exp.length) return { year, empty: true, name: null, pop: null, expenseTotal: 0, expense: [], revenueTotal: 0, revenue: [] };
+  const empenhada = exp.filter((i) => i.coluna === "Despesas Empenhadas");
+  const fn: Raw[] = empenhada.filter((i) => /^\d{2} - /.test(i.conta)).map((i) => ({ code: i.conta.slice(0, 2), name: clean(i.conta), value: i.valor }));
+  const fnSum = fn.reduce((a, r) => a + r.value, 0);
+  const expenseTotal = empenhada.find((i) => /^Despesas \(?Exceto Intraor/i.test(i.conta))?.valor ?? fnSum;
+
+  const realizada = rev.filter((i) => i.coluna === "Receitas Brutas Realizadas");
+  const origins: Raw[] = realizada
+    .filter((i) => /^RO\d\.[1-9](\.0+)+$/.test(i.cod_conta))
+    .map((i) => ({ code: i.cod_conta.slice(0, 5), name: clean(i.conta), value: i.valor }));
+  const cat = (c: string) => realizada.find((i) => /^RO\d\.0(\.0+)+$/.test(i.cod_conta) && i.cod_conta.startsWith(c))?.valor ?? 0;
+  const revenueTotal =
+    realizada.find((i) => i.cod_conta === "ReceitasExcetoIntraOrcamentarias")?.valor ??
+    realizada.find((i) => i.cod_conta === "TotalReceitas")?.valor ??
+    cat("RO1") + cat("RO2");
+
+  return { year, name: exp[0].instituicao ?? null, pop: exp[0].populacao ?? null, expenseTotal, expense: fn, revenueTotal, revenue: origins };
+}
+
+async function fetchDca(id: number, year: number): Promise<DcaYear> {
   const [exp, rev] = await Promise.all([
     siconfi("dca", { an_exercicio: year, no_anexo: "DCA-Anexo I-E", id_ente: id }),
     siconfi("dca", { an_exercicio: year, no_anexo: "DCA-Anexo I-C", id_ente: id }),
   ]);
-  if (!exp.length) return { annual: null, pop: null, name: null };
+  return parseDca(exp, rev, year);
+}
 
-  // despesa empenhada: total + funções (códigos de 2 dígitos)
-  const empenhada = exp.filter((i) => i.coluna === "Despesas Empenhadas");
-  const total = empenhada.find((i) => /^Despesas Exceto Intraor/i.test(i.conta))?.valor ?? empenhada.filter((i) => /^\d{2} - /.test(i.conta)).reduce((a, i) => a + i.valor, 0);
-  const fn = empenhada
-    .filter((i) => /^\d{2} - /.test(i.conta))
-    .map((i) => ({ code: i.conta.slice(0, 2), name: clean(i.conta), value: i.valor }));
-
-  // receita bruta realizada: total + origens (nível "X.Y.0.0.00.0.0")
-  const realizada = rev.filter((i) => i.coluna === "Receitas Brutas Realizadas");
-  const revTotal = realizada.find((i) => i.cod_conta === "ReceitasExcetoIntraOrcamentarias")?.valor ?? 0;
-  const origins = realizada
-    .filter((i) => /^RO\d\.[1-9]\.0\.0\.00\.0\.0$/.test(i.cod_conta))
-    .map((i) => ({ code: i.cod_conta, name: clean(i.conta), value: i.valor }));
-
-  const first = exp[0];
+async function fetchAnnual(id: number, year: number): Promise<{ annual: Annual | null; pop: number | null; name: string | null }> {
+  const d = await fetchDca(id, year);
+  if (d.empty) return { annual: null, pop: null, name: null };
   return {
-    annual: { year, expenseTotal: total, expense: slices(fn, total), revenueTotal: revTotal, revenue: slices(origins, revTotal, 8) },
-    pop: first.populacao ?? null,
-    name: first.instituicao ?? null,
+    annual: { year, expenseTotal: d.expenseTotal, expense: slices(d.expense, d.expenseTotal), revenueTotal: d.revenueTotal, revenue: slices(d.revenue, d.revenueTotal, 8) },
+    pop: d.pop,
+    name: d.name,
   };
 }
 
@@ -118,7 +131,7 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
 export async function getBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }, opts: { force?: boolean } = {}): Promise<BudgetData | null> {
   const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
   if (!id) return null;
-  const key = `budget:v1:${id}`;
+  const key = `budget:v2:${id}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && !opts.force && Date.now() - hit.fetchedAt.getTime() < DAY) return hit.data as unknown as BudgetData;
 
@@ -162,3 +175,133 @@ export function brlShort(v: number): string {
 }
 
 export const pct = (n: number, digits = 1) => `${(n * 100).toLocaleString("pt-BR", { maximumFractionDigits: digits })}%`;
+
+
+/* ───────── Histórico de 10 anos ───────── */
+
+export type Series = { code: string; name: string; values: Record<number, number> };
+
+export type BudgetHistory = {
+  scope: BudgetScope;
+  entity: string;
+  years: number[];
+  expense: Series[];
+  revenue: Series[];
+  totals: { expense: Record<number, number>; revenue: Record<number, number> };
+  population: Record<number, number>;
+  /** fator para converter o valor nominal de cada ano para os preços do último ano (IPCA) */
+  deflator: Record<number, number>;
+  fetchedAt: string;
+};
+
+/** Média anual do IPCA (número-índice, IBGE/SIDRA 1737) por ano; cache de 30 dias. */
+async function ipcaByYear(): Promise<Record<number, number>> {
+  const key = "ipca:v1";
+  const hit = await db.budgetCache.findUnique({ where: { key } });
+  if (hit && Date.now() - hit.fetchedAt.getTime() < 30 * DAY) return hit.data as unknown as Record<number, number>;
+  try {
+    const res = await fetch("https://servicodados.ibge.gov.br/api/v3/agregados/1737/periodos/-170/variaveis/2266?localidades=N1[all]", { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`IBGE ${res.status}`);
+    const json = (await res.json()) as { resultados: { series: { serie: Record<string, string> }[] }[] }[];
+    const serie = json[0].resultados[0].series[0].serie;
+    const byYear: Record<number, number[]> = {};
+    for (const [ym, v] of Object.entries(serie)) (byYear[Number(ym.slice(0, 4))] ??= []).push(Number(v));
+    const avg: Record<number, number> = {};
+    for (const [y, list] of Object.entries(byYear)) if (list.length >= 11) avg[Number(y)] = list.reduce((a, b) => a + b, 0) / list.length;
+    await db.budgetCache.upsert({ where: { key }, create: { key, data: avg as never }, update: { data: avg as never, fetchedAt: new Date() } });
+    return avg;
+  } catch (err) {
+    console.warn("[ipca]", (err as Error).message);
+    return hit ? (hit.data as unknown as Record<number, number>) : {};
+  }
+}
+
+async function dcaCached(id: number, year: number, ttlDays: number, force: boolean): Promise<DcaYear> {
+  const key = `budget:dca:v3:${id}:${year}`;
+  const hit = await db.budgetCache.findUnique({ where: { key } });
+  const d = hit?.data as unknown as DcaYear | undefined;
+  const ttl = (d?.empty ? 7 : ttlDays) * DAY;
+  if (hit && d && !force && Date.now() - hit.fetchedAt.getTime() < ttl) return d;
+  try {
+    const fresh = await fetchDca(id, year);
+    await db.budgetCache.upsert({ where: { key }, create: { key, data: fresh as never }, update: { data: fresh as never, fetchedAt: new Date() } });
+    return fresh;
+  } catch (err) {
+    console.warn("[budget:dca]", id, year, (err as Error).message);
+    return d ?? { year, empty: true, name: null, pop: null, expenseTotal: 0, expense: [], revenueTotal: 0, revenue: [] };
+  }
+}
+
+function toSeries(perYear: { year: number; rows: Raw[] }[]): Series[] {
+  const map = new Map<string, Series>();
+  for (const { year, rows } of perYear) {
+    for (const r of rows) {
+      const s = map.get(r.code) ?? { code: r.code, name: r.name, values: {} };
+      s.values[year] = (s.values[year] ?? 0) + r.value;
+      s.name = r.name; // o nome do ano mais recente prevalece (anos vêm em ordem crescente)
+      map.set(r.code, s);
+    }
+  }
+  const latest = perYear.length ? perYear[perYear.length - 1].year : 0;
+  return [...map.values()].sort((a, b) => (b.values[latest] ?? 0) - (a.values[latest] ?? 0) || Math.max(...Object.values(b.values)) - Math.max(...Object.values(a.values)));
+}
+
+/** Série de despesa (por função) e receita (por origem) dos últimos 10 anos fechados, com cache por ano no banco. */
+export async function getBudgetHistory(scope: BudgetScope, user: { uf: string; municipalityKey: string }, opts: { force?: boolean; years?: number } = {}): Promise<BudgetHistory | null> {
+  const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
+  if (!id) return null;
+  const now = new Date().getFullYear();
+  const n = opts.years ?? 10;
+
+  // último ano fechado com dados (o DCA sai com atraso)
+  let last = now - 1;
+  let probe = await dcaCached(id, last, 14, opts.force ?? false);
+  if (probe.empty) {
+    last = now - 2;
+    probe = await dcaCached(id, last, 14, opts.force ?? false);
+  }
+  const years = Array.from({ length: n }, (_, i) => last - (n - 1) + i);
+
+  // busca o resto em paralelo limitado (3 por vez)
+  const data = new Map<number, DcaYear>([[last, probe]]);
+  const pending = years.filter((y) => y !== last);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: 3 }, async () => {
+      while (next < pending.length) {
+        const y = pending[next++];
+        data.set(y, await dcaCached(id, y, y >= last - 1 ? 14 : 90, (opts.force ?? false) && y >= last - 1));
+      }
+    }),
+  );
+
+  const have = years.filter((y) => !data.get(y)?.empty);
+  if (!have.length) return null;
+  const ipca = await ipcaByYear();
+  const base = ipca[last] ?? ipca[have[have.length - 1]];
+  const deflator: Record<number, number> = {};
+  for (const y of years) if (ipca[y] && base) deflator[y] = base / ipca[y];
+
+  const population: Record<number, number> = {};
+  let carry: number | null = null;
+  for (const y of years) {
+    const p = data.get(y)?.pop ?? null;
+    if (p) carry = p;
+    if (carry) population[y] = carry;
+  }
+  const rev = have.filter((y) => (data.get(y)?.revenue.length ?? 0) > 0 || (data.get(y)?.revenueTotal ?? 0) > 0);
+  return {
+    scope,
+    entity: probe.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""),
+    years: have,
+    expense: toSeries(have.map((y) => ({ year: y, rows: data.get(y)!.expense }))),
+    revenue: toSeries(rev.map((y) => ({ year: y, rows: data.get(y)!.revenue }))),
+    totals: {
+      expense: Object.fromEntries(have.map((y) => [y, data.get(y)!.expenseTotal])),
+      revenue: Object.fromEntries(rev.map((y) => [y, data.get(y)!.revenueTotal])),
+    },
+    population,
+    deflator,
+    fetchedAt: new Date().toISOString(),
+  };
+}

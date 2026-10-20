@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { BudgetChart } from "@/components/budget-chart";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
-import { BRAZIL_POPULATION, brlShort, getBudget, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
+import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -74,41 +76,78 @@ function Detail({ b }: { b: BudgetData }) {
         <Kpi label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]})` : "sem dados do ano corrente"} />
       </section>
 
-      {a && a.expense.length > 0 && (
-        <section aria-label="Para onde vai o dinheiro" className="card p-5 sm:p-6">
-          <h2 className="display text-xl font-semibold">Para onde vai o dinheiro</h2>
-          <p className="mb-5 text-xs text-muted">Despesa empenhada em {a.year}, por função de governo.</p>
-          <Bars items={a.expense} scope={b.scope} explain />
-          {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">“Encargos Especiais” inclui o pagamento de juros e do principal da dívida pública e transferências obrigatórias a estados e municípios.</p>}
+      {a && (a.expense.length > 0 || a.revenue.length > 0) && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* mesmo destaque para os dois lados: de onde vem e para onde vai */}
+          <section aria-label="De onde vem o dinheiro" className="card p-5 sm:p-6">
+            <p className="eyebrow !text-municipal">Entradas</p>
+            <h2 className="display text-2xl font-semibold">De onde vem o dinheiro</h2>
+            <p className="mb-4 text-xs text-muted">Receita realizada em {a.year}: <b className="text-ink">{brlShort(a.revenueTotal)}</b>, por origem.</p>
+            {(() => {
+              const tax = a.revenue.find((r) => r.code === "RO1.1");
+              const transfer = a.revenue.find((r) => r.code === "RO1.7");
+              return tax || transfer ? (
+                <div className="mb-5 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Tributos próprios</p><p className="display text-xl font-semibold">{tax ? pct(tax.share, 0) : "—"}</p><p className="text-[11px] text-faint">impostos, taxas e contribuições</p></div>
+                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Transferências</p><p className="display text-xl font-semibold">{transfer ? pct(transfer.share, 0) : "—"}</p><p className="text-[11px] text-faint">repasses de outros governos</p></div>
+                </div>
+              ) : null;
+            })()}
+            {a.revenue.length > 0 ? <Bars items={a.revenue} scope={b.scope} /> : <p className="text-sm text-muted">Sem detalhamento da receita para este ano.</p>}
+            {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida. Por isso o total é muito maior do que a arrecadação de impostos e contribuições.</p>}
+            {b.scope === "MUNICIPAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios.</p>}
+          </section>
+
+          <section aria-label="Para onde vai o dinheiro" className="card p-5 sm:p-6">
+            <p className="eyebrow !text-estadual">Saídas</p>
+            <h2 className="display text-2xl font-semibold">Para onde vai o dinheiro</h2>
+            <p className="mb-4 text-xs text-muted">Despesa empenhada em {a.year}: <b className="text-ink">{brlShort(a.expenseTotal)}</b>, por função de governo.</p>
+            {(() => {
+              const top = a.expense.find((x) => x.code !== "outros");
+              const top3 = a.expense.filter((x) => x.code !== "outros").slice(0, 3).reduce((acc, x) => acc + x.share, 0);
+              return top ? (
+                <div className="mb-5 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Maior gasto</p><p className="display truncate text-xl font-semibold">{top.name}</p><p className="text-[11px] text-faint">{pct(top.share, 0)} do total</p></div>
+                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">3 maiores juntas</p><p className="display text-xl font-semibold">{pct(top3, 0)}</p><p className="text-[11px] text-faint">da despesa total</p></div>
+                </div>
+              ) : null;
+            })()}
+            {a.expense.length > 0 ? <Bars items={a.expense} scope={b.scope} explain /> : <p className="text-sm text-muted">Sem detalhamento da despesa para este ano.</p>}
+            {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">“Encargos Especiais” inclui o pagamento de juros e do principal da dívida pública e transferências obrigatórias a estados e municípios.</p>}
+          </section>
+        </div>
+      )}
+
+      {c && (
+        <section aria-label="Ano corrente" className="card p-5 sm:p-6">
+          <h2 className="display text-xl font-semibold">{c.year}: previsto x realizado</h2>
+          <p className="mb-5 text-xs text-muted">Acumulado até o {c.period}º bimestre ({PERIOD_LABEL[c.period]}), segundo o relatório bimestral de execução orçamentária.</p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Progress label="Receita arrecadada" done={c.revenue.realized} of={c.revenue.updated} scope={b.scope} sub={`Previsão inicial: ${brlShort(c.revenue.initial)} · atualizada: ${brlShort(c.revenue.updated)}`} />
+            <Progress label="Despesa empenhada" done={c.expense.committed} of={c.expense.updated} scope={b.scope} sub={`Dotação inicial: ${brlShort(c.expense.initial)} · atualizada: ${brlShort(c.expense.updated)}`} />
+          </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {a && a.revenue.length > 0 && (
-          <section aria-label="De onde vem" className="card p-5 sm:p-6">
-            <h2 className="display text-xl font-semibold">De onde vem o dinheiro</h2>
-            <p className="mb-5 text-xs text-muted">Receita realizada em {a.year}, por origem.</p>
-            <Bars items={a.revenue} scope={b.scope} />
-            {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida. Por isso o total é muito maior do que a arrecadação de impostos e contribuições.</p>}
-            {b.scope === "MUNICIPAL" && <p className="mt-4 text-xs leading-relaxed text-faint">As barras mostram as origens dentro das receitas correntes. Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios.</p>}
-          </section>
-        )}
-
-        {c && (
-          <section aria-label="Ano corrente" className="card p-5 sm:p-6">
-            <h2 className="display text-xl font-semibold">{c.year}: previsto x realizado</h2>
-            <p className="mb-5 text-xs text-muted">Acumulado até o {c.period}º bimestre ({PERIOD_LABEL[c.period]}), segundo o relatório bimestral de execução orçamentária.</p>
-            <div className="space-y-6">
-              <Progress label="Receita arrecadada" done={c.revenue.realized} of={c.revenue.updated} scope={b.scope} sub={`Previsão inicial: ${brlShort(c.revenue.initial)} · atualizada: ${brlShort(c.revenue.updated)}`} />
-              <Progress label="Despesa empenhada" done={c.expense.committed} of={c.expense.updated} scope={b.scope} sub={`Dotação inicial: ${brlShort(c.expense.initial)} · atualizada: ${brlShort(c.expense.updated)}`} />
-            </div>
-          </section>
-        )}
-      </div>
+      <section aria-label="Evolução em 10 anos">
+        <p className="eyebrow">Série histórica</p>
+        <h2 className="display text-2xl font-semibold">Evolução nos últimos 10 anos</h2>
+        <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Compare como a receita e a despesa mudaram ao longo do tempo. Filtre o período, escolha uma categoria e veja os valores corrigidos pela inflação ou por habitante.</p>
+        <Suspense fallback={<div className="skeleton h-[26rem]" aria-busy="true" />}>
+          <History scope={b.scope} />
+        </Suspense>
+      </section>
 
       {!a && !c && <EmptyState title="Sem dados para esta esfera">O Tesouro Nacional ainda não tem os demonstrativos deste ente, ou a fonte não respondeu agora. Tente de novo mais tarde.</EmptyState>}
     </div>
   );
+}
+
+async function History({ scope }: { scope: BudgetScope }) {
+  const user = await requireUser();
+  const h = await getBudgetHistory(scope, user);
+  if (!h) return <EmptyState title="Série histórica indisponível">Não consegui montar os últimos anos agora. Tente novamente em alguns minutos.</EmptyState>;
+  return <BudgetChart scope={h.scope} entity={h.entity} years={h.years} expense={h.expense} revenue={h.revenue} totals={h.totals} population={h.population} deflator={h.deflator} />;
 }
 
 function Compare({ list }: { list: { scope: BudgetScope; b: BudgetData | null }[] }) {

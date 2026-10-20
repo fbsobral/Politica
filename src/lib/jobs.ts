@@ -5,7 +5,7 @@ import { classifyPending, runIngest } from "@/lib/news/ingest";
 import { getSettings } from "@/lib/settings";
 import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
-import { getBudget } from "@/lib/budget";
+import { getBudget, getBudgetHistory } from "@/lib/budget";
 
 export const JOBS = {
   /** coleta de notícias + classificação + alertas (a cada hora) */
@@ -60,6 +60,7 @@ export const JOBS = {
     const users = await db.user.findMany({ where: { uf: { not: null }, municipalityKey: { not: null } }, select: { uf: true, municipalityKey: true }, distinct: ["uf", "municipalityKey"] });
     let n = 0;
     await getBudget("FEDERAL", { uf: "SP", municipalityKey: "" }, { force: true });
+    await getBudgetHistory("FEDERAL", { uf: "SP", municipalityKey: "" }, { force: true });
     n++;
     const ufs = new Set<string>();
     for (const u of users) {
@@ -67,9 +68,11 @@ export const JOBS = {
       if (!ufs.has(loc.uf)) {
         ufs.add(loc.uf);
         await getBudget("ESTADUAL", loc, { force: true });
+        await getBudgetHistory("ESTADUAL", loc, { force: true });
         n++;
       }
       await getBudget("MUNICIPAL", loc, { force: true });
+      await getBudgetHistory("MUNICIPAL", loc, { force: true });
       n++;
     }
     return { refreshed: n };

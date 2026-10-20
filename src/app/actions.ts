@@ -23,6 +23,7 @@ export async function saveLocation(formData: FormData) {
   syncUf(uf).catch((e) => console.warn("[syncUf]", (e as Error).message));
   // coleta já as notícias da cidade escolhida, sem esperar a próxima hora cheia
   runJobDetached("ingest").catch(() => undefined);
+  runJobDetached("budget").catch(() => undefined); // já deixa o orçamento da cidade em cache
   revalidatePath("/", "layout");
   redirect("/");
 }
