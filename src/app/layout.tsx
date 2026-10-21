@@ -19,6 +19,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: { default: "Política", template: "%s · Política" },
   description: "Notícias e representantes da política municipal, estadual e federal.",
+  appleWebApp: { capable: true, title: "Política", statusBarStyle: "default" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
