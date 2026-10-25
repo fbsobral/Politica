@@ -6,6 +6,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { SubmitButton } from "@/components/submit-button";
 import { Notice, PageHeader, SourceAvatar } from "@/components/ui";
 import { db } from "@/lib/db";
+import { PARTIES } from "@/lib/quiz/data";
 import { requireAdmin } from "@/lib/user";
 import { BRANCH_LABEL, SCOPE_LABEL, SOURCE_CATEGORY_LABEL, UFS } from "@/lib/taxonomy";
 
@@ -60,6 +61,9 @@ export default async function FeedsPage({ searchParams }: { searchParams: Promis
             </label>
             <label className="block"><span className={label}>Município</span><input name="municipality" className="input" placeholder="Só se municipal" /></label>
           </div>
+          <label className="block"><span className={label}>Site de partido (opcional)</span>
+            <select name="party" defaultValue="" className="input"><option value="">— não é de partido —</option>{PARTIES.map((p) => <option key={p.sigla} value={p.sigla}>{p.sigla}</option>)}</select>
+          </label>
           <p className="text-xs text-faint">UF e município valem para feeds locais. O feed é testado antes de salvar.</p>
           <SubmitButton className="btn btn-primary w-full" pendingText="Testando o feed…">Testar e adicionar</SubmitButton>
         </form>
@@ -80,6 +84,7 @@ export default async function FeedsPage({ searchParams }: { searchParams: Promis
                     <span className="chip">{SCOPE_LABEL[f.scope]}{f.municipality ? ` · ${f.municipality}` : f.uf ? ` · ${f.uf}` : ""}</span>
                     {f.branch && <span className="chip">{BRANCH_LABEL[f.branch]}</span>}
                     {f.factCheck && <span className="chip !bg-municipal-soft !text-municipal">checagem</span>}
+                    {f.party && <span className="chip !bg-brand-soft !text-brand">partido {f.party}</span>}
                   </div>
                   <div className="truncate text-xs text-muted">{f.feedUrl}</div>
                   <div className="text-xs">

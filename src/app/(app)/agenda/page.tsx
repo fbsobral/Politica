@@ -129,7 +129,7 @@ async function LocalNews({ user, scope }: { user: { id: string; uf: string; muni
         Não existe uma agenda oficial única {who} em formato aberto. Aqui mostramos o que a imprensa publicou sobre <b>sessões, pautas e votações</b>, coletado pelo robô. Para a pauta oficial, consulte o site da casa legislativa.
       </Notice>
       {items.length ? (
-        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">{items.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />)}</div>
+        <div className="grid grid-cols-1 gap-3.5">{items.map((a, i) => <ArticleCard key={a.id} index={i} a={{ ...a, favorited: fav.has(a.id) }} />)}</div>
       ) : (
         <EmptyState title="Nada sobre sessões ou votações por enquanto">O robô procura essas notícias a cada hora. Ajuste as buscas em Admin → Buscas se quiser ampliar.</EmptyState>
       )}

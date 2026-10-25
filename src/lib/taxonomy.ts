@@ -20,6 +20,7 @@ export const SOURCE_CATEGORY_LABEL: Record<SourceCategory, string> = {
   RADIO: "Rádio",
   AGENCIA_NOTICIAS: "Agência de notícias",
   ORGAO_OFICIAL: "Órgão oficial",
+  PARTIDO: "Site de partido",
   REGIONAL: "Veículo regional",
   BLOG_INDEPENDENTE: "Independente / blog",
   OUTRO: "Outros",

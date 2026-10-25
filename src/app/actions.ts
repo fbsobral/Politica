@@ -7,6 +7,7 @@ import { sendDigestNow, type DigestKind } from "@/lib/digest";
 import { runJobDetached } from "@/lib/job-runner";
 import { listMunicipalities } from "@/lib/ibge";
 import { syncUf } from "@/lib/politicians/sync";
+import { PARTIES } from "@/lib/quiz/data";
 import { UFS } from "@/lib/taxonomy";
 import { getDbUser } from "@/lib/user";
 
@@ -111,4 +112,42 @@ export async function loadUfData() {
   const user = await getDbUser();
   if (user.uf) await syncUf(user.uf);
   revalidatePath("/representantes");
+}
+
+/** Define o partido do usuário (sigla do app) ou "NONE" (não tenho partido). */
+export async function setMyParty(formData: FormData) {
+  const user = await getDbUser();
+  const sigla = String(formData.get("party") ?? "");
+  const back = String(formData.get("back") ?? "/partidos");
+  const ok = sigla === "NONE" || PARTIES.some((p) => p.sigla === sigla);
+  if (ok) await db.user.update({ where: { id: user.id }, data: { party: sigla } });
+  revalidatePath("/partidos", "layout");
+  redirect(back.startsWith("/") ? back : "/partidos");
+}
+
+/** Guarda o resultado do quiz de perfil político do usuário. */
+export async function saveQuiz(answers: Record<string, string>, weights: Record<string, number>): Promise<{ ok: boolean }> {
+  const user = await getDbUser();
+  const cleanA: Record<string, string> = {};
+  for (let n = 1; n <= 12; n++) {
+    const v = answers[String(n)];
+    if (v === "a" || v === "b" || v === "c" || (n === 12 && v === "x")) cleanA[String(n)] = v;
+  }
+  if (Object.keys(cleanA).length < 12) return { ok: false };
+  const cleanW: Record<string, number> = {};
+  for (const k of ["economia", "costumes", "seguranca", "ambiente", "educacao", "estilo"]) {
+    const w = Number(weights[k]);
+    cleanW[k] = [0, 1, 2, 3].includes(w) ? w : 2;
+  }
+  await db.user.update({ where: { id: user.id }, data: { quizAnswers: cleanA, quizWeights: cleanW, quizAt: new Date() } });
+  return { ok: true };
+}
+
+/** Igual a setMyParty, mas sem redirecionar (usado no fim do quiz). */
+export async function saveMyParty(sigla: string): Promise<{ ok: boolean }> {
+  const user = await getDbUser();
+  if (!(sigla === "NONE" || PARTIES.some((p) => p.sigla === sigla))) return { ok: false };
+  await db.user.update({ where: { id: user.id }, data: { party: sigla } });
+  revalidatePath("/partidos", "layout");
+  return { ok: true };
 }

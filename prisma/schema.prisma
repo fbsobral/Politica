@@ -40,6 +40,7 @@ enum SourceCategory {
   RADIO
   AGENCIA_NOTICIAS
   ORGAO_OFICIAL
+  PARTIDO
   REGIONAL
   BLOG_INDEPENDENTE
   OUTRO
@@ -91,6 +92,12 @@ model User {
   digestTiersWeekly  String @default("1,2,3")
   digestTiersMonthly String @default("1,2,3")
   alertEmails      Boolean  @default(true)
+  /// sigla do partido do usuário (ex.: "PT"); "NONE" = respondeu que não tem partido; null = ainda não perguntado
+  party            String?
+  /// respostas e pesos do quiz de perfil político (ver lib/quiz)
+  quizAnswers      Json?
+  quizWeights      Json?
+  quizAt           DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -138,6 +145,9 @@ model Article {
   clusterKey      String
   searchText      String       @default("")
   classified      Boolean      @default(false)
+  /// siglas dos partidos citados (detectadas por regras, ver lib/parties.ts)
+  parties         String[]     @default([])
+  partiesChecked  Boolean      @default(false)
   origin          String?
   sourceId        String
   source          Source       @relation(fields: [sourceId], references: [id])
@@ -154,6 +164,7 @@ model Article {
   @@index([scope, uf, publishedAt(sort: Desc)])
   @@index([scope, uf, municipalityKey, publishedAt(sort: Desc)])
   @@index([clusterKey])
+  @@index([parties], type: Gin)
   @@index([classified])
   @@index([sourceId])
 }
@@ -264,6 +275,8 @@ model FeedSource {
   municipalityKey String?
   active          Boolean        @default(true)
   factCheck       Boolean        @default(false)
+  /// sigla do partido dono do site (as notícias desse feed ficam ligadas ao partido)
+  party           String?
   lastOkAt        DateTime?
   lastError       String?
   lastCount       Int?

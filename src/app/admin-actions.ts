@@ -110,6 +110,7 @@ export async function runJobNow(job: string) {
 import { saveSettings, SETTING_DEFAULTS, SETTING_GROUPS, type SettingGroup, type Settings } from "@/lib/settings";
 import { probeFeed } from "@/lib/news/ingest";
 import { normalize } from "@/lib/text";
+import { PARTIES } from "@/lib/quiz/data";
 import { UFS } from "@/lib/taxonomy";
 
 function go(kind: "ok" | "erro", msg: string, path = "/admin"): never {
@@ -157,11 +158,12 @@ export async function resetRobotSettings(formData: FormData) {
 const feedSchema = z.object({
   name: z.string().trim().min(2).max(80),
   feedUrl: z.string().trim().url("URL inválida"),
-  category: z.enum(["PORTAL_NACIONAL", "JORNAL", "REVISTA", "TV", "RADIO", "AGENCIA_NOTICIAS", "ORGAO_OFICIAL", "REGIONAL", "BLOG_INDEPENDENTE", "OUTRO"]),
+  category: z.enum(["PORTAL_NACIONAL", "JORNAL", "REVISTA", "TV", "RADIO", "AGENCIA_NOTICIAS", "ORGAO_OFICIAL", "PARTIDO", "REGIONAL", "BLOG_INDEPENDENTE", "OUTRO"]),
   scope: z.enum(["MUNICIPAL", "ESTADUAL", "FEDERAL"]),
   branch: z.enum(["", "LEGISLATIVO", "EXECUTIVO", "JUDICIARIO"]),
   uf: z.string().trim().toUpperCase().optional(),
   municipality: z.string().trim().optional(),
+  party: z.string().trim().optional(),
 });
 
 function goFeeds(k: "ok" | "erro", m: string): never {
@@ -183,7 +185,8 @@ export async function addFeed(formData: FormData) {
         name: d.name,
         feedUrl: d.feedUrl,
         homepage: new URL(d.feedUrl).origin,
-        category: d.category,
+        category: d.party ? "PARTIDO" : d.category,
+        party: d.party && PARTIES.some((p) => p.sigla === d.party) ? d.party : null,
         scope: d.scope,
         branch: d.branch || null,
         uf: d.scope === "FEDERAL" ? null : d.uf,

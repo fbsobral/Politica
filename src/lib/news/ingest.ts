@@ -6,6 +6,9 @@ import { UFS } from "@/lib/taxonomy";
 import { clusterKey, normalize, stripHtml, truncate } from "@/lib/text";
 import { classifyArticles, classifySources, setAiEnabled, type ClassifyInput } from "./classify";
 import { applyTiers } from "./tiers";
+import { PARTIES } from "@/lib/quiz/data";
+import { detectParties, searchQueryFor } from "@/lib/parties";
+import { PARTY_FEEDS, partyFeedName, partyFeedUrl } from "./party-feeds";
 import { FACT_CHECK_FEEDS, MORE_FEEDS, NATIONAL_FEEDS, guessSourceCategory } from "./sources";
 
 const parser = new Parser({
@@ -43,6 +46,7 @@ type Candidate = {
   sourceName: string;
   sourceHomepage?: string;
   factCheck?: boolean;
+  party?: string | null;
   scope: Scope;
   scopeLocked: boolean;
   branch: Branch | null;
@@ -61,6 +65,7 @@ type Origin = {
   feedId?: string;
   branch?: Branch | null;
   factCheck?: boolean;
+  party?: string | null;
 };
 
 // days = 0 (sem limite): o Google News só devolve os itens mais recentes (~100), então usamos uma janela de 30 dias
@@ -106,6 +111,8 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
         sourceName = (fromTag || m?.[2] || "").trim();
         if (m && (!fromTag || m[2].trim() === fromTag.trim())) title = m[1].trim();
         if (!sourceName) continue;
+      } else if (o.url.includes("news.google.com")) {
+        title = title.replace(/ - [^-]+$/, ""); // busca no Google News restrita a um site: tira o "- site" do título
       }
       const description = o.fixedSource
         ? truncate(stripHtml(item.contentSnippet ?? item.content ?? item.summary ?? ""), 400) || null
@@ -120,6 +127,7 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
         sourceName,
         sourceHomepage: o.fixedSource?.homepage,
         factCheck: o.factCheck,
+        party: o.party ?? null,
         scope: o.scope,
         scopeLocked: !o.fixedSource,
         branch: o.branch ?? null,
@@ -129,7 +137,9 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
       });
     }
     if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastOkAt: new Date(), lastError: null, lastCount: out.length } }).catch(() => undefined);
-    return out;
+    // a busca por partido traz ruído (siglas e nomes comuns): só fica o que cita o partido de fato
+    const partyOrigin = o.label.match(/^gnews:party:(.+)$/)?.[1];
+    return partyOrigin ? out.filter((c) => detectParties(c.title).includes(partyOrigin)) : out;
   } catch (err) {
     console.warn(`[ingest] falha em ${o.label}:`, (err as Error).message);
     if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastError: (err as Error).message.slice(0, 200) } }).catch(() => undefined);
@@ -172,6 +182,14 @@ export async function ensureDefaultFeeds(): Promise<void> {
     });
     await db.setting.create({ data: { key: "seed_more_feeds_1", value: "1" } });
   }
+  // sites oficiais dos partidos (as notícias deles ficam ligadas ao partido; o admin gerencia em Feeds RSS)
+  if (!(await db.setting.findUnique({ where: { key: "seed_party_feeds_1" } }))) {
+    await db.feedSource.createMany({
+      data: PARTY_FEEDS.map((p) => ({ name: partyFeedName(p), feedUrl: partyFeedUrl(p), homepage: p.site ? `https://${p.site}` : new URL(p.feed!).origin, category: "PARTIDO" as const, scope: "FEDERAL" as const, party: p.sigla })),
+      skipDuplicates: true,
+    });
+    await db.setting.create({ data: { key: "seed_party_feeds_1", value: "1" } });
+  }
   for (const f of NATIONAL_FEEDS.filter((x) => x.branch)) {
     await db.feedSource.updateMany({ where: { feedUrl: f.feedUrl, branch: null }, data: { branch: f.branch } });
   }
@@ -195,6 +213,7 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
       feedId: f.id,
       branch: f.branch,
       factCheck: f.factCheck,
+      party: f.party,
     });
   }
 
@@ -210,6 +229,11 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
       const query = q("Federal", p);
       if (query.trim()) origins.push({ label: `gnews:federal:${branch}`, url: googleNewsUrl(query, days), scope: "FEDERAL", uf: null, municipalityKey: null, branch });
     }
+  }
+
+  // notícias específicas de cada partido (aba Partidos)
+  if (gnews) {
+    for (const p of PARTIES) origins.push({ label: `gnews:party:${p.sigla}`, url: googleNewsUrl(searchQueryFor(p), days), scope: "FEDERAL", uf: null, municipalityKey: null });
   }
 
   const users = await db.user.findMany({
@@ -303,6 +327,18 @@ function isLocalOrigin(origin: string | null): boolean {
 
 export type IngestResult = { fetched: number; created: number; classified: number; removed: number; newArticleIds: string[] };
 
+/** Partidos citados no título/resumo. */
+function partiesOf(title: string, description: string | null): string[] {
+  return detectParties(`${title} ${description ?? ""}`);
+}
+
+/** Marca os artigos antigos (ainda não verificados) com os partidos citados. */
+export async function backfillParties(limit = 3000): Promise<number> {
+  const rows = await db.article.findMany({ where: { partiesChecked: false }, select: { id: true, title: true, description: true }, take: limit });
+  for (const r of rows) await db.article.update({ where: { id: r.id }, data: { parties: partiesOf(r.title, r.description), partiesChecked: true } });
+  return rows.length;
+}
+
 export async function runIngest(): Promise<IngestResult> {
   const cfg = await getSettings();
   if (cfg.aiModel) process.env.ANTHROPIC_MODEL = cfg.aiModel;
@@ -356,9 +392,10 @@ export async function runIngest(): Promise<IngestResult> {
   const sourceIds = new Map<string, string>();
   const names = [...new Set(fresh.map((c) => c.sourceName))];
   const knownFeeds = new Map(NATIONAL_FEEDS.map((f) => [f.name, f]));
+  const partySourceNames = new Map<string, "PARTIDO">(PARTY_FEEDS.map((p) => [partyFeedName(p), "PARTIDO" as const]));
   for (const name of names) {
     const feed = knownFeeds.get(name);
-    const guessed = feed?.category ?? guessSourceCategory(name);
+    const guessed = feed?.category ?? partySourceNames.get(name) ?? guessSourceCategory(name);
     const src = await db.source.upsert({
       where: { name },
       create: {
@@ -366,6 +403,7 @@ export async function runIngest(): Promise<IngestResult> {
         homepage: feed?.homepage ?? fresh.find((c) => c.sourceName === name)?.sourceHomepage ?? null,
         category: guessed ?? "OUTRO",
         categoryKnown: guessed !== null,
+        ...(partySourceNames.has(name) ? { tier: 3, tierBy: "default" } : {}),
         factCheck: fresh.find((c) => c.sourceName === name)?.factCheck ?? false,
       },
       update: fresh.find((c) => c.sourceName === name)?.factCheck ? { factCheck: true } : {},
@@ -391,6 +429,8 @@ export async function runIngest(): Promise<IngestResult> {
           factCheck: Boolean(c.factCheck) || (srcFactCheck.get(c.sourceName) ?? false),
           clusterKey: clusterKey(c.title),
           searchText: normalize(`${c.title} ${c.description ?? ""}`),
+          parties: [...new Set([...partiesOf(c.title, c.description), ...(c.party ? [c.party] : [])])],
+          partiesChecked: true,
           origin: c.origin,
           sourceId: sourceIds.get(c.sourceName)!,
         },
@@ -422,6 +462,7 @@ export async function runIngest(): Promise<IngestResult> {
     removed += r.removed;
     if (r.classified + r.removed < 300) break;
   }
+  await backfillParties().catch((err) => console.warn("[ingest] backfill de partidos", (err as Error).message));
   return { fetched: all.length, created: newArticleIds.length, classified, removed, newArticleIds };
 }
 
@@ -431,7 +472,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
     where: { classified: false },
     orderBy: { publishedAt: "desc" },
     take: limit,
-    include: { source: { select: { name: true, factCheck: true } } },
+    include: { source: { select: { name: true, factCheck: true, category: true } } },
   });
   if (!pending.length) return { classified: 0, removed: 0, reused: 0 };
 
@@ -455,7 +496,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   let classified = 0;
   let reused = 0;
   for (const a of pending) {
-    const keep = a.source.factCheck || a.factCheck;
+    const keep = a.source.factCheck || a.factCheck || a.source.category === "PARTIDO";
     if (!keep && !a.municipalityKey && !isLocalOrigin(a.origin) && rejected.has(a.clusterKey)) {
       toRemove.push(a.id); // mesmo assunto já julgado "não é política"
       continue;
@@ -493,7 +534,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   const newlyRejected = new Set<string>();
   for (const r of results) {
     const orig = toAi.find((p) => p.id === r.id)!;
-    if (!r.political && !orig.source.factCheck && !orig.factCheck) {
+    if (!r.political && !orig.source.factCheck && !orig.factCheck && orig.source.category !== "PARTIDO") {
       toRemove.push(r.id);
       if (!orig.municipalityKey && !isLocalOrigin(orig.origin)) newlyRejected.add(orig.clusterKey);
       continue;

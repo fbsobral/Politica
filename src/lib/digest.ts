@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import * as email from "@/lib/email";
 import { appUrl, escapeHtml, layout, sendEmail } from "@/lib/email";
 import { followedNeedles } from "@/lib/feed";
+import { partyBySigla } from "@/lib/parties";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
 import { NEWS_CATEGORY_LABEL, SCOPE_LABEL, UFS } from "@/lib/taxonomy";
 
@@ -140,7 +141,7 @@ function congressSection(c: Congress, kind: DigestKind): string {
   );
 }
 
-type DigestUser = { id: string; email: string; uf: string | null; municipality: string | null; municipalityKey: string | null; digestTiersDaily?: string; digestTiersWeekly?: string; digestTiersMonthly?: string };
+type DigestUser = { id: string; email: string; party?: string | null; uf: string | null; municipality: string | null; municipalityKey: string | null; digestTiersDaily?: string; digestTiersWeekly?: string; digestTiersMonthly?: string };
 
 async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, congressCache: Map<string, Promise<Congress>>): Promise<boolean | "empty"> {
   const since = new Date(Date.now() - PERIOD[kind].days * 86400000);
@@ -149,7 +150,8 @@ async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, co
   const needles = await followedNeedles(user.id);
   const tiers = parseTiers(kind === "daily" ? user.digestTiersDaily : kind === "weekly" ? user.digestTiersWeekly : user.digestTiersMonthly);
 
-  const [mun, est, fed, congress, checks, follows] = await Promise.all([
+  const mine = user.party && user.party !== "NONE" ? partyBySigla(user.party) : undefined;
+  const [mun, est, fed, congress, checks, follows, partyBlock] = await Promise.all([
     local ? newsBlock(kind, cache, `mun:${uf}:${user.municipalityKey}`, `Municipal — ${user.municipality}`, { scope: "MUNICIPAL", ...local }, since, tiers) : Promise.resolve({ items: [], summary: null } as Block),
     newsBlock(kind, cache, `est:${uf}`, `Estadual — ${UFS[uf]}`, { scope: "ESTADUAL", uf }, since, tiers),
     newsBlock(kind, cache, "fed", "Federal", { scope: "FEDERAL" }, since, tiers),
@@ -165,9 +167,12 @@ async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, co
     needles.length
       ? topNews({ factCheck: false, OR: needles.map((n) => ({ searchText: { contains: n } })) }, since, PERIOD[kind].take, tiers)
       : Promise.resolve([] as Item[]),
+    mine ? newsBlock(kind, cache, `party:${mine.sigla}`, `Partido ${mine.sigla} (${mine.nome})`, { parties: { has: mine.sigla } }, since, [1, 2, 3]) : Promise.resolve({ items: [], summary: null } as Block),
   ]);
+  // resumo de quem o usuário segue (um por usuário, pois cada um segue pessoas diferentes)
+  const followSummary = follows.length >= 3 ? await summarize(kind, "Políticos que o leitor segue", follows.map((i) => `${i.title} (${i.source})`)) : null;
 
-  if (![mun, est, fed, checks].some((b) => b.items.length) && !congress.votes.length && !follows.length) return "empty";
+  if (![mun, est, fed, checks, partyBlock].some((b) => b.items.length) && !congress.votes.length && !follows.length) return "empty";
 
   const intro =
     kind === "daily"
@@ -180,7 +185,8 @@ async function buildAndSend(user: DigestUser, kind: DigestKind, cache: Cache, co
     newsSection(`Estado · ${UFS[uf]}`, est) +
     newsSection(SCOPE_LABEL.FEDERAL, fed) +
     congressSection(congress, kind) +
-    (follows.length ? `${H2("Quem você segue")}<ul style="padding-left:18px;margin:0">${follows.map(A).join("")}</ul>` : "") +
+    (mine && partyBlock.items.length ? newsSection(`Seu partido · ${mine.sigla}`, partyBlock) : "") +
+    (follows.length ? `${H2("Quem você segue")}${P(followSummary)}<ul style="padding-left:18px;margin:0">${follows.map(A).join("")}</ul>` : "") +
     (checks.items.length ? `${H2("Checagem de fatos")}<ul style="padding-left:18px;margin:0">${checks.items.map(A).join("")}</ul>` : "") +
     `<p style="margin-top:26px"><a href="${appUrl()}" style="background:#17407f;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">Abrir o feed completo</a>
      <a href="${appUrl()}/agenda?esfera=federal" style="margin-left:8px;color:#17407f">Ver a agenda do Congresso →</a></p>`;

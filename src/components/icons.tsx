@@ -81,3 +81,9 @@ export const IconCalendar = (p: P) => (
 export const IconMore = (p: P) => (
   <svg {...base(p)}><circle cx="5.5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="18.5" cy="12" r="1.3" /></svg>
 );
+export const IconFlag = (p: P) => (
+  <svg {...base(p)}><path d="M5 21V4M5 4h11l-1.8 3.5L16 11H5" /></svg>
+);
+export const IconCompass = (p: P) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" /></svg>
+);
