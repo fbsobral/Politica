@@ -416,7 +416,7 @@ export type BudgetHistory = {
 };
 
 /** Média anual do IPCA (número-índice, IBGE/SIDRA 1737) por ano; cache de 30 dias. */
-async function ipcaByYear(): Promise<Record<number, number>> {
+export async function ipcaByYear(): Promise<Record<number, number>> {
   const key = "ipca:v2";
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && Date.now() - hit.fetchedAt.getTime() < 30 * DAY) return hit.data as unknown as Record<number, number>;

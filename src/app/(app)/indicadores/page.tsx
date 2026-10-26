@@ -3,7 +3,7 @@ import type { User } from "@prisma/client";
 import { IndicatorCard, type CardData } from "@/components/indicator-card";
 import type { ChartSeries } from "@/components/indicator-chart";
 import { EmptyState, PageHeader, ScopeTabs } from "@/components/ui";
-import { UF_CODE } from "@/lib/budget";
+import { ipcaByYear, UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
 import { GROUPS, INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
 import type { Geo, Scope } from "@/lib/indicators/core";
@@ -23,7 +23,17 @@ async function geoOf(user: User): Promise<Geo> {
 
 const placeName = (scope: Scope, user: User) => (scope === "FEDERAL" ? "Brasil" : scope === "ESTADUAL" ? UFS[user.uf ?? ""] ?? "Estado" : user.municipality ?? "Município");
 
-async function cardFor(ind: Indicator, scopes: Scope[], geo: Geo, user: User): Promise<CardData | null> {
+/** Fator para levar cada ano aos preços do último ano fechado (índice IPCA médio do ano, IBGE). */
+async function deflators(): Promise<Record<number, number>> {
+  const ipca = await ipcaByYear();
+  const last = new Date().getFullYear() - 1;
+  const base = ipca[last];
+  const out: Record<number, number> = {};
+  if (base) for (const [y, v] of Object.entries(ipca)) if (v) out[Number(y)] = base / v;
+  return out;
+}
+
+async function cardFor(ind: Indicator, scopes: Scope[], geo: Geo, user: User, deflator: Record<number, number> | null): Promise<CardData | null> {
   const series: ChartSeries[] = [];
   const subSeries: CardData["subs"] = [];
   for (const s of scopes) {
@@ -37,15 +47,19 @@ async function cardFor(ind: Indicator, scopes: Scope[], geo: Geo, user: User): P
       const v = await getSeries(sub, s, geo);
       if (v) ss.push({ name: placeName(s, user), color: scopes.length > 1 ? SCOPE_COLOR[s] : "#17407f", values: v });
     }
-    if (ss.length) subSeries.push({ id: sub.id, title: sub.name, unit: sub.unit, decimals: sub.decimals, desc: sub.desc, source: sub.source, better: sub.better, series: ss });
+    if (ss.length) subSeries.push({ inflation: Boolean(sub.inflation), id: sub.id, title: sub.name, unit: sub.unit, decimals: sub.decimals, desc: sub.desc, source: sub.source, better: sub.better, series: ss });
   }
-  return { id: ind.id, title: ind.name, unit: ind.unit, decimals: ind.decimals, desc: ind.desc, source: ind.source, sourceUrl: ind.sourceUrl, better: ind.better, series, subs: subSeries };
+  // PIB do Brasil: acima de cada valor em R$ vai o crescimento REAL publicado pelo IBGE (e não a variação nominal, que inclui a inflação)
+  const realGrowth = ind.id === "pib" && scopes.length === 1 && scopes[0] === "FEDERAL" ? await getSeries(INDICATORS.find((i) => i.id === "pib-cresc")!, "FEDERAL", geo) : null;
+  return { changeLabels: realGrowth ?? undefined, changeNote: realGrowth ? "Acima de cada valor: crescimento real do PIB no ano (volume, já descontada a inflação), como publicado pelo IBGE." : undefined, deflator: deflator && (ind.inflation || subSeries.some((x) => x.inflation)) ? deflator : undefined, deflatorYear: new Date().getFullYear() - 1, id: ind.id, title: ind.name, unit: ind.unit, decimals: ind.decimals, desc: ind.desc, source: ind.source, sourceUrl: ind.sourceUrl, better: ind.better, series, subs: subSeries };
 }
 
 async function Group({ group, scopes, user }: { group: (typeof GROUPS)[number]; scopes: Scope[]; user: User }) {
   const geo = await geoOf(user);
   const tops = INDICATORS.filter((i) => i.group === group.id && !i.parent && scopes.some((s) => i.fetch[s]));
-  const cards = (await Promise.all(tops.map((i) => cardFor(i, scopes.filter((s) => i.fetch[s]), geo, user)))).filter(Boolean) as CardData[];
+  // o fator de correção só é buscado se algum gráfico do grupo for em reais
+  const deflator = tops.some((i) => i.inflation || INDICATORS.some((c) => c.parent === i.id && c.inflation)) ? await deflators() : null;
+  const cards = (await Promise.all(tops.map((i) => cardFor(i, scopes.filter((s) => i.fetch[s]), geo, user, deflator)))).filter(Boolean) as CardData[];
   if (!cards.length) return null;
   return (
     <section aria-label={group.title} className="mb-10">

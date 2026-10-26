@@ -5,11 +5,11 @@ import { formatChange, formatValue, type Unit } from "@/lib/indicators/format";
 
 export type ChartSeries = { name: string; color: string; values: Record<number, number> };
 
-const H = 150;
-const M = { l: 28, r: 28, t: 26, b: 22 };
+const H = 165;
+const M = { l: 28, r: 28, t: 40, b: 22 };
 
 /** Linha(s) por ano, sem eixos pesados: bom para cartões; passa o mouse (ou toca) para ver o valor de cada ano. */
-export function IndicatorChart({ series, unit, decimals = 1, height = H }: { series: ChartSeries[]; unit: Unit; decimals?: number; height?: number }) {
+export function IndicatorChart({ series, unit, decimals = 1, height = H, better, changeLabels, changeNote }: { series: ChartSeries[]; unit: Unit; decimals?: number; height?: number; better?: "up" | "down"; changeLabels?: Record<number, number>; changeNote?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   // a largura do desenho acompanha a do cartão, então o texto não encolhe e a altura fica fixa e baixa
   const box = useRef<HTMLDivElement>(null);
@@ -57,15 +57,43 @@ export function IndicatorChart({ series, unit, decimals = 1, height = H }: { ser
               <polyline points={pts.join(" ")} fill="none" stroke={s.color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
               {years.filter((yr) => s.values[yr] !== undefined).map((yr) => <circle key={yr} cx={x(yr)} cy={yv(s.values[yr])} r={hy === yr ? 4.5 : 2.4} fill="var(--surface)" stroke={s.color} strokeWidth="1.8" />)}
               {series.length === 1 && years.filter((yr) => s.values[yr] !== undefined).map((yr, i, arr) => (
-                <text key={`l${yr}`} x={x(yr)} y={yv(s.values[yr]) - 8} textAnchor={i === 0 ? "start" : i === arr.length - 1 ? "end" : "middle"} fontSize="10" fontWeight="600" fill="var(--ink)" stroke="var(--surface)" strokeWidth="3" paintOrder="stroke">{formatValue(s.values[yr], unit, decimals)}</text>
+                <g key={`l${yr}`}>
+                  <text x={x(yr)} y={yv(s.values[yr]) - 8} textAnchor={i === 0 ? "start" : i === arr.length - 1 ? "end" : "middle"} fontSize="10" fontWeight="600" fill="var(--ink)" stroke="var(--surface)" strokeWidth="3" paintOrder="stroke">{formatValue(s.values[yr], unit, decimals)}</text>
+                  {(i > 0 || changeLabels) && (() => {
+                    const cur = s.values[yr];
+                    const prev = i > 0 ? s.values[arr[i - 1]] : cur;
+                    // quando há um indicador oficial de variação (ex.: crescimento real do PIB), ele substitui a conta simples entre os dois valores
+                    const official = changeLabels?.[yr];
+                    if (changeLabels && official === undefined) return null;
+                    const txt = official !== undefined ? `${official > 0 ? "+" : official < 0 ? "−" : ""}${Math.abs(official).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : periodChange(prev, cur, unit);
+                    if (!txt) return null;
+                    const ref = official !== undefined ? official : cur - prev;
+                    const color = !better || ref === 0 ? "var(--muted)" : (ref > 0) === (better === "up") ? "var(--ok)" : "var(--danger)";
+                    return <text x={x(yr)} y={yv(s.values[yr]) - 20} textAnchor={i === arr.length - 1 ? "end" : "middle"} fontSize="9.5" fontWeight="700" fill={color} stroke="var(--surface)" strokeWidth="3" paintOrder="stroke">{txt}</text>;
+                  })()}
+                </g>
               ))}
             </g>
           );
         })}
         {years.map((yr, i) => <rect key={yr} x={x(yr) - (W - M.l - M.r) / (years.length - 1) / 2} y={0} width={(W - M.l - M.r) / (years.length - 1)} height={height} fill="transparent" onMouseEnter={() => setHover(i)} onMouseMove={() => setHover(i)} onClick={() => setHover(i)} />)}
       </svg>
+      {changeNote && <p className="mt-1 text-[11px] text-faint">{changeNote}</p>}
+      {!changeNote && series.length === 1 && (unit === "brl" || unit === "usd") && (
+        <p className="mt-1 text-[11px] text-faint">As variações acima de cada valor são em valores correntes do ano, ou seja, incluem a inflação. Elas não são o crescimento real.</p>
+      )}
       {hy !== null && (
-        <div className="pointer-events-none absolute right-1 top-0 rounded-lg border border-line bg-surface/95 px-2.5 py-1.5 text-xs shadow-pop">
+        <div
+          className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg border border-line bg-surface/95 px-2.5 py-1.5 text-xs shadow-pop"
+          style={(() => {
+            // o balão acompanha o ponto: fica logo acima dele (e dos rótulos), sem sair das bordas do gráfico
+            const px = x(hy);
+            const ys = series.filter((s) => s.values[hy] !== undefined).map((s) => yv(s.values[hy]));
+            const top = Math.max(0, (ys.length ? Math.min(...ys) : M.t) - 58 - series.length * 16);
+            const tx = px < 80 ? "0%" : px > W - 80 ? "-100%" : "-50%";
+            return { left: px, top, transform: `translateX(${tx})` };
+          })()}
+        >
           <b>{hy}</b>
           {series.map((s) => (
             <div key={s.name} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: s.color }} />{series.length > 1 && <span className="text-muted">{s.name}:</span>}<b>{s.values[hy] !== undefined ? formatValue(s.values[hy], unit, decimals) : "—"}</b></div>
@@ -74,6 +102,18 @@ export function IndicatorChart({ series, unit, decimals = 1, height = H }: { ser
       )}
     </div>
   );
+}
+
+/** Variação em relação ao período anterior: pontos percentuais para taxas em %, percentual relativo para o resto. */
+function periodChange(prev: number, cur: number, unit: Unit): string | null {
+  const nf = (n: number, d: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  if (unit === "pct") {
+    const d = cur - prev;
+    return `${d > 0 ? "+" : d < 0 ? "−" : ""}${nf(Math.abs(d), 1)} p.p.`;
+  }
+  if (!prev) return null;
+  const r = (cur / prev - 1) * 100;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${nf(Math.abs(r), Math.abs(r) < 10 ? 1 : 0)}%`;
 }
 
 export function delta(values: Record<number, number>, unit: Unit): { from: number; to: number; text: string } | null {
