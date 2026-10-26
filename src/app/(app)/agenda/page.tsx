@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Scope } from "@prisma/client";
 import { ArticleCard } from "@/components/article-card";
+import { AskButton } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { IconPin } from "@/components/icons";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
@@ -77,6 +78,7 @@ async function Federal({ casa }: { casa: string }) {
                     <p className="mt-1.5 text-[0.9375rem] leading-snug">{e.link ? <a href={e.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{e.description}</a> : e.description}</p>
                     {e.place && <p className="mt-1 flex items-center gap-1 text-xs text-muted"><IconPin /> {e.place}</p>}
                     <Explain kind="event" text={`${e.house} — ${e.type}${e.organ ? ` (${e.organ})` : ""}: ${e.description}`} />
+                    <AskButton className="mt-2" focus={{ title: `${e.house}: ${e.type}`, text: `Evento da agenda do Congresso. Casa: ${e.house}. Tipo: ${e.type}${e.organ ? ` (${e.organ})` : ""}. Início: ${e.start}. Situação: ${e.situation}. Pauta: ${e.description}`, suggestions: ["O que vai ser discutido?", "Por que isso importa para mim?", "Como cada partido costuma votar nisso?"] }} />
                   </div>
                 </li>
               ))}
@@ -97,6 +99,7 @@ async function Federal({ casa }: { casa: string }) {
               </div>
               <p className="line-clamp-4 text-sm leading-snug text-muted">{v.description}</p>
               <Explain kind="vote" text={`${v.house}: ${v.description}${v.approved === true ? " (resultado: aprovada)" : v.approved === false ? " (resultado: rejeitada)" : ""}`} />
+              <AskButton className="mt-2" focus={{ title: `Votação no ${v.house}`, text: `Votação de plenário. Casa: ${v.house}. Data: ${v.date}. Resultado: ${v.approved === true ? "aprovada" : v.approved === false ? "rejeitada" : "não informado"}. Descrição: ${v.description}`, suggestions: ["O que foi votado, em linguagem simples?", "O que isso muda na minha vida?", "Quais partidos votaram a favor e contra?"] }} />
             </li>
           ))}
         </ul>

@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { appUrl } from "@/lib/email";
 import { runJobDetached } from "@/lib/job-runner";
 import { JOBS, type JobName } from "@/lib/jobs";
+import { resetModelCache } from "@/lib/ai";
 import { requireAdmin } from "@/lib/user";
 
 const createSchema = z.object({
@@ -136,8 +137,10 @@ export async function saveRobotSettings(formData: FormData) {
   if (values.ingestIntervalMinutes !== undefined) values.ingestIntervalMinutes = num(values.ingestIntervalMinutes, 10, 1440, SETTING_DEFAULTS.ingestIntervalMinutes);
   if (values.localMaxAgeDays !== undefined) values.localMaxAgeDays = num(values.localMaxAgeDays, 0, 365, SETTING_DEFAULTS.localMaxAgeDays);
   if (values.aiDailyTokenBudget !== undefined) values.aiDailyTokenBudget = num(values.aiDailyTokenBudget, 0, 1_000_000_000, SETTING_DEFAULTS.aiDailyTokenBudget);
+  if (values.chatDailyLimit !== undefined) values.chatDailyLimit = num(values.chatDailyLimit, 0, 1000, SETTING_DEFAULTS.chatDailyLimit);
   if (values.retentionDays !== undefined) values.retentionDays = num(values.retentionDays, 0, 3650, SETTING_DEFAULTS.retentionDays);
   await saveSettings(values);
+  resetModelCache();
   const back = backOf(formData, "/admin/robo");
   revalidatePath(back);
   go("ok", "Configuração salva. Vale na próxima coleta (ou use “Coletar notícias agora” no Robô).", back);

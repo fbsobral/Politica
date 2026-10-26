@@ -6,6 +6,7 @@ import { IconRobot } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { Notice, PageHeader } from "@/components/ui";
 import { db } from "@/lib/db";
+import { AI_KINDS, AI_MODEL_SUGGESTIONS, modelSettingKey } from "@/lib/ai-kinds";
 import { requireAdmin } from "@/lib/user";
 import { JOBS } from "@/lib/jobs";
 import { getSettings } from "@/lib/settings";
@@ -105,9 +106,24 @@ export default async function RoboPage({ searchParams }: { searchParams: Promise
             <label className="block"><span className={label}>Guardar histórico (dias)</span><input name="retentionDays" type="number" min={0} max={3650} defaultValue={cfg.retentionDays} className="input" /></label>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className={label}>Modelo do Claude (vazio = padrão)</span><input name="aiModel" defaultValue={cfg.aiModel} placeholder="claude-haiku-5-5" className="input" /></label>
+            <label className="block"><span className={label}>Mensagens por dia por usuário no agente (0 = sem limite)</span><input name="chatDailyLimit" type="number" min={0} max={1000} defaultValue={cfg.chatDailyLimit} className="input" /></label>
             <label className="block"><span className={label}>Limite diário de tokens da IA (0 = sem limite)</span><input name="aiDailyTokenBudget" type="number" min={0} step={10000} defaultValue={cfg.aiDailyTokenBudget} className="input" /><span className="mt-1 block text-xs text-faint">Soma de entrada e saída nas últimas 24 h. Ao atingir, o app usa regras e descrições dos veículos, sem IA, até liberar. Veja o consumo em Visão geral.</span></label>
           </div>
+          <fieldset className="rounded-2xl border border-line p-4">
+            <legend className="px-2 text-sm font-semibold">Modelos de IA</legend>
+            <p className="mb-3 text-xs text-faint">Escolha o modelo de cada uso. Vazio = usa o modelo padrão. Pode digitar qualquer ID de modelo (as sugestões são só atalhos). Vale em até 1 minuto.</p>
+            <datalist id="ai-models">{AI_MODEL_SUGGESTIONS.map((m) => <option key={m} value={m} />)}</datalist>
+            <label className="mb-4 block"><span className={label}>Modelo padrão (todos os usos sem modelo próprio)</span><input name="aiModel" list="ai-models" defaultValue={cfg.aiModel} placeholder={process.env.ANTHROPIC_MODEL || "claude-haiku-5-5"} className="input" /></label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {AI_KINDS.map((k) => (
+                <label key={k.kind} className="block">
+                  <span className={label}>{k.label}</span>
+                  <input name={modelSettingKey(k.kind)} list="ai-models" defaultValue={cfg[modelSettingKey(k.kind)]} placeholder="padrão" className="input" />
+                  <span className="mt-1 block text-xs text-faint">{k.hint}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" name="googleNews" defaultChecked={cfg.googleNews === "1"} /> Buscar no Google News</label>
             <label className="flex items-center gap-2"><input type="checkbox" name="aiClassify" defaultChecked={cfg.aiClassify === "1"} /> Classificar com IA (senão, só regras)</label>

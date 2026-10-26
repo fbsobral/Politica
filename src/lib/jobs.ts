@@ -6,6 +6,7 @@ import { getSettings } from "@/lib/settings";
 import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
 import { getBudget, getBudgetHistory } from "@/lib/budget";
+import { refreshIndicators } from "@/lib/indicators/job";
 
 export const JOBS = {
   /** coleta de notícias + classificação + alertas (a cada hora) */
@@ -76,6 +77,10 @@ export const JOBS = {
       n++;
     }
     return { refreshed: n };
+  },
+  /** indicadores (Banco Central, IBGE, IPEA, Tesouro): baixa e guarda as séries de 10 anos de cada local */
+  async indicators() {
+    return refreshIndicators();
   },
   /** candidatos das eleições 2026 (presidente, governador, senado) */
   async candidates() {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { IconLogo, IconSettings, IconShield } from "@/components/icons";
+import { AgentLauncher } from "@/components/agent/launcher";
 import { DesktopNav, MobileNav } from "@/components/nav";
 import { UserMenu } from "@/components/user-menu";
 import { UFS } from "@/lib/taxonomy";
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {UFS[user.uf]} · Notícias coletadas de feeds públicos a cada hora e classificadas por IA. Representantes: Câmara dos Deputados, Senado e TSE.
         </p>
       </footer>
+      <AgentLauncher hints={{ city: user.municipality ?? "sua cidade", party: user.party && user.party !== "NONE" ? user.party : null, hasQuiz: Boolean(user.quizAnswers) }} />
       <MobileNav />
     </div>
   );

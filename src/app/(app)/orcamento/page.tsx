@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
+import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
@@ -63,6 +64,19 @@ function Bars({ items, scope, explain, child, parent }: { items: Slice[]; scope:
   );
 }
 
+/** Texto compacto de uma lista de fatias (com subcategorias) para o assistente. */
+function sliceText(items: Slice[], depth = 0): string {
+  return items
+    .filter((i) => i.code !== "outros")
+    .slice(0, depth === 0 ? 12 : 6)
+    .map((i) => `${"  ".repeat(depth)}- ${i.name}: ${brlShort(i.value)} (${pct(i.share, 1)})${i.children?.length && depth < 1 ? `\n${sliceText(i.children, depth + 1)}` : ""}`)
+    .join("\n");
+}
+
+function askBudget(b: BudgetData, what: string, body: string, suggestions: string[]): AskFocus {
+  return { title: `${what} · ${b.entity}`, text: `${what} (${b.entity}, ano ${b.annual?.year}). Valores do ano fechado, como declarados ao Tesouro Nacional (Siconfi):\n${body}`, suggestions };
+}
+
 function Progress({ label, done, of, scope, sub }: { label: string; done: number; of: number; scope: BudgetScope; sub: string }) {
   const p = of > 0 ? Math.min(1, done / of) : 0;
   return (
@@ -102,7 +116,10 @@ function Detail({ b }: { b: BudgetData }) {
 
       <section aria-label="Evolução em 10 anos">
         <p className="eyebrow">Série histórica</p>
-        <h2 className="display text-2xl font-semibold">Evolução nos últimos 10 anos</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="display text-2xl font-semibold">Evolução nos últimos 10 anos</h2>
+          <AskButton focus={{ title: `Evolução do orçamento · ${b.entity}`, text: `Gráfico de 10 anos do orçamento de ${b.entity}: despesa por função, receita por origem e despesa por tipo de gasto (Siconfi). Resumo do último ano fechado ${a?.year}:\nDespesa total ${a ? brlShort(a.expenseTotal) : "?"}; receita total ${a ? brlShort(a.revenueTotal) : "?"}.\nPrincipais despesas:\n${a ? sliceText(a.expense) : ""}\nPara a série completa e as projeções, use a tela.`, suggestions: ["Como o orçamento mudou nos últimos anos?", "Quais áreas cresceram mais?", "O que significa corrigir pela inflação?"] }} />
+        </div>
         <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Compare como a receita e a despesa mudaram ao longo do tempo. Filtre o período, escolha uma categoria e veja os valores corrigidos pela inflação ou por habitante.</p>
         <Suspense fallback={<div className="skeleton h-[26rem]" aria-busy="true" />}>
           <History scope={b.scope} />
@@ -114,7 +131,10 @@ function Detail({ b }: { b: BudgetData }) {
           {/* mesmo destaque para os dois lados: de onde vem e para onde vai */}
           <section aria-label="De onde vem o dinheiro" className="card p-5 sm:p-6">
             <p className="eyebrow !text-municipal">Entradas</p>
-            <h2 className="display text-2xl font-semibold">De onde vem o dinheiro</h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="display text-2xl font-semibold">De onde vem o dinheiro</h2>
+              <AskButton focus={askBudget(b, "De onde vem o dinheiro", `Receita total ${brlShort(a.revenueTotal)}. Por origem:\n${sliceText(a.revenue)}`, ["Explique de onde vem o dinheiro desta cidade", "O que são transferências e por que pesam tanto?", "Quais impostos são cobrados aqui?"])} />
+            </div>
             <p className="mb-4 text-xs text-muted">Receita realizada em {a.year}: <b className="text-ink">{brlShort(a.revenueTotal)}</b>, por origem.</p>
             {(() => {
               const tax = a.revenue.find((r) => r.code === "RO1.1");
@@ -133,7 +153,10 @@ function Detail({ b }: { b: BudgetData }) {
 
           <section aria-label="Para onde vai o dinheiro" className="card p-5 sm:p-6">
             <p className="eyebrow !text-estadual">Saídas</p>
-            <h2 className="display text-2xl font-semibold">Para onde vai o dinheiro</h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="display text-2xl font-semibold">Para onde vai o dinheiro</h2>
+              <AskButton focus={askBudget(b, "Para onde vai o dinheiro", `Despesa total ${brlShort(a.expenseTotal)}. Por função de governo (com subfunções):\n${sliceText(a.expense)}`, ["Para onde vai o dinheiro, em linguagem simples?", "Quanto vai para saúde e educação?", "Isso é diferente da média das cidades?"])} />
+            </div>
             <p className="mb-4 text-xs text-muted">Despesa empenhada em {a.year}: <b className="text-ink">{brlShort(a.expenseTotal)}</b>, por função de governo.</p>
             {(() => {
               const top = a.expense.find((x) => x.code !== "outros");
@@ -153,7 +176,10 @@ function Detail({ b }: { b: BudgetData }) {
 
       {a && a.nature?.length > 0 && (
         <section aria-label="Em que se gasta" className="card p-5 sm:p-6">
-          <h2 className="display text-xl font-semibold">Em que se gasta</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="display text-xl font-semibold">Em que se gasta</h2>
+            <AskButton focus={askBudget(b, "Em que se gasta (tipo de gasto)", `A mesma despesa vista por tipo de gasto:\n${sliceText(a.nature)}`, ["O que é pessoal, juros e investimentos?", "Quanto vai para investimento?"])} />
+          </div>
           <p className="mb-4 text-xs text-muted">A mesma despesa de {a.year} vista pelo tipo de gasto, e não pela área.</p>
           <Bars items={a.nature} scope={b.scope} explain="nature" />
           <p className="mt-4 text-xs leading-relaxed text-faint">“Pessoal” inclui salários, encargos e também aposentadorias e pensões pagas pelo regime próprio. Investimentos são obras e equipamentos; o restante é custeio da máquina e dívida.</p>
@@ -162,7 +188,10 @@ function Detail({ b }: { b: BudgetData }) {
 
       {c && (
         <section aria-label="Ano corrente" className="card p-5 sm:p-6">
-          <h2 className="display text-xl font-semibold">{c.year}: previsto x realizado</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="display text-xl font-semibold">{c.year}: previsto x realizado</h2>
+            <AskButton focus={{ title: `${c.year}: previsto x realizado · ${b.entity}`, text: `Execução do orçamento de ${c.year} até o ${c.period}º bimestre (${PERIOD_LABEL[c.period]}). Receita: prevista inicial ${brlShort(c.revenue.initial)}, atualizada ${brlShort(c.revenue.updated)}, realizada ${brlShort(c.revenue.realized)}. Despesa: dotação inicial ${brlShort(c.expense.initial)}, atualizada ${brlShort(c.expense.updated)}, empenhada ${brlShort(c.expense.committed)}. Fonte: relatório bimestral (RREO) do Tesouro.`, suggestions: ["O que é dotação e empenho?", "A execução está no ritmo esperado?"] }} />
+          </div>
           <p className="mb-5 text-xs text-muted">Acumulado até o {c.period}º bimestre ({PERIOD_LABEL[c.period]}), segundo o relatório bimestral de execução orçamentária.</p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <Progress label="Receita arrecadada" done={c.revenue.realized} of={c.revenue.updated} scope={b.scope} sub={`Previsão inicial: ${brlShort(c.revenue.initial)} · atualizada: ${brlShort(c.revenue.updated)}`} />

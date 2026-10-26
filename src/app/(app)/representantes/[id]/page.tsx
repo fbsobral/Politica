@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AskButton } from "@/components/agent/ask-button";
 import { notFound } from "next/navigation";
 import { togglePoliticianAlert } from "@/app/actions";
 import { ArticleCard } from "@/components/article-card";
@@ -58,7 +59,10 @@ export default async function PoliticianPage({ params }: { params: Promise<{ id:
             </div>
           </div>
           <p className="eyebrow mt-4">{ROLE_LABEL[p.role]}</p>
-          <h1 className="display text-3xl font-semibold leading-tight sm:text-4xl">{p.ballotName ?? p.name}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="display text-3xl font-semibold leading-tight sm:text-4xl">{p.ballotName ?? p.name}</h1>
+            <AskButton focus={{ title: `${p.ballotName ?? p.name} · ${ROLE_LABEL[p.role]}`, text: `Político: ${p.ballotName ?? p.name} (nome civil: ${p.name}). Cargo: ${ROLE_LABEL[p.role]}. Partido: ${p.party ?? "sem partido"}. ${place ? `Local: ${place}. ` : ""}${p.mandate ? `Mandato: ${p.mandate}. ` : ""}Para notícias recentes sobre essa pessoa, use a ferramenta de busca.`, suggestions: ["O que essa pessoa faz no cargo?", "Quais as notícias recentes sobre essa pessoa?", "Qual a posição do partido dela nos temas principais?"] }} />
+          </div>
           {p.ballotName && p.ballotName !== p.name && <p className="mt-0.5 text-sm text-muted">{p.name}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
             <PartyBadge party={p.party} />

@@ -87,3 +87,6 @@ export const IconFlag = (p: P) => (
 export const IconCompass = (p: P) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" /></svg>
 );
+export const IconChart = (p: P) => (
+  <svg {...base(p)}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+);

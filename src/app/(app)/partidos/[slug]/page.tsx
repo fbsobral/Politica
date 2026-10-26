@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { PoliticianRole } from "@prisma/client";
 import { setMyParty } from "@/app/actions";
+import { AskButton } from "@/components/agent/ask-button";
 import { ArticleCard } from "@/components/article-card";
 import { PoliticianCard } from "@/components/politician-card";
 import { EmptyState } from "@/components/ui";
@@ -101,11 +102,18 @@ export default async function PartidoPage({ params }: { params: Promise<{ slug: 
               <span className="rounded-full bg-ink/5 px-2.5 py-1 font-semibold">Confiança da estimativa: {party.conf}</span>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          <AskButton focus={{
+            title: `${party.sigla} · ${party.nome}`,
+            text: `Partido: ${party.sigla} (${party.nome})${party.federacao ? `; federação ${party.federacao}` : ""}. Caixa no mapa do quiz: ${placement}. ${party.box !== "undefined" ? `Posições estimadas pelo app (−10 a +10; confiança ${party.conf}): ${PILLARS.filter((x) => x.id !== "estilo").map((x) => `${x.label} ${fmtPos(pos.pillars[x.id as "economia"] ?? 0)} (${radarBand(x.id as "economia", pos.pillars[x.id as "economia"] ?? 0)})`).join("; ")}.` : "Perfil pouco definido."}${party.seal ? ` Estilo: ${SEAL_LABEL[party.seal]}.` : ""} Eleitos no cadastro: ${total}.`,
+            suggestions: ["O que esse partido defende?", "Como ele costuma votar?", "Em que ele se difere do meu perfil?", "Quem são os principais nomes dele na minha região?"],
+          }} />
           <form action={setMyParty}>
             <input type="hidden" name="back" value={`/partidos/${slugOf(party.sigla)}`} />
             <input type="hidden" name="party" value={isMine ? "NONE" : party.sigla} />
             <button type="submit" className={`btn ${isMine ? "btn-primary" : "btn-secondary"}`}>{isMine ? "✓ É o meu partido" : "Definir como meu partido"}</button>
           </form>
+          </div>
         </div>
         {others.length > 0 && <p className="mt-4 text-sm text-muted">Federado com {others.map((o, i) => <span key={o.sigla}>{i ? ", " : ""}<Link href={`/partidos/${slugOf(o.sigla)}`} className="font-semibold text-ink underline-offset-4 hover:underline">{o.sigla}</Link></span>)}. Partidos federados atuam como um só por pelo menos quatro anos.</p>}
       </section>

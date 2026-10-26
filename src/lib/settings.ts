@@ -19,6 +19,17 @@ export const SETTING_DEFAULTS = {
   aiClassify: "1",
   /** modelo do Claude para classificar e resumir */
   aiModel: "",
+  /** mensagens por dia que cada usuário pode mandar ao agente de conversa; 0 = sem limite */
+  chatDailyLimit: "20",
+  /** modelo de cada uso da IA; vazio = o modelo padrão acima */
+  aiModel_classify: "",
+  aiModel_sources: "",
+  aiModel_tiers: "",
+  aiModel_summary: "",
+  aiModel_explain: "",
+  aiModel_digest: "",
+  aiModel_chat: "",
+  aiModel_other: "",
   /** veículos prioritários (domínios separados por vírgula ou linha): ganham buscas próprias por esfera no Google News */
   priorityOutlets: "cnnbrasil.com.br",
   /** buscas do Google News por esfera e poder. Placeholders: {estado}, {cidade}, {uf} */
@@ -61,7 +72,7 @@ export function fillTemplate(tpl: string, vars: { estado?: string; cidade?: stri
 
 /** Grupos de configurações editados em páginas diferentes do admin (cada formulário só salva o seu grupo). */
 export const SETTING_GROUPS = {
-  geral: ["aiDailyTokenBudget", "ingestIntervalMinutes", "maxAgeDays", "localMaxAgeDays", "retentionDays", "aiModel", "googleNews", "aiClassify"],
+  geral: ["aiDailyTokenBudget", "ingestIntervalMinutes", "maxAgeDays", "localMaxAgeDays", "retentionDays", "chatDailyLimit", "aiModel", "aiModel_classify", "aiModel_sources", "aiModel_tiers", "aiModel_summary", "aiModel_explain", "aiModel_digest", "aiModel_chat", "aiModel_other", "googleNews", "aiClassify"],
   buscas: Object.keys(SETTING_DEFAULTS).filter((k) => k === "priorityOutlets" || k.startsWith("query")),
 } as const satisfies Record<string, readonly string[]>;
 export type SettingGroup = keyof typeof SETTING_GROUPS;

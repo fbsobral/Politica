@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { saveMyParty, saveQuiz } from "@/app/actions";
+import { AskButton } from "@/components/agent/ask-button";
 import { NineBox } from "@/components/quiz/nine-box";
 import { Radar } from "@/components/quiz/radar";
 import { slugOf } from "@/lib/parties";
@@ -258,7 +259,14 @@ function Results({ answers, weights, onRedo, onChangeWeights, party }: { answers
     <div className="space-y-6">
       <section className="card p-5 sm:p-8">
         <p className="eyebrow">Você</p>
-        <h2 className="display text-3xl font-semibold leading-tight">{pr.boxName}</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="display text-3xl font-semibold leading-tight">{pr.boxName}</h2>
+          <AskButton focus={{
+            title: `Meu perfil político · ${pr.boxName}`,
+            text: `Perfil do usuário no quiz: ${pr.boxName}. Economia ${fmtPos(pr.economia)}, costumes ${fmtPos(pr.costumes)} (−10 a +10).${pr.seal ? ` Estilo: ${SEAL_LABEL[pr.seal]}.` : ""} Por tema: ${RADAR_ORDER.map((id) => `${PILLAR_SHORT[id]} ${fmtPos(pr.pillars[id as Exclude<Pillar, "estilo">] ?? 0)}`).join("; ")}. Partidos mais próximos: ${r.ranking.slice(0, 5).map((s) => `${s.pos.party.sigla} ${s.total.toFixed(1)}`).join(", ")}. A nota mede proximidade com as respostas e prioridades, não qualidade do partido.`,
+            suggestions: ["Explique meu perfil em poucas palavras", "Por que esses partidos ficaram mais perto?", "Em que meu perfil se afasta do primeiro colocado?", "O que mudaria se eu priorizasse outro tema?"],
+          }} />
+        </div>
         <p className="mt-1 text-sm text-muted">Economia {fmt(pr.economia)} · Costumes {fmt(pr.costumes)}{pr.seal ? ` · Estilo: ${SEAL_LABEL[pr.seal]}` : ""}</p>
         <p className="mt-3 max-w-2xl">
           Pelas suas respostas, {ranked.map((p) => `em ${PILLARS.find((x) => x.id === p)!.label.toLowerCase()} você ficou em “${shortBand(p, pr.pillars[p]!)}”`).join(" e ")}.

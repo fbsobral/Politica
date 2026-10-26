@@ -2,6 +2,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
+import { AskButton } from "@/components/agent/ask-button";
 import { IconExternal, IconStar } from "@/components/icons";
 import { ArticleSheet } from "@/components/article-sheet";
 import { ScopeBadge, SourceAvatar } from "@/components/ui";
@@ -115,7 +116,14 @@ export function ArticleCard({ a, index = 0 }: { a: ArticleView; index?: number }
         ) : (
           <span className="hidden text-faint opacity-0 transition-opacity group-hover:opacity-100 sm:block"><IconExternal /></span>
         )}
-        <FavButton a={a} className="-mb-1 -mr-1" />
+        <div className="-mb-1 -mr-1 flex items-center">
+          <AskButton compact focus={{
+            title: a.title.length > 80 ? `${a.title.slice(0, 79)}…` : a.title,
+            text: `Notícia: "${a.title}". Veículo: ${a.source.name} (${SOURCE_CATEGORY_LABEL[a.source.category]}). Publicada em ${a.publishedAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}. Assunto: ${NEWS_CATEGORY_LABEL[a.category]}${a.branch ? `, ${BRANCH_LABEL[a.branch]}` : ""}.${a.description ? ` Resumo do veículo: ${a.description}` : ""}${a.alsoIn.length ? ` Também publicada por: ${a.alsoIn.join(", ")}.` : ""}`,
+            suggestions: ["Explique essa notícia em linguagem simples", "Por que isso importa para mim?", "Quem são os envolvidos?", "Há outras versões ou notícias sobre isso?"],
+          }} />
+          <FavButton a={a} />
+        </div>
       </div>
     </article>
   );

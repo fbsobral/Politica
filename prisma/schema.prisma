@@ -105,6 +105,7 @@ model User {
   favorites Favorite[]
   alerts    Alert[]
   digests   DigestLog[]
+  chatTurns ChatTurn[]
 }
 
 model Source {
@@ -308,6 +309,20 @@ model Explanation {
   kind      String
   text      String
   createdAt DateTime @default(now())
+}
+
+/// uma mensagem do usuário ao agente de conversa (para o limite diário e o acompanhamento de custo)
+model ChatTurn {
+  id           String   @id @default(cuid())
+  userId       String
+  at           DateTime @default(now())
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cachedTokens Int      @default(0)
+  toolCalls    Int      @default(0)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
 }
 
 model AiUsage {

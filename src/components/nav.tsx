@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote, IconCoins, IconCompass, IconFlag } from "./icons";
+import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote, IconCoins, IconCompass, IconFlag, IconChart } from "./icons";
 
 type Item = { href: string; label: string; short?: string; icon: React.ReactNode; match: (p: string) => boolean };
 
@@ -12,7 +12,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/indicadores", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -36,10 +36,17 @@ const MENU: Entry[] = [
       { href: "/checagens", label: "Checagens", hint: "Boatos e declarações verificados", icon: <IconShield />, match: (p) => p.startsWith("/checagens") },
     ],
   },
-  { label: "Orçamento", href: "/orcamento", match: (p) => p.startsWith("/orcamento") },
+  {
+    label: "Números",
+    children: [
+      { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
+      { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, em 10 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
+    ],
+  },
+  { label: "Pergunte", href: "/conversar", match: (p) => p.startsWith("/conversar") },
 ];
 
-const topClass = (active: boolean) => `inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
+const topClass = (active: boolean) => `inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
 
 function Dropdown({ entry, path }: { entry: Entry; path: string }) {
   const [open, setOpen] = useState(false);

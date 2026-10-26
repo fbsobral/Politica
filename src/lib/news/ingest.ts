@@ -341,7 +341,6 @@ export async function backfillParties(limit = 3000): Promise<number> {
 
 export async function runIngest(): Promise<IngestResult> {
   const cfg = await getSettings();
-  if (cfg.aiModel) process.env.ANTHROPIC_MODEL = cfg.aiModel;
   setAiEnabled(cfg.aiClassify === "1");
   const maxAgeMs = Math.max(0, Number(cfg.maxAgeDays) || 0) * 24 * 60 * 60 * 1000;
   const localMaxAgeMs = Math.max(0, Number(cfg.localMaxAgeDays) || 0) * 24 * 60 * 60 * 1000;

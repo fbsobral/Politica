@@ -25,6 +25,7 @@ export async function saveLocation(formData: FormData) {
   // coleta já as notícias da cidade escolhida, sem esperar a próxima hora cheia
   runJobDetached("ingest").catch(() => undefined);
   runJobDetached("budget").catch(() => undefined); // já deixa o orçamento da cidade em cache
+  runJobDetached("indicators").catch(() => undefined); // e os indicadores
   revalidatePath("/", "layout");
   redirect("/");
 }

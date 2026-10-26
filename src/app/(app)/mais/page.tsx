@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { IconBell, IconCoins, IconCompass, IconFlag, IconShield, IconStar, IconUser, IconVote } from "@/components/icons";
+import { IconBell, IconChart, IconCoins, IconCompass, IconFlag, IconShield, IconStar, IconUser, IconVote } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/user";
 
@@ -8,10 +8,12 @@ export const metadata = { title: "Mais" };
 export default async function MaisPage() {
   const user = await requireUser();
   const items = [
+    { href: "/conversar", t: "Pergunte", d: "Converse com o assistente sobre política", i: <IconCompass /> },
     { href: "/partidos", t: "Partidos", d: "Notícias, perfil e eleitos de cada partido", i: <IconFlag /> },
     { href: "/perfil", t: "Você", d: "Seu perfil político e os partidos mais próximos", i: <IconCompass /> },
     { href: "/eleicoes", t: "Eleições", d: "Candidatos, pesquisas e notícias por cargo", i: <IconVote /> },
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
+    { href: "/indicadores", t: "Indicadores", d: "Economia, dívida, segurança e pobreza em 10 anos", i: <IconChart /> },
     { href: "/checagens", t: "Checagem de fatos", d: "Boatos e declarações verificados", i: <IconShield /> },
     { href: "/diario-oficial", t: "Diário Oficial", d: `Edições de ${user.municipality}`, i: <IconStar /> },
     { href: "/favoritos", t: "Favoritos", d: "Notícias salvas", i: <IconStar /> },

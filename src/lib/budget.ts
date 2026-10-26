@@ -7,12 +7,12 @@ const DAY = 24 * 3600 * 1000;
 export type BudgetScope = "MUNICIPAL" | "ESTADUAL" | "FEDERAL";
 
 /** Código IBGE das UFs (2 dígitos) — é o id_ente dos estados no Siconfi. */
-const UF_CODE: Record<string, number> = {
+export const UF_CODE: Record<string, number> = {
   RO: 11, AC: 12, AM: 13, RR: 14, PA: 15, AP: 16, TO: 17, MA: 21, PI: 22, CE: 23, RN: 24, PB: 25, PE: 26, AL: 27, SE: 28, BA: 29,
   MG: 31, ES: 32, RJ: 33, SP: 35, PR: 41, SC: 42, RS: 43, MS: 50, MT: 51, GO: 52, DF: 53,
 };
 
-type Item = { exercicio: number; instituicao: string; cod_ibge: number; uf: string; populacao: number | null; anexo: string; rotulo: string; coluna: string; cod_conta: string; conta: string; valor: number };
+export type Item = { exercicio: number; instituicao: string; cod_ibge: number; uf: string; populacao: number | null; anexo: string; rotulo: string; coluna: string; cod_conta: string; conta: string; valor: number };
 
 export type Slice = { code: string; name: string; value: number; share: number; /** participação dentro do item pai */ shareOfParent?: number; children?: Slice[] };
 
@@ -42,7 +42,7 @@ export type BudgetData = {
   fetchedAt: string;
 };
 
-async function siconfi(path: string, params: Record<string, string | number>): Promise<Item[]> {
+export async function siconfi(path: string, params: Record<string, string | number>): Promise<Item[]> {
   const url = `${API}/${path}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`;
   const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(45000) });
   if (!res.ok) throw new Error(`Siconfi ${res.status}`);
@@ -200,6 +200,14 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
     };
   }
   return { current: null, pop: null, name: null };
+}
+
+/** Só lê o cache do banco (sem ir ao Tesouro): usado para montar o contexto do agente sem custo de espera. */
+export async function peekBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }): Promise<BudgetData | null> {
+  const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
+  if (!id) return null;
+  const hit = await db.budgetCache.findUnique({ where: { key: `budget:v4:${id}` } });
+  return (hit?.data as unknown as BudgetData | undefined) ?? null;
 }
 
 /** Busca os números de uma esfera (com cache no banco: 7 dias para o fechado do ano, 1 dia para o ano corrente). */
