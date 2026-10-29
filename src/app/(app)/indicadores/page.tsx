@@ -5,7 +5,7 @@ import type { ChartSeries } from "@/components/indicator-chart";
 import { EmptyState, PageHeader, ScopeTabs } from "@/components/ui";
 import { ipcaByYear, UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
-import { GROUPS, INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
+import { BUNDLES, GROUPS, INDICATORS, SECTOR_INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
 import type { Geo, Scope } from "@/lib/indicators/core";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -54,12 +54,31 @@ async function cardFor(ind: Indicator, scopes: Scope[], geo: Geo, user: User, de
   return { changeLabels: realGrowth ?? undefined, changeNote: realGrowth ? "Acima de cada valor: crescimento real do PIB no ano (volume, já descontada a inflação), como publicado pelo IBGE." : undefined, deflator: deflator && (ind.inflation || subSeries.some((x) => x.inflation)) ? deflator : undefined, deflatorYear: new Date().getFullYear() - 1, id: ind.id, title: ind.name, unit: ind.unit, decimals: ind.decimals, desc: ind.desc, source: ind.source, sourceUrl: ind.sourceUrl, better: ind.better, series, subs: subSeries };
 }
 
+const BUNDLE_COLORS = ["#0e8a5f", "#d9480f", "#17407f", "#7048e8", "#e0a800", "#d6336c"];
+
+/** Gráfico com várias linhas publicadas pela fonte (ex.: PIB por setor). Só faz sentido com uma esfera por vez. */
+async function bundleCard(b: (typeof BUNDLES)[number], scope: Scope, geo: Geo, deflator: Record<number, number> | null): Promise<CardData | null> {
+  const members = SECTOR_INDICATORS.filter((i) => i.bundle === b.id && i.fetch[scope]);
+  const series: ChartSeries[] = [];
+  for (const m of members) {
+    const v = await getSeries(m, scope, geo);
+    if (v) series.push({ name: m.name, color: BUNDLE_COLORS[series.length % BUNDLE_COLORS.length], values: v });
+  }
+  if (!series.length) return null;
+  return { id: b.id, title: b.title, unit: b.unit, decimals: b.decimals, desc: b.desc, source: b.source, sourceUrl: b.sourceUrl, series, subs: [], deflator: b.inflation && deflator ? deflator : undefined, deflatorYear: new Date().getFullYear() - 1 };
+}
+
 async function Group({ group, scopes, user }: { group: (typeof GROUPS)[number]; scopes: Scope[]; user: User }) {
   const geo = await geoOf(user);
   const tops = INDICATORS.filter((i) => i.group === group.id && !i.parent && scopes.some((s) => i.fetch[s]));
   // o fator de correção só é buscado se algum gráfico do grupo for em reais
   const deflator = tops.some((i) => i.inflation || INDICATORS.some((c) => c.parent === i.id && c.inflation)) ? await deflators() : null;
-  const cards = (await Promise.all(tops.map((i) => cardFor(i, scopes.filter((s) => i.fetch[s]), geo, user, deflator)))).filter(Boolean) as CardData[];
+  const cards0 = (await Promise.all(tops.map((i) => cardFor(i, scopes.filter((s) => i.fetch[s]), geo, user, deflator)))).filter(Boolean) as CardData[];
+  // gráficos de várias linhas (PIB por setor) só quando há uma esfera escolhida
+  const bundles = scopes.length === 1 ? BUNDLES.filter((b) => b.group === group.id) : [];
+  const bundleDeflator = bundles.some((b) => b.inflation) ? deflator ?? (await deflators()) : null;
+  const bundleCards = (await Promise.all(bundles.map((b) => bundleCard(b, scopes[0], geo, bundleDeflator)))).filter(Boolean) as CardData[];
+  const cards = [...cards0, ...bundleCards];
   if (!cards.length) return null;
   return (
     <section aria-label={group.title} className="mb-10">

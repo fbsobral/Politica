@@ -1,5 +1,5 @@
 import { cached, type Geo, type Scope, type YearSeries } from "./core";
-import { bcb, budgetTotal, cempre, dclRcl, expenseValue, giniSidra, pessoalRcl, pibPerCapitaOficial, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
+import { bcb, budgetTotal, cempre, sectorFor, dclRcl, expenseValue, giniSidra, pessoalRcl, pibPerCapitaOficial, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
 import type { Unit } from "./format";
 
 export type GroupId = "economia" | "financas" | "familias" | "seguranca" | "social" | "servicos";
@@ -31,6 +31,8 @@ export type Indicator = {
   ttlDays?: number;
   /** o dado é gravado por um job (arquivo grande): a visita só lê o banco */
   fed?: boolean;
+  /** faz parte de um gráfico com várias linhas (ver BUNDLES); `name` é o rótulo da linha */
+  bundle?: string;
   /** valor em R$ que pode ser exibido corrigido pela inflação (IPCA) a pedido do usuário */
   inflation?: boolean;
 };
@@ -86,6 +88,44 @@ export const INDICATORS: Indicator[] = [
   /* ═════ Saúde, educação e saneamento ═════ */
   { id: "analfabetismo", group: "servicos", name: "Analfabetismo (15 anos ou mais)", unit: "pct", decimals: 1, desc: "Percentual de pessoas de 15 anos ou mais que não sabem ler e escrever um bilhete simples.", source: "IBGE (PNAD Contínua) via IPEA (PNADCA_TXA15MUF)", better: "down", fed: true, fetch: { FEDERAL: stored("analfabetismo", "FEDERAL"), ESTADUAL: stored("analfabetismo", "ESTADUAL") } },
   { id: "mortalidade-infantil", group: "servicos", name: "Mortalidade infantil (por mil nascidos vivos)", unit: "rate", decimals: 1, desc: "Crianças que morrem antes de completar 1 ano, por mil nascidos vivos. Só há série nacional.", source: "IBGE via IPEA (DEPIS_TMI)", better: "down", fed: true, fetch: { FEDERAL: stored("mortalidade-infantil", "FEDERAL") } },
+];
+
+/** Gráficos com várias linhas (uma por componente publicado). */
+export const BUNDLES: { id: string; group: GroupId; title: string; desc: string; source: string; sourceUrl?: string; unit: Unit; decimals?: number; inflation?: boolean }[] = [
+  {
+    id: "pib-setores-valor",
+    group: "economia",
+    title: "PIB por setor da economia (R$)",
+    unit: "brl",
+    inflation: true,
+    desc: "Valor adicionado bruto de cada setor, em reais correntes, como publicado nas Contas Regionais do IBGE: Agropecuária; Indústria; Serviços, que o IBGE publica em duas partes (serviços privados e administração pública); e os impostos sobre produtos, que somados ao valor adicionado formam o PIB. O IBGE ainda não publicou a divisão por setor de 2022 e 2023, por isso a série termina em 2021.",
+    source: "IBGE (Contas Regionais, tabela 5938)",
+    sourceUrl: "https://www.ibge.gov.br/estatisticas/economicas/contas-nacionais/9054-contas-regionais-do-brasil.html",
+  },
+  {
+    id: "pib-setores-share",
+    group: "economia",
+    title: "Peso de cada setor no valor adicionado (%)",
+    unit: "pct",
+    decimals: 1,
+    desc: "Participação de cada setor no valor adicionado bruto total do local, como publicada pelo IBGE (não é calculada aqui). Mostra de onde vem a riqueza produzida: roça, fábricas, serviços ou governo.",
+    source: "IBGE (Contas Regionais, tabela 5938)",
+    sourceUrl: "https://www.ibge.gov.br/estatisticas/economicas/contas-nacionais/9054-contas-regionais-do-brasil.html",
+  },
+];
+
+const ALL3 = (v: number, scale = 1) => ({ FEDERAL: sectorFor("FEDERAL", v, scale), ESTADUAL: sectorFor("ESTADUAL", v, scale), MUNICIPAL: sectorFor("MUNICIPAL", v, scale) });
+
+export const SECTOR_INDICATORS: Indicator[] = [
+  { id: "setor-agro", bundle: "pib-setores-valor", inflation: true, group: "economia", name: "Agropecuária", unit: "brl", desc: "Valor adicionado bruto da agropecuária.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(513, 1000) },
+  { id: "setor-industria", bundle: "pib-setores-valor", inflation: true, group: "economia", name: "Indústria", unit: "brl", desc: "Valor adicionado bruto da indústria (extrativa, transformação, eletricidade, água e construção).", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(517, 1000) },
+  { id: "setor-servicos", bundle: "pib-setores-valor", inflation: true, group: "economia", name: "Serviços privados (exceto administração pública)", unit: "brl", desc: "Valor adicionado bruto dos serviços, exclusive administração, defesa, educação e saúde públicas e seguridade social.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(6575, 1000) },
+  { id: "setor-adm", bundle: "pib-setores-valor", inflation: true, group: "economia", name: "Administração, defesa, educação e saúde públicas", unit: "brl", desc: "Valor adicionado bruto da administração, defesa, educação e saúde públicas e seguridade social.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(525, 1000) },
+  { id: "setor-impostos", bundle: "pib-setores-valor", inflation: true, group: "economia", name: "Impostos sobre produtos (líquidos de subsídios)", unit: "brl", desc: "Impostos sobre produtos, líquidos de subsídios, que somados ao valor adicionado bruto formam o PIB.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(543, 1000) },
+  { id: "share-agro", bundle: "pib-setores-share", group: "economia", name: "Agropecuária", unit: "pct", decimals: 1, desc: "Participação da agropecuária no valor adicionado total.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(516) },
+  { id: "share-industria", bundle: "pib-setores-share", group: "economia", name: "Indústria", unit: "pct", decimals: 1, desc: "Participação da indústria no valor adicionado total.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(520) },
+  { id: "share-servicos", bundle: "pib-setores-share", group: "economia", name: "Serviços privados (exceto administração pública)", unit: "pct", decimals: 1, desc: "Participação dos serviços, exclusive administração pública, no valor adicionado total.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(6574) },
+  { id: "share-adm", bundle: "pib-setores-share", group: "economia", name: "Administração, defesa, educação e saúde públicas", unit: "pct", decimals: 1, desc: "Participação da administração, defesa, educação e saúde públicas no valor adicionado total.", source: "IBGE (Contas Regionais, tabela 5938)", fetch: ALL3(528) },
 ];
 
 export const indicatorsFor = (scope: Scope) => INDICATORS.filter((i) => i.fetch[scope]);

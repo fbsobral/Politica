@@ -1,7 +1,7 @@
 import { UF_CODE } from "@/lib/budget";
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
-import { INDICATORS, getSeries } from "./catalog";
+import { INDICATORS, SECTOR_INDICATORS, getSeries } from "./catalog";
 import type { Geo, Scope } from "./core";
 import { refreshIpea } from "./ipea";
 
@@ -19,7 +19,7 @@ export async function refreshIndicators(): Promise<{ places: number; ipeaKeys: n
   const doneStates = new Set<string>();
   let federalDone = false;
   for (const geo of geos) {
-    for (const ind of INDICATORS.filter((i) => !i.fed)) {
+    for (const ind of [...INDICATORS, ...SECTOR_INDICATORS].filter((i) => !i.fed)) {
       for (const scope of ["FEDERAL", "ESTADUAL", "MUNICIPAL"] as Scope[]) {
         if (!ind.fetch[scope]) continue;
         if (scope === "FEDERAL" && federalDone) continue;
@@ -41,7 +41,7 @@ export async function refreshIndicators(): Promise<{ places: number; ipeaKeys: n
     await new Promise((r) => setTimeout(r, 30_000));
     for (const f of [...failed]) {
       const [id, scope] = f.split(":") as [string, Scope];
-      const ind = INDICATORS.find((i) => i.id === id);
+      const ind = [...INDICATORS, ...SECTOR_INDICATORS].find((i) => i.id === id);
       const geo = geos[0];
       if (!ind || !scope || !geo) continue;
       try {

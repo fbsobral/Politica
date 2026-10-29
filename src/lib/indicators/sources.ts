@@ -60,6 +60,20 @@ export const unemploymentQ4 = (scope: Scope): Fetcher => async (geo) => {
 
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
+/**
+ * Valor adicionado por setor (Contas Regionais do IBGE, tabela 5938), como publicado, para Brasil, UF e município.
+ * `scale` só converte a unidade (mil reais -> reais). A série vai até o último ano publicado (hoje 2021) e mostra os 10 anos mais recentes.
+ */
+export const sectorFor = (scope: Scope, variable: number, scale = 1): Fetcher => async (geo) => {
+  const rows = await sidra(`t/5938/${terr(scope, geo)}/v/${variable}/p/all`);
+  const all = sidraYears(rows, "D3C");
+  const ys = Object.keys(all).map(Number).sort((a, b) => a - b);
+  const last = ys[ys.length - 1];
+  const out: YearSeries = {};
+  for (const y of ys) if (y > last - 10) out[y] = all[y] * scale;
+  return out;
+};
+
 /** Censo de empresas (CEMPRE): salário médio mensal em R$ e pessoal ocupado. */
 export const cempre = (variable: 10143 | 707): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/1685/n6/${geo.ibge}/v/${variable}/p/all`), "D3C"));
 
