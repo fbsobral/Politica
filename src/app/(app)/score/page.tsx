@@ -225,17 +225,17 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
         <p className="mt-2 text-xs text-faint">Anos sem nota num dos lados ficam sem score. O primeiro ano de cada indicador não tem nota, porque a nota compara com o ano anterior. {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
       </section>
 
-      <section className="mb-8">
-        <h2 className="display mb-1 text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2>
+      <details open className="group mb-8">
+        <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Cada quadrado mostra o número publicado (em cima) e a nota do ano (embaixo). Passe o mouse ou toque para ver a explicação.</p>
         {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
-      </section>
+      </details>
 
-      <section className="mb-8">
-        <h2 className="display mb-1 text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2>
+      <details open className="group mb-8">
+        <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Mesma leitura: número publicado em cima, nota do ano embaixo.</p>
         {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
-      </section>
+      </details>
 
       <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length)} />
     </div>

@@ -15,6 +15,8 @@ export type TermRow = {
 /** Resultado por governo em tabela, com botão para ver a conta ano a ano. */
 export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const flip = (k: string) => setClosed((c) => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full min-w-[760px] table-fixed border-collapse text-sm">
@@ -95,8 +97,15 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                           <tbody>
                             {(["economia", "social"] as const).map((side) => (
                               <Fragment key={side}>
-                                <tr><td colSpan={t.years.length + 2} className="pb-0.5 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted">{side === "economia" ? "Econômico" : "Social"}</td></tr>
-                                {t.items.filter((i) => i.side === side).map((it) => (
+                                <tr>
+                                  <td colSpan={t.years.length + 2} className="pb-0.5 pt-2">
+                                    <button type="button" aria-expanded={!closed.has(`${t.id}:${side}`)} onClick={() => flip(`${t.id}:${side}`)} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted hover:text-ink">
+                                      <span className={`inline-block transition-transform ${closed.has(`${t.id}:${side}`) ? "" : "rotate-90"}`}>▸</span>
+                                      {side === "economia" ? "Econômico" : "Social"} <span className="font-normal normal-case">({t.items.filter((i) => i.side === side).length} indicadores)</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                                {!closed.has(`${t.id}:${side}`) && t.items.filter((i) => i.side === side).map((it) => (
                                   <tr key={it.name} className="border-t border-line">
                                     <td className="py-1.5 pr-3 font-medium">{it.name}</td>
                                     {it.cells.map((c) => (
@@ -108,7 +117,7 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                                     <td className="px-2 py-1 text-center font-semibold" style={{ background: it.avgBg }}>{it.avg}</td>
                                   </tr>
                                 ))}
-                                {t.items.filter((i) => i.side === side).length === 0 && <tr><td colSpan={t.years.length + 2} className="py-1 text-muted">Nenhum indicador com nota neste lado.</td></tr>}
+                                {!closed.has(`${t.id}:${side}`) && t.items.filter((i) => i.side === side).length === 0 && <tr><td colSpan={t.years.length + 2} className="py-1 text-muted">Nenhum indicador com nota neste lado.</td></tr>}
                               </Fragment>
                             ))}
                           </tbody>
