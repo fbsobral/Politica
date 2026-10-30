@@ -63,8 +63,8 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
   const [itemsOpen, setItemsOpen] = useState<Set<string>>(new Set());
   const [sidesClosed, setSidesClosed] = useState<Set<string>>(new Set());
   const flipSet = (set: Set<string>, id: string) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
-  // por padrão todos os mandatos ficam expandidos; o usuário pode recolher
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(groups.map((g) => g.id)));
+  // por padrão tudo começa recolhido; o usuário abre o que quiser
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const flip = (id: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allOpen = openGroups.size === groups.length;
   return (
