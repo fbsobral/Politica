@@ -13,7 +13,7 @@ export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
 }
 
 /** Conjunto padrão: os indicadores principais que têm meta de referência (as sub-métricas ficam como opção). */
-export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && TARGETS[c.ind.id] && (TARGETS[c.ind.id].value != null || TARGETS[c.ind.id].base || TARGETS[c.ind.id].byScope?.[scope] != null)).map((c) => c.ind.id);
+export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && TARGETS[c.ind.id] && (TARGETS[c.ind.id].value != null || TARGETS[c.ind.id].base || TARGETS[c.ind.id].ratioOf || TARGETS[c.ind.id].byScope?.[scope] != null)).map((c) => c.ind.id);
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };
 
@@ -94,11 +94,23 @@ export function advanceScore(prev: number, now: number, target: number, better: 
   return 50 + 50 * Math.max(-1, Math.min(1, c));
 }
 
+/** Metas que mudam a cada ano (ex.: 3 meses de importações), calculadas a partir de outra série. */
+async function yearlyTarget(id: string, scope: Scope, geo: Geo): Promise<Record<number, number> | null> {
+  const r = TARGETS[id]?.ratioOf;
+  if (!r) return null;
+  const base = INDICATORS.find((i) => i.id === r.id);
+  if (!base) return null;
+  const v = await getSeries(base, scope, geo, { lazy: true });
+  return v ? Object.fromEntries(Object.entries(v).map(([y, x]) => [Number(y), x * r.factor])) : null;
+}
+
 export async function computeScore(scope: Scope, geo: Geo, selected: string[], from: number, terms: Term[], custom: Record<string, number> = {}, method: ScoreMethod = "nivel"): Promise<ScoreResult> {
   const items: ScoreItem[] = [];
   for (const { ind, side } of candidates(scope)) {
     const values = (await getSeries(ind, scope, geo, { lazy: true })) ?? {};
-    const fixed = fixedTargetFor(ind.id, scope, values);
+    const byYear = await yearlyTarget(ind.id, scope, geo);
+    const latestY = byYear ? Math.max(...Object.keys(byYear).map(Number)) : null;
+    const fixed = byYear && latestY != null ? byYear[latestY] : fixedTargetFor(ind.id, scope, values);
     const own = custom[ind.id];
     const target = own != null && Number.isFinite(own) ? own : fixed;
     const targetMode: TargetMode | null = own != null && Number.isFinite(own) ? "personalizada" : fixed != null ? "fixa" : null;
@@ -107,8 +119,10 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
       for (const [ys, v] of Object.entries(values)) {
         const y = Number(ys);
         if (method === "nivel-avanco" && values[y - 1] == null) continue;
-        level[y] = levelScore(v, target, ind.better!);
-        if (values[y - 1] != null) advance[y] = advanceScore(values[y - 1], v, target, ind.better!);
+        const tY = own != null && Number.isFinite(own) ? target : byYear?.[y] ?? target;
+        const tPrev = own != null && Number.isFinite(own) ? target : byYear?.[y - 1] ?? tY;
+        level[y] = levelScore(v, tY, ind.better!);
+        if (values[y - 1] != null) advance[y] = advanceScore(values[y - 1], v, tPrev, ind.better!);
         notes[y] = method === "nivel" ? level[y] : (level[y] + advance[y]) / 2;
       }
     }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
+import { ScoreItemPeek } from "@/components/score-item-peek";
 import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
 import { ScoreTermTable, type TermRow } from "@/components/score-term-table";
@@ -56,7 +57,7 @@ function Legend() {
   );
 }
 
-function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string }) {
+function ItemRows({ items, years, sideRow, place, scope }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string; scope: string }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full border-collapse text-sm" style={{ minWidth: Math.max(560, 200 + years.length * 62) }}>
@@ -72,12 +73,13 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
               <th scope="row" className="sticky left-0 z-10 bg-surface px-3 py-2 text-left align-middle font-normal">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
+                    <span className="font-medium">{it.name}</span>
                     <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
                     <div className="text-xs text-faint">{it.target != null ? <>Meta: <b className="text-muted">{formatValue(it.target, it.unit, it.decimals)}</b> · {it.targetMode === "personalizada" ? <>personalizada{it.fixedTarget != null && <> (fixa: {formatValue(it.fixedTarget, it.unit, it.decimals)})</>}</> : "fixa"}{it.targetRef && it.targetMode === "fixa" && <span title={`${it.targetRef}${it.targetApprox ? " (valor aproximado: confira na fonte)" : ""}`}> ⓘ{it.targetApprox ? "~" : ""}</span>}</> : "sem meta global"}</div>
                     {it.target == null && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">sem meta · fora da conta (defina uma em Editar)</span>}
                     {!it.considered && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">não considerado no score · existe, mas está desmarcado em Editar indicadores</span>}
                     {it.considered && it.target != null && !it.hasData && <span className="mt-0.5 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-semibold">{Object.keys(it.values).length ? "sem dois anos seguidos para dar nota" : "sem dados publicados"} · considerado, mas fora da conta por falta de dados</span>}
+                    <div><ScoreItemPeek id={it.id} scope={scope} name={it.name} cols={years.length + 2} targetText={it.target != null ? `Meta: ${formatValue(it.target, it.unit, it.decimals)} (${it.targetMode === "personalizada" ? "personalizada" : "fixa"}). ${it.targetRef ?? ""}` : "Sem meta definida: fora da conta."} valueLabels={Object.fromEntries(years.filter((y) => it.values[y] != null).map((y) => [y, formatValue(it.values[y], it.unit, it.decimals)]))} /></div>
                   </div>
                   <AskButton compact focus={itemFocus(it, years, place)} />
                 </div>
@@ -145,7 +147,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
     suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
   });
 
-  const yearRows: YearRow[] = [...r.years].reverse().map((y) => {
+  const yearRows: YearRow[] = r.years.map((y) => {
     const t = termOf(y.year);
     return {
       year: y.year, gov: t ? termLabel(t) : "—", color: t?.color,
@@ -246,13 +248,13 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
       <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Cada quadrado mostra o número publicado (em cima) e a nota do ano (embaixo). Passe o mouse ou toque para ver a explicação.</p>
-        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
       <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Mesma leitura: número publicado em cima, nota do ano embaixo.</p>
-        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
       <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length) || Object.keys(customTargets).length > 0 || method !== "nivel"} method={method} />

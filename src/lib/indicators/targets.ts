@@ -6,6 +6,8 @@ export type Target = {
   byScope?: Partial<Record<"FEDERAL" | "ESTADUAL" | "MUNICIPAL", number>>;
   /** meta relativa: fração do valor do ano-base (ex.: "reduzir à metade em relação a 2015") */
   base?: { year: number; factor: number };
+  /** meta que acompanha outra série ano a ano (ex.: 3 meses de importações = ¼ das importações do ano) */
+  ratioOf?: { id: string; factor: number };
   ref: string;
   url?: string;
   /** o número vem de fonte secundária ou de definição próxima, e vale conferir na fonte primária */
@@ -18,6 +20,7 @@ export function fixedTargetFor(id: string, scope: "FEDERAL" | "ESTADUAL" | "MUNI
   if (!t) return null;
   if (t.byScope?.[scope] != null) return t.byScope[scope]!;
   if (t.value != null) return t.value;
+  if (t.ratioOf) return null; // resolvida ano a ano no cálculo do score
   if (t.base) { const b = values[t.base.year]; return b != null ? b * t.base.factor : null; }
   return null;
 }
@@ -51,4 +54,10 @@ export const TARGETS: Record<string, Target> = {
   previdencia: { value: 100, ref: "ODS 1.3 (ONU/OIT): cobertura universal de proteção social, ou seja, 100% dos ocupados", url: "https://brasil.un.org/pt-br/sdgs/1" },
   "dcl-rcl": { byScope: { ESTADUAL: 200, MUNICIPAL: 120 }, ref: "Limites legais do Senado (Resolução 40/2001): dívida de até 200% da receita corrente líquida nos estados e 120% nos municípios", url: "https://www12.senado.leg.br/legislacao/" },
   "pessoal-rcl": { byScope: { ESTADUAL: 49, MUNICIPAL: 54 }, ref: "Limites da Lei de Responsabilidade Fiscal (art. 20) para o Poder Executivo: 49% da receita nos estados e 54% nos municípios", url: "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm" },
+  reservas: { ratioOf: { id: "importacoes", factor: 0.25 }, ref: "Regra prática do FMI: reservas que cubram ao menos 3 meses de importações (um quarto das importações do ano)", url: "https://www.imf.org/en/Publications/Policy-Papers/Issues/2016/12/31/Assessing-Reserve-Adequacy-PP4572" },
+  comprometimento: { value: 10, ref: "Média de ~10% da renda no serviço da dívida das famílias em 17 países do BIS (Debt Service Ratio)", url: "https://data.bis.org/topics/DSR", approx: true },
+  endividamento: { value: 130, ref: "Média da OCDE de dívida das famílias de ~130% da renda anual (base de cálculo mais ampla que a do Banco Central)", url: "https://www.oecd.org/en/data/indicators/household-debt.html", approx: true },
+  "endividamento-sem-habitacao": { value: 130, ref: "Mesma referência da OCDE do endividamento total (não há média internacional sem crédito imobiliário)", url: "https://www.oecd.org/en/data/indicators/household-debt.html", approx: true },
+  "renda-trabalho": { value: 7107, ref: "Salário mínimo necessário calculado pelo DIEESE (R$ 7.107 em dez/2025, para uma família de 4 pessoas), a preços de 2025", url: "https://www.dieese.org.br/analisecestabasica/salarioMinimo.html", approx: true },
+  desalento: { value: 0, ref: "Ideal teórico: nenhum trabalhador desalentado (não achei média internacional comparável)", approx: true },
 };
