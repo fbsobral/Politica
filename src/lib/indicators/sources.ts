@@ -73,7 +73,7 @@ export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidra
 
 /**
  * Valor adicionado por setor (Contas Regionais do IBGE, tabela 5938), como publicado, para Brasil, UF e município.
- * `scale` só converte a unidade (mil reais -> reais). A série vai até o último ano publicado (hoje 2021) e mostra até os 20 anos mais recentes.
+ * `scale` só converte a unidade (mil reais -> reais). A série vai até o último ano publicado (hoje 2021) e mostra até os 30 anos mais recentes.
  */
 export const sectorFor = (scope: Scope, variable: number, scale = 1): Fetcher => async (geo) => {
   const rows = await sidra(`t/5938/${terr(scope, geo)}/v/${variable}/p/all`);
@@ -103,7 +103,8 @@ async function rgfYear(ente: string, year: number, anexo: "RGF-Anexo 01" | "RGF-
 }
 
 async function eachYear(fn: (y: number) => Promise<number | null>): Promise<YearSeries> {
-  const { from, to } = span();
+  const { to } = span();
+  const from = Math.max(span().from, 2013); // o Siconfi (RGF) não tem anos anteriores a 2013
   const years = Array.from({ length: to - from + 1 }, (_, i) => from + i);
   const out: YearSeries = {};
   let next = 0;

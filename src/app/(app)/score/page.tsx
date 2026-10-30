@@ -220,6 +220,12 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
         <p className="mt-3 text-xs leading-relaxed text-faint"><b>Índice calculado pelo Política, não é um dado oficial.</b> Os valores de cada indicador vêm das fontes oficiais, como na aba Indicadores; só a nota é uma conta nossa. O score resume, não dá veredito: clima, economia mundial e pandemia pesam nos números e estão fora do controle de um governo.</p>
       </section>
 
+      {r.items.some((i) => i.considered && i.target != null && Object.keys(i.values).length === 0) && (
+        <p className="mb-6 rounded-2xl border border-gold/40 bg-gold/10 p-4 text-sm">
+          <b>Atualizando dados em segundo plano.</b> Alguns indicadores ainda não estão guardados ({r.items.filter((i) => i.considered && i.target != null && Object.keys(i.values).length === 0).map((i) => i.name).join(", ")}). Recarregue a página em alguns instantes; o score se completa sozinho.
+        </p>
+      )}
+
       {(r.sides.economia === 0 || r.sides.social === 0) && (
         <p className="mb-6 rounded-2xl border border-gold/40 bg-gold/10 p-4 text-sm">
           <b>Sem score nesta esfera.</b> {r.sides.economia === 0 ? "Nenhum indicador econômico" : "Nenhum indicador social"} com dado publicado entre os escolhidos. O score só existe quando os dois lados têm pelo menos um indicador.

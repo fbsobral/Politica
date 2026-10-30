@@ -114,10 +114,10 @@ export function ScopeTabs({ base, scope, params = {}, noAll = false }: { base: s
   );
 }
 
-export const RANGE_YEARS = [5, 10, 20] as const;
+export const RANGE_YEARS = [5, 10, 20, 30] as const;
 export const rangeOf = (v?: string): number => (RANGE_YEARS as readonly number[]).includes(Number(v)) ? Number(v) : 10;
 
-/** Janela de tempo dos gráficos: últimos 5, 10 ou 20 anos (?anos=...), preservando outros parâmetros. */
+/** Janela de tempo dos gráficos: últimos 5, 10, 20 ou 30 anos (?anos=...), preservando outros parâmetros. */
 export function RangeTabs({ base, years, params = {} }: { base: string; years: number; params?: Record<string, string | undefined> }) {
   const href = (y: number) => {
     const qs = new URLSearchParams();

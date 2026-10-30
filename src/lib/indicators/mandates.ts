@@ -4,8 +4,8 @@ import type { Geo, Scope } from "./core";
 
 export type TermName = { from: number; to: number; name: string; party: string | null };
 
-const GOV_YEARS = [2006, 2010, 2014, 2018, 2022];
-const MAYOR_YEARS = [2004, 2008, 2012, 2016, 2020, 2024];
+const GOV_YEARS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022];
+const MAYOR_YEARS = [1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024];
 
 const key = (scope: Scope, place: string) => `terms:v1:${scope}:${place}`;
 
@@ -21,7 +21,7 @@ async function put(k: string, data: TermName[]) {
   await db.budgetCache.upsert({ where: { key: k }, create: { key: k, data: data as never }, update: { data: data as never, fetchedAt: new Date() } });
 }
 
-/** Governadores (por UF) e prefeitos (por município) eleitos desde 2004, a partir dos arquivos de candidaturas do TSE. O mandato vai de janeiro do ano seguinte à eleição por 4 anos. */
+/** Governadores (por UF) e prefeitos (por município) eleitos desde 1994 (governadores) e 1996 (prefeitos), a partir dos arquivos de candidaturas do TSE. O mandato vai de janeiro do ano seguinte à eleição por 4 anos. */
 export async function refreshMandates(geos: Geo[]): Promise<{ written: number; failed: string[] }> {
   let written = 0;
   const failed: string[] = [];

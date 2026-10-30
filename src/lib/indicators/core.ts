@@ -8,8 +8,8 @@ export type Geo = { uf: string; ufCode: number; ibge: string; municipalityKey: s
 
 const DAY = 24 * 3600 * 1000;
 
-/** quantos anos a gente guarda; a tela mostra 5, 10 ou 20 */
-export const YEARS_BACK = 20;
+/** quantos anos a gente guarda; a tela mostra 5, 10, 20 ou 30 */
+export const YEARS_BACK = 30;
 export const lastClosedYear = () => new Date().getFullYear() - 1;
 export const yearRange = () => {
   const last = lastClosedYear();

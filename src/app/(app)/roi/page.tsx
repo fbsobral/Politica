@@ -111,7 +111,7 @@ async function RoiContent({ searchParams }: { searchParams: Promise<{ esfera?: s
 
   const analyses = await Promise.all(indIds.map(async (id, k) => {
     const c = cands.find((x) => x.ind.id === id)!;
-    const series = (await getSeries(c.ind, scope, geo)) ?? {};
+    const series = (await getSeries(c.ind, scope, geo, { lazy: true })) ?? {};
     const byH = HORIZONS.map((hh) => ({ h: hh, ws: roiWindows(real, series, c.ind.better!, hh) }));
     return { c, series, byH, color: COLORS[k % COLORS.length] };
   }));

@@ -17,9 +17,12 @@ export const defaultSelection = (scope: Scope): string[] => candidates(scope).fi
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };
 
-/** Quem exercia a Presidência ao fim de cada ano (Temer assumiu em 31/08/2016, então 2016 fica com ele). */
+/** Quem exercia a Presidência ao fim de cada ano (Temer assumiu em 31/08/2016, então 2016 fica com ele; Itamar Franco, 1993–1994, fica fora da janela de 30 anos). */
 export const PRESIDENTS: Term[] = [
-  { id: "lula2", name: "Lula", role: "Presidente (2º mandato)", from: 2006, to: 2010, color: "#d9480f" },
+  { id: "fhc1", name: "Fernando Henrique Cardoso", role: "Presidente (1º mandato)", from: 1995, to: 1998, color: "#2b8a3e" },
+  { id: "fhc2", name: "Fernando Henrique Cardoso", role: "Presidente (2º mandato)", from: 1999, to: 2002, color: "#5c940d" },
+  { id: "lula1", name: "Lula", role: "Presidente (1º mandato)", from: 2003, to: 2006, color: "#e03131" },
+  { id: "lula2", name: "Lula", role: "Presidente (2º mandato)", from: 2007, to: 2010, color: "#d9480f" },
   { id: "dilma", name: "Dilma Rousseff", role: "Presidente", from: 2011, to: 2015, color: "#c2255c" },
   { id: "temer", name: "Michel Temer", role: "Presidente", from: 2016, to: 2018, color: "#7048e8" },
   { id: "bolsonaro", name: "Jair Bolsonaro", role: "Presidente", from: 2019, to: 2022, color: "#0e8a5f" },
@@ -30,7 +33,7 @@ const PALETTE = ["#17407f", "#0e8a5f", "#d9480f", "#7048e8", "#e0a800", "#d6336c
 
 /** Mandatos fixos por esfera, com os nomes dos eleitos quando já foram carregados. */
 export function cycleTerms(scope: Scope, names: { from: number; to: number; name: string }[] = []): Term[] {
-  const start = scope === "ESTADUAL" ? 2007 : 2005;
+  const start = scope === "ESTADUAL" ? 1995 : 1997; // posse em janeiro do ano seguinte à eleição (1994 e 1996)
   const role = scope === "ESTADUAL" ? "Governador" : "Prefeito";
   const out: Term[] = [];
   for (let from = start, i = 0; from <= lastClosedYear(); from += 4, i++) {
@@ -93,7 +96,7 @@ export function advanceScore(prev: number, now: number, target: number, better: 
 export async function computeScore(scope: Scope, geo: Geo, selected: string[], from: number, terms: Term[], custom: Record<string, number> = {}, method: ScoreMethod = "nivel"): Promise<ScoreResult> {
   const items: ScoreItem[] = [];
   for (const { ind, side } of candidates(scope)) {
-    const values = (await getSeries(ind, scope, geo)) ?? {};
+    const values = (await getSeries(ind, scope, geo, { lazy: true })) ?? {};
     const fixed = TARGETS[ind.id]?.value ?? null;
     const own = custom[ind.id];
     const target = own != null && Number.isFinite(own) ? own : fixed;
@@ -112,7 +115,7 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
   }
   items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();
-  // o score é calculado sobre todos os anos guardados; a janela (5/10/20 anos) só limita o que a tela mostra
+  // o score é calculado sobre todos os anos guardados; a janela (5/10/20/30 anos) só limita o que a tela mostra
   const first = Math.min(from, to - YEARS_BACK + 1);
   const years: ScoreYear[] = [];
   for (let y = first; y <= to; y++) {

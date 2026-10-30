@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { cached, type Geo, type Scope, type YearSeries } from "./core";
 import { bcb, budgetTotal, cempre, sectorFor, dclRcl, expenseValue, giniSidra, incomeReal, pessoalRcl, pibPerCapitaOficial, sidraAnnual, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
 import type { Unit } from "./format";
@@ -150,8 +151,33 @@ export const SECTOR_INDICATORS: Indicator[] = [
 
 export const indicatorsFor = (scope: Scope) => INDICATORS.filter((i) => i.fetch[scope]);
 
-/** Série (já com cache no banco) de um indicador em uma esfera para o local do usuário. */
-export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { force?: boolean } = {}): Promise<YearSeries | null> {
+const inflight = new Map<string, Promise<unknown>>();
+let running = 0;
+const waiting: (() => void)[] = [];
+
+/** Atualiza uma série em segundo plano (no máximo 3 por vez e sem repetir a mesma), sem fazer ninguém esperar. */
+function refreshInBackground(key: string, ttlDays: number, fn: () => Promise<YearSeries>) {
+  if (inflight.has(key)) return;
+  const run = async () => {
+    running++;
+    try { await cached<YearSeries>(key, ttlDays, fn, true); } catch { /* tenta na próxima visita */ } finally {
+      running--;
+      inflight.delete(key);
+      waiting.shift()?.();
+    }
+  };
+  inflight.set(key, new Promise<void>((resolve) => {
+    const go = () => { run().then(resolve); };
+    if (running < 3) go(); else waiting.push(go);
+  }));
+}
+
+/**
+ * Série (já com cache no banco) de um indicador em uma esfera para o local do usuário.
+ * `lazy`: nunca espera uma busca ao vivo — devolve o que já está guardado (mesmo velho, ou da versão anterior do cache) e atualiza em segundo plano;
+ * se não houver nada guardado ainda, devolve null e a série aparece na próxima visita.
+ */
+export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { force?: boolean; lazy?: boolean } = {}): Promise<YearSeries | null> {
   const f = ind.fetch[scope];
   if (!f) return null;
   if (ind.fed) {
@@ -159,7 +185,28 @@ export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { 
     return Object.keys(v).length ? v : null;
   }
   const place = scope === "FEDERAL" ? "br" : scope === "ESTADUAL" ? geo.uf : geo.ibge;
-  const key = `ind:v6:${ind.id}:${scope}:${place}`; // v4: só valores publicados pela fonte
-  const out = await cached<YearSeries>(key, ind.ttlDays ?? 7, () => f(geo), opts.force);
-  return out && Object.keys(out).length ? out : null;
+  const key = `ind:v7:${ind.id}:${scope}:${place}`;
+  const ttl = ind.ttlDays ?? 7;
+  const nonEmpty = (v: YearSeries | null | undefined) => (v && Object.keys(v).length ? v : null);
+  if (opts.lazy && !opts.force) {
+    const hit = await db.budgetCache.findUnique({ where: { key } });
+    if (hit) {
+      if (Date.now() - hit.fetchedAt.getTime() > ttl * 24 * 3600 * 1000) refreshInBackground(key, ttl, () => f(geo));
+      return nonEmpty(hit.data as unknown as YearSeries);
+    }
+    // ainda não há a versão nova: usa a anterior enquanto a nova é preparada
+    const old = await db.budgetCache.findUnique({ where: { key: `ind:v6:${ind.id}:${scope}:${place}` } });
+    refreshInBackground(key, ttl, () => f(geo));
+    return nonEmpty(old?.data as unknown as YearSeries | undefined);
+  }
+  if (!opts.force && !(await db.budgetCache.findUnique({ where: { key }, select: { key: true } }))) {
+    // versão nova do cache ainda vazia: mostra a anterior na hora e prepara a nova em segundo plano
+    const old = await db.budgetCache.findUnique({ where: { key: `ind:v6:${ind.id}:${scope}:${place}` } });
+    if (old && nonEmpty(old.data as unknown as YearSeries)) {
+      refreshInBackground(key, ttl, () => f(geo));
+      return nonEmpty(old.data as unknown as YearSeries);
+    }
+  }
+  const out = await cached<YearSeries>(key, ttl, () => f(geo), opts.force);
+  return nonEmpty(out);
 }
