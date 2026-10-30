@@ -13,6 +13,7 @@ function short(n: number, d = 1): string {
 }
 
 export function formatValue(v: number, unit: Unit, decimals = 1): string {
+  if (v == null || !Number.isFinite(v)) return "—";
   switch (unit) {
     case "pct": return `${nf(v, decimals)}%`;
     case "brl": return `R$ ${short(v)}`;
