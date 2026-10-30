@@ -66,12 +66,14 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
         </thead>
         <tbody>
           {items.map((it) => (
-            <tr key={it.id} className="border-t border-line">
+            <tr key={it.id} className={`border-t border-line ${it.considered ? "" : "opacity-60"}`}>
               <th scope="row" className="sticky left-0 z-10 bg-surface px-3 py-2 text-left align-middle font-normal">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
                     <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
+                    {!it.considered && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">não considerado no score · existe, mas está desmarcado em Editar indicadores</span>}
+                    {it.considered && !it.hasData && <span className="mt-0.5 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-semibold">{Object.keys(it.values).length ? "sem dois anos seguidos para dar nota" : "sem dados publicados"} · considerado, mas fora da conta por falta de dados</span>}
                   </div>
                   <AskButton compact focus={itemFocus(it, years, place)} />
                 </div>
@@ -129,7 +131,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
 
   const yearFocus = (y: (typeof r.years)[number], pl: string, t?: Term): AskFocus => ({
     title: `Score de ${y.year} · ${pl}`,
-    text: `Score dos governos, ${pl}, ano ${y.year}${t ? ` (${t.name ?? t.role}, mandato ${t.from}–${t.to})` : ""}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}. Indicadores e notas do ano: ${r.items.filter((i) => i.values[y.year] != null).map((i) => `${i.name} ${formatValue(i.values[y.year], i.unit, i.decimals)}${i.notes[y.year] != null ? ` (nota ${Math.round(i.notes[y.year])})` : ""}`).join("; ")}. Método: cada nota mede a melhora em relação ao ano anterior (0 a 100, 50 = variação típica da série); cada lado é a média das suas notas; o score é a média dos dois lados.`,
+    text: `Score dos governos, ${pl}, ano ${y.year}${t ? ` (${t.name ?? t.role}, mandato ${t.from}–${t.to})` : ""}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}. Indicadores e notas do ano: ${r.items.filter((i) => i.considered && i.values[y.year] != null).map((i) => `${i.name} ${formatValue(i.values[y.year], i.unit, i.decimals)}${i.notes[y.year] != null ? ` (nota ${Math.round(i.notes[y.year])})` : ""}`).join("; ")}. Método: cada nota mede a melhora em relação ao ano anterior (0 a 100, 50 = variação típica da série); cada lado é a média das suas notas; o score é a média dos dois lados.`,
     suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
   });
 
@@ -140,7 +142,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       economia: n0(y.economia), economiaBg: heat(y.economia), social: n0(y.social), socialBg: heat(y.social), total: n0(y.total), totalBg: heat(y.total, 0.4),
       nEcon: 0, nSocial: 0,
       ask: yearFocus(y, place, termOf(y.year)),
-      items: r.items.filter((i) => i.values[y.year] != null).map((i) => {
+      items: r.items.filter((i) => i.considered && i.values[y.year] != null).map((i) => {
         const v = i.values[y.year], prev = i.values[y.year - 1];
         const dir = prev == null ? null : v === prev ? "igual" : (i.better === "up" ? v > prev : v < prev) ? "melhorou" : "piorou";
         return { name: i.name, side: i.side, value: formatValue(v, i.unit, i.decimals), prev: prev == null ? null : formatValue(prev, i.unit, i.decimals), dir, note: i.notes[y.year] ?? null, bg: heat(i.notes[y.year]) };
@@ -153,7 +155,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
     { id: "total", label: "Score", color: "#111827", kind: "total", values: Object.fromEntries(r.years.map((y) => [y.year, y.total])) },
     { id: "economia", label: "Econômico", color: "#2563eb", kind: "economia", values: Object.fromEntries(r.years.map((y) => [y.year, y.economia])) },
     { id: "social", label: "Social", color: "#db2777", kind: "social", values: Object.fromEntries(r.years.map((y) => [y.year, y.social])) },
-    ...r.items.map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
+    ...r.items.filter((i) => i.considered && i.hasData).map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
   ];
 
   const firstYear = (xs: { year: number; v: number | null }[]) => xs.find((x) => x.v != null)?.year ?? null;
@@ -163,7 +165,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
     return fy != null && fy > from + 1 ? [{ side, fy }] : [];
   });
   const gapNote = firstTotal != null && firstTotal > from + 1 && gaps.length > 0
-    ? `O score só começa em ${firstTotal}: ${gaps.map((g) => `o lado ${g.side === "economia" ? "econômico" : "social"} só tem nota a partir de ${g.fy}`).join(" e ")}. Antes disso, os indicadores escolhidos não têm dado publicado (a nota compara com o ano anterior, então precisa de dois anos seguidos). Início das séries: ${r.items.map((i) => `${i.name} ${Math.min(...Object.keys(i.values).map(Number))}`).join(", ")}. Não preenchemos esses anos com estimativas.`
+    ? `O score só começa em ${firstTotal}: ${gaps.map((g) => `o lado ${g.side === "economia" ? "econômico" : "social"} só tem nota a partir de ${g.fy}`).join(" e ")}. Antes disso, os indicadores escolhidos não têm dado publicado (a nota compara com o ano anterior, então precisa de dois anos seguidos). Início das séries: ${r.items.filter((i) => i.considered && i.hasData).map((i) => `${i.name} ${Math.min(...Object.keys(i.values).map(Number))}`).join(", ")}. Não preenchemos esses anos com estimativas.`
     : null;
 
   const mean = (xs: (number | null)[]) => { const v = xs.filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
@@ -178,8 +180,8 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       items: r.items.map((i) => {
         const cells = ys.map((y) => ({ year: y.year, value: i.values[y.year] != null ? formatValue(i.values[y.year], i.unit, i.decimals) : "—", note: n0(i.notes[y.year]), bg: heat(i.notes[y.year]) }));
         const m = mean(ys.map((y) => i.notes[y.year] ?? null));
-        return { name: i.name, side: i.side, cells, avg: n0(m), avgBg: heat(m, 0.4), has: m != null };
-      }).filter((i) => i.has).map(({ has: _has, ...rest }) => rest),
+        return { name: i.name, side: i.side, cells, avg: n0(m), avgBg: heat(m, 0.4), has: m != null, considered: i.considered };
+      }).map(({ has, ...rest }) => ({ ...rest, noData: !has })),
       ask: { title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${ys.map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] },
     };
   });
@@ -191,7 +193,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       <PageHeader eyebrow={`Números · ${place} · últimos ${range} anos`} title="Score dos governos" />
       <ScopeTabs base="/score" scope={scope} noAll params={{ anos: sp.anos }} />
       <RangeTabs base="/score" years={range} params={{ esfera: sp.esfera }} />
-      <AskButton className="mb-6 ml-3 align-top" label="Perguntar sobre o score" focus={{ title: `Score dos governos · ${place}`, text: `Página Score dos governos (${place}, últimos ${range} anos). Resultado por governo: ${r.terms.map((t) => `${termLabel(t)} ${n0(t.avg)}`).join("; ")}. Indicadores usados: ${r.items.map((i) => i.name).join("; ")}. Método: cada indicador recebe nota anual (0 a 100) pela melhora em relação ao ano anterior comparada com as demais variações da série (mesma régua para todos os anos); lados econômico e social valem 50% cada, indicadores com peso igual dentro do lado; o score do governo é a média dos seus anos. É um índice calculado pelo Política, não um dado oficial.`, suggestions: ["Como o score é calculado?", "Por que não usar o nível do indicador em vez da melhora?", "O que o score não consegue mostrar?"] }} />
+      <AskButton className="mb-6 ml-3 align-top" label="Perguntar sobre o score" focus={{ title: `Score dos governos · ${place}`, text: `Página Score dos governos (${place}, últimos ${range} anos). Resultado por governo: ${r.terms.map((t) => `${termLabel(t)} ${n0(t.avg)}`).join("; ")}. Indicadores usados: ${r.items.filter((i) => i.considered && i.hasData).map((i) => i.name).join("; ")}${r.items.some((i) => i.considered && !i.hasData) ? `. Escolhidos, mas sem dados: ${r.items.filter((i) => i.considered && !i.hasData).map((i) => i.name).join("; ")}` : ""}${r.items.some((i) => !i.considered) ? `. Existem mas não entram na conta: ${r.items.filter((i) => !i.considered).map((i) => i.name).join("; ")}` : ""}. Método: cada indicador recebe nota anual (0 a 100) pela melhora em relação ao ano anterior comparada com as demais variações da série (mesma régua para todos os anos); lados econômico e social valem 50% cada, indicadores com peso igual dentro do lado; o score do governo é a média dos seus anos. É um índice calculado pelo Política, não um dado oficial.`, suggestions: ["Como o score é calculado?", "Por que não usar o nível do indicador em vez da melhora?", "O que o score não consegue mostrar?"] }} />
 
       <section className="mb-6 rounded-2xl border border-line bg-surface p-5">
         <h2 className="display text-xl font-semibold">Como ler esta página</h2>

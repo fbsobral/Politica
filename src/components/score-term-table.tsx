@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 
 export type TermYear = { year: number; economia: string; economiaBg?: string; social: string; socialBg?: string; total: string; bg?: string };
-export type TermItem = { name: string; side: "economia" | "social"; cells: { year: number; value: string; note: string; bg?: string }[]; avg: string; avgBg?: string };
+export type TermItem = { name: string; side: "economia" | "social"; cells: { year: number; value: string; note: string; bg?: string }[]; avg: string; avgBg?: string; noData?: boolean; considered?: boolean };
 export type TermRow = {
   id: string; name: string; role: string; period: string; color: string;
   economia: string; economiaBg?: string; social: string; socialBg?: string;
@@ -106,8 +106,8 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                                   </td>
                                 </tr>
                                 {!closed.has(`${t.id}:${side}`) && t.items.filter((i) => i.side === side).map((it) => (
-                                  <tr key={it.name} className="border-t border-line">
-                                    <td className="py-1.5 pr-3 font-medium">{it.name}</td>
+                                  <tr key={it.name} className={`border-t border-line ${it.considered === false ? "opacity-60" : ""}`}>
+                                    <td className="py-1.5 pr-3 font-medium">{it.name}{!it.considered && <span className="ml-2 rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-semibold">não considerado</span>}{it.considered && it.noData && <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-semibold">sem dados · fora da conta</span>}</td>
                                     {it.cells.map((c) => (
                                       <td key={c.year} className="px-1 py-1 text-center" style={{ background: c.bg }}>
                                         <div className="font-semibold">{c.value}</div>

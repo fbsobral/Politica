@@ -41,7 +41,7 @@ export function cycleTerms(scope: Scope, names: { from: number; to: number; name
   return out;
 }
 
-export type ScoreItem = { id: string; name: string; unit: Unit; decimals?: number; better: "up" | "down"; side: Side; values: YearSeries; notes: Record<number, number> };
+export type ScoreItem = { id: string; name: string; unit: Unit; decimals?: number; better: "up" | "down"; side: Side; values: YearSeries; notes: Record<number, number>; /** false = escolhido, mas a fonte não publicou dado (ou não há dois anos seguidos) para calcular nota */ hasData: boolean; /** false = existe na plataforma, mas não está marcado para entrar na conta */ considered: boolean };
 export type ScoreYear = { year: number; economia: number | null; social: number | null; total: number | null };
 export type ScoreResult = { items: ScoreItem[]; years: ScoreYear[]; terms: (Term & { avg: number | null; years: number[] })[]; sides: Record<Side, number> };
 
@@ -71,17 +71,15 @@ function improvementNotes(values: YearSeries, better: "up" | "down"): Record<num
 export async function computeScore(scope: Scope, geo: Geo, selected: string[], from: number, terms: Term[]): Promise<ScoreResult> {
   const items: ScoreItem[] = [];
   for (const { ind, side } of candidates(scope)) {
-    if (!selected.includes(ind.id)) continue;
-    const values = await getSeries(ind, scope, geo);
-    if (!values) continue;
+    const values = (await getSeries(ind, scope, geo)) ?? {};
     const notes = improvementNotes(values, ind.better!);
-    if (!Object.keys(notes).length) continue;
-    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes });
+    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
   }
+  items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();
   const years: ScoreYear[] = [];
   for (let y = from; y <= to; y++) {
-    const side = (s: Side) => avg(items.filter((i) => i.side === s && i.notes[y] != null).map((i) => i.notes[y]));
+    const side = (s: Side) => avg(items.filter((i) => i.considered && i.side === s && i.notes[y] != null).map((i) => i.notes[y]));
     const economia = side("economia"), social = side("social");
     years.push({ year: y, economia, social, total: economia != null && social != null ? (economia + social) / 2 : null });
   }
@@ -91,5 +89,5 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
       const ys = years.filter((y) => y.year >= t.from && y.year <= t.to && y.total != null);
       return { ...t, avg: avg(ys.map((y) => y.total!)), years: ys.map((y) => y.year) };
     });
-  return { items, years, terms: outTerms, sides: { economia: items.filter((i) => i.side === "economia").length, social: items.filter((i) => i.side === "social").length } };
+  return { items, years, terms: outTerms, sides: { economia: items.filter((i) => i.considered && i.side === "economia" && i.hasData).length, social: items.filter((i) => i.considered && i.side === "social" && i.hasData).length } };
 }
