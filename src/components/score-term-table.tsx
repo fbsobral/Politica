@@ -3,7 +3,7 @@
 import { Fragment, useState } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 
-export type TermYear = { year: number; economia: string; social: string; total: string; bg?: string };
+export type TermYear = { year: number; economia: string; economiaBg?: string; social: string; socialBg?: string; total: string; bg?: string };
 export type TermItem = { name: string; side: "economia" | "social"; cells: { year: number; value: string; note: string; bg?: string }[]; avg: string; avgBg?: string };
 export type TermRow = {
   id: string; name: string; role: string; period: string; color: string;
@@ -75,8 +75,8 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                           {t.years.map((y) => (
                             <tr key={y.year} className="border-t border-line">
                               <td className="py-1 font-semibold">{y.year}</td>
-                              <td className="py-1 text-center">{y.economia}</td>
-                              <td className="py-1 text-center">{y.social}</td>
+                              <td className="py-1 text-center" style={{ background: y.economiaBg }}>{y.economia}</td>
+                              <td className="py-1 text-center" style={{ background: y.socialBg }}>{y.social}</td>
                               <td className="py-1 text-center font-semibold" style={{ background: y.bg }}>{y.total}</td>
                             </tr>
                           ))}
