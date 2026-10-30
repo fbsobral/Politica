@@ -35,7 +35,7 @@ export function cycleTerms(scope: Scope, names: { from: number; to: number; name
   const out: Term[] = [];
   for (let from = start, i = 0; from <= lastClosedYear(); from += 4, i++) {
     const to = from + 3;
-    const nm = names.find((n) => n.from <= from + 1 && n.to >= to - 1)?.name ?? null;
+    const nm = names.filter((n) => n.from === from).map((n) => n.name).join(" / ") || null;
     out.push({ id: `${scope}-${from}`, name: nm, role, from, to, color: PALETTE[i % PALETTE.length] });
   }
   return out;

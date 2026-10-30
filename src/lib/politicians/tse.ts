@@ -193,3 +193,18 @@ export async function syncCandidates(ufs: string[]): Promise<number> {
   await db.candidate.deleteMany({ where: { externalKey: { notIn: rows.map((r) => r.externalKey) } } });
   return rows.length;
 }
+
+/* ───────── Histórico de governadores e prefeitos eleitos (para os mandatos do score) ───────── */
+
+export type ElectedHead = { year: number; name: string; party: string | null; municipalityKey: string | null };
+
+/** Eleitos para governador (UF) ou prefeito (UF, todos os municípios) em um ano de eleição, segundo o TSE. */
+export async function electedHeads(year: number, uf: string, cargo: "GOVERNADOR" | "PREFEITO"): Promise<ElectedHead[]> {
+  const zip = await downloadZip(year, 1000 * 60 * 60 * 24 * 30);
+  const out = new Map<string, ElectedHead>();
+  for (const r of readCandidates(zip, uf, year)) {
+    if (r.DS_CARGO !== cargo || !ELECTED.test(r.DS_SIT_TOT_TURNO) || out.has(r.SQ_CANDIDATO)) continue;
+    out.set(r.SQ_CANDIDATO, { year, name: titleCase(r.NM_URNA_CANDIDATO && !/^#/.test(r.NM_URNA_CANDIDATO) ? r.NM_URNA_CANDIDATO : r.NM_CANDIDATO), party: r.SG_PARTIDO || null, municipalityKey: cargo === "PREFEITO" ? normalize(r.NM_UE) : null });
+  }
+  return [...out.values()];
+}

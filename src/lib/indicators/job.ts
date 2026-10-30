@@ -4,6 +4,7 @@ import { ibgeIdFor } from "@/lib/ibge";
 import { INDICATORS, SECTOR_INDICATORS, getSeries } from "./catalog";
 import type { Geo, Scope } from "./core";
 import { refreshIpea } from "./ipea";
+import { refreshMandates } from "./mandates";
 
 /** Atualiza os indicadores de todos os locais usados: baixa os arquivos grandes do IPEA e aquece o cache das demais fontes. */
 export async function refreshIndicators(): Promise<{ places: number; ipeaKeys: number; series: number; failed: string[] }> {
@@ -15,6 +16,12 @@ export async function refreshIndicators(): Promise<{ places: number; ipeaKeys: n
   }
   const ipea = await refreshIpea(geos.map((g) => g.ibge));
   const failed = [...ipea.failed];
+  try {
+    const m = await refreshMandates(geos);
+    failed.push(...m.failed);
+  } catch (err) {
+    console.warn("[indicators:job] mandatos", (err as Error).message);
+  }
   let series = 0;
   const doneStates = new Set<string>();
   let federalDone = false;
