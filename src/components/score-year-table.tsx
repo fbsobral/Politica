@@ -53,8 +53,8 @@ function Side({ title, rows, avg, bg }: { title: string; rows: YearDetailItem[];
 /** Tabela "Ano a ano" agrupada por mandato (cada grupo abre e fecha), com botão de detalhamento por ano. */
 export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
   const [open, setOpen] = useState<number | null>(null);
-  // por padrão só o mandato mais recente fica aberto
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(groups.length ? [groups[groups.length - 1].id] : []));
+  // por padrão todos os mandatos ficam expandidos; o usuário pode recolher
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(groups.map((g) => g.id)));
   const flip = (id: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allOpen = openGroups.size === groups.length;
   return (
