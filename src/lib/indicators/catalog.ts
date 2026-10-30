@@ -1,5 +1,5 @@
 import { cached, type Geo, type Scope, type YearSeries } from "./core";
-import { bcb, budgetTotal, cempre, sectorFor, dclRcl, expenseValue, giniSidra, pessoalRcl, pibPerCapitaOficial, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
+import { bcb, budgetTotal, cempre, sectorFor, dclRcl, expenseValue, giniSidra, incomeReal, pessoalRcl, pibPerCapitaOficial, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
 import type { Unit } from "./format";
 
 export type GroupId = "economia" | "financas" | "familias" | "seguranca" | "social" | "servicos";
@@ -35,6 +35,8 @@ export type Indicator = {
   bundle?: string;
   /** valor em R$ que pode ser exibido corrigido pela inflação (IPCA) a pedido do usuário */
   inflation?: boolean;
+  /** valor em R$ que a própria fonte já publica a preços constantes (não precisa de correção) */
+  real?: boolean;
 };
 
 export const INDICATORS: Indicator[] = [
@@ -83,6 +85,8 @@ export const INDICATORS: Indicator[] = [
   /* ═════ Pobreza e renda ═════ */
   { id: "pobreza", group: "social", name: "Pessoas em situação de pobreza", unit: "pct", decimals: 1, desc: "Percentual da população abaixo da linha de pobreza nacional (síntese de indicadores sociais do IBGE, PNAD Contínua). Não existe anualmente por município.", source: "IBGE (SIS) via IPEA (PNADCA_TXPNUF)", sourceUrl: "https://www.ibge.gov.br/estatisticas/sociais/trabalho/", better: "down", fed: true, fetch: { FEDERAL: stored("pobreza", "FEDERAL"), ESTADUAL: stored("pobreza", "ESTADUAL") } },
   { id: "pobreza-int", parent: "pobreza", group: "social", name: "Pobreza pela linha internacional", unit: "pct", decimals: 1, desc: "Percentual da população abaixo da linha internacional de pobreza (Banco Mundial).", source: "IBGE (SIS) via IPEA (PNADCA_TXPIUF)", better: "down", fed: true, fetch: { FEDERAL: stored("pobreza-int", "FEDERAL"), ESTADUAL: stored("pobreza-int", "ESTADUAL") } },
+  { id: "renda-trabalho", real: true, group: "social", name: "Rendimento médio real do trabalho", unit: "brl", decimals: 0, desc: "Rendimento médio mensal habitual de todos os trabalhos das pessoas ocupadas, já a preços constantes do último ano (valor real publicado pelo IBGE; PNAD Contínua anual).", source: "IBGE (PNAD Contínua anual, tabela 7444)", sourceUrl: "https://www.ibge.gov.br/estatisticas/sociais/trabalho/", better: "up", fetch: { FEDERAL: incomeReal("FEDERAL"), ESTADUAL: incomeReal("ESTADUAL") } },
+  { id: "subutilizacao", group: "social", name: "Subutilização da força de trabalho (4º trimestre)", unit: "pct", decimals: 1, desc: "Taxa composta de subutilização: desocupados, quem trabalha menos horas do que gostaria e quem está disponível mas não procurou trabalho, em % da força de trabalho ampliada. Valor do 4º trimestre, como o IBGE publica (PNAD Contínua).", source: "IBGE (PNAD Contínua, tabela 4099)", sourceUrl: "https://www.ibge.gov.br/explica/desemprego.php", better: "down", fetch: { FEDERAL: unemploymentQ4("FEDERAL", 4118), ESTADUAL: unemploymentQ4("ESTADUAL", 4118) } },
   { id: "gini", group: "social", name: "Desigualdade de renda (Gini)", unit: "index", decimals: 3, desc: "Índice de Gini do rendimento domiciliar per capita: de 0 (todos ganham igual) a 1 (uma pessoa fica com tudo). Só existe por município nos Censos.", source: "IBGE (PNAD Contínua, tabela 7435)", better: "down", fetch: { FEDERAL: giniSidra("FEDERAL"), ESTADUAL: giniSidra("ESTADUAL") } },
 
   /* ═════ Saúde, educação e saneamento ═════ */

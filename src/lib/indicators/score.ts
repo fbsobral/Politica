@@ -6,13 +6,13 @@ export type Side = "economia" | "social";
 
 const SIDE_OF_GROUP: Record<string, Side> = { economia: "economia", financas: "economia", familias: "economia", seguranca: "social", social: "social", servicos: "social" };
 
-/** Indicadores que podem entrar no score: têm sentido de "melhor" e dado na esfera. Valores em R$ ficam de fora (crescem com a inflação e não têm "melhor" claro). */
+/** Indicadores que podem entrar no score: têm sentido de "melhor" e dado na esfera. Valores em R$ só entram se a própria fonte já os publica em termos reais (senão crescem com a inflação). */
 export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
-  return INDICATORS.filter((i) => i.better && i.unit !== "brl" && i.unit !== "count" && i.fetch[scope] && SIDE_OF_GROUP[i.group]).map((ind) => ({ ind, side: SIDE_OF_GROUP[ind.group] }));
+  return INDICATORS.filter((i) => i.better && (i.unit !== "brl" || i.real) && i.unit !== "count" && i.fetch[scope] && SIDE_OF_GROUP[i.group]).map((ind) => ({ ind, side: SIDE_OF_GROUP[ind.group] }));
 }
 
 /** Conjunto padrão: no Brasil, os 10 indicadores principais; em estado e município, os indicadores principais que existem (as sub-métricas ficam como opção). */
-const FEDERAL_DEFAULT = ["pib-cresc", "desemprego", "ipca", "divida-bruta", "deficit-primario", "homicidios", "pobreza", "gini", "analfabetismo", "mortalidade-infantil"];
+const FEDERAL_DEFAULT = ["pib-cresc", "desemprego", "ipca", "divida-bruta", "deficit-primario", "homicidios", "pobreza", "gini", "analfabetismo", "mortalidade-infantil", "renda-trabalho", "subutilizacao"];
 export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => (scope === "FEDERAL" ? FEDERAL_DEFAULT.includes(c.ind.id) : !c.ind.parent)).map((c) => c.ind.id);
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };

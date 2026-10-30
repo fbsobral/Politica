@@ -11,7 +11,7 @@ const H = 300, PL = 34, PR = 14, PT = 16, PB = 28;
 export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines: LineSeries[]; terms: BandTerm[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(720);
-  const [on, setOn] = useState<Set<string>>(new Set(["total", "economia", "social"]));
+  const [on, setOn] = useState<Set<string>>(new Set(["total"]));
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -97,7 +97,7 @@ export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs text-faint">Notas de 0 a 100. A linha tracejada em 50 é a melhora típica; as faixas coloridas são os governos. Lacunas na linha são anos sem nota. Toque nos botões acima para mostrar ou esconder cada linha.</p>
+      <p className="mt-2 text-xs text-faint">Notas de 0 a 100. A linha tracejada em 50 é a melhora típica; as faixas coloridas são os governos. Lacunas na linha são anos sem nota. Por padrão só o score aparece: toque nos botões acima para mostrar o lado econômico, o social ou cada indicador.</p>
     </div>
   );
 }

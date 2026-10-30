@@ -48,8 +48,8 @@ export const sidraPop = (scope: Scope): Fetcher => async (geo) => {
 export const pibPerCapitaOficial: Fetcher = async () => toRange(sidraYears(await sidra("t/6784/n1/1/v/9812/p/all"), "D3C"));
 
 /** Taxa de desocupação do 4º trimestre de cada ano, exatamente como o IBGE publica (PNAD Contínua). */
-export const unemploymentQ4 = (scope: Scope): Fetcher => async (geo) => {
-  const rows = await sidra(`t/4099/${terr(scope, geo)}/v/4099/p/all`);
+export const unemploymentQ4 = (scope: Scope, variable = 4099): Fetcher => async (geo) => {
+  const rows = await sidra(`t/4099/${terr(scope, geo)}/v/${variable}/p/all`);
   const out: YearSeries = {};
   for (const r of rows) {
     const code = String(r.D3C);
@@ -57,6 +57,9 @@ export const unemploymentQ4 = (scope: Scope): Fetcher => async (geo) => {
   }
   return toRange(out);
 };
+
+/** Rendimento médio mensal REAL do trabalho (PNAD Contínua anual, tabela 7444): o IBGE já publica a preços do último ano, então nada é corrigido aqui. */
+export const incomeReal = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7444/${terr(scope, geo)}/v/10774/p/all`), "D3C"));
 
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
