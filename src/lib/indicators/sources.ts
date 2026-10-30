@@ -159,8 +159,13 @@ export const budgetTotal = (scope: Scope, kind: "expense" | "revenue"): Fetcher 
 /* ───────── séries gravadas por jobs (arquivos grandes do IPEA) ───────── */
 
 /** Lê o que o job de indicadores gravou; nunca baixa nada durante a visita do usuário. */
+/** Anos que o IPEA marca como ESTIMADOS (não publicados pela fonte primária): ficam de fora, pela regra de só usar dado real. */
+const ESTIMATED_BY_IPEA: Record<string, number[]> = { pobreza: [2025], "pobreza-int": [2025] };
+
 export const stored = (id: string, scope: Scope): Fetcher => async (geo) => {
   const place = scope === "FEDERAL" ? "br" : scope === "ESTADUAL" ? geo.uf : geo.ibge;
   const hit = await db.budgetCache.findUnique({ where: { key: `ind:v1:${id}:${scope}:${place}` } });
-  return (hit?.data as unknown as YearSeries | undefined) ?? {};
+  const data = { ...((hit?.data as unknown as YearSeries | undefined) ?? {}) };
+  for (const y of ESTIMATED_BY_IPEA[id] ?? []) delete data[y];
+  return data;
 };

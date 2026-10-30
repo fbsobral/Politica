@@ -22,8 +22,8 @@ export type Term = { id: string; name: string | null; role: string; from: number
 
 /** Quem exercia a Presidência ao fim de cada ano (Temer assumiu em 31/08/2016, então 2016 fica com ele; Itamar Franco, 1993–1994, fica fora da janela de 30 anos). */
 export const PRESIDENTS: Term[] = [
-  { id: "fhc1", name: "Fernando Henrique Cardoso", role: "Presidente (1º mandato)", from: 1995, to: 1998, color: "#2b8a3e" },
-  { id: "fhc2", name: "Fernando Henrique Cardoso", role: "Presidente (2º mandato)", from: 1999, to: 2002, color: "#5c940d" },
+  { id: "fhc1", name: "FHC", role: "Presidente (1º mandato)", from: 1995, to: 1998, color: "#2b8a3e" },
+  { id: "fhc2", name: "FHC", role: "Presidente (2º mandato)", from: 1999, to: 2002, color: "#5c940d" },
   { id: "lula1", name: "Lula", role: "Presidente (1º mandato)", from: 2003, to: 2006, color: "#e03131" },
   { id: "lula2", name: "Lula", role: "Presidente (2º mandato)", from: 2007, to: 2010, color: "#d9480f" },
   { id: "dilma", name: "Dilma Rousseff", role: "Presidente", from: 2011, to: 2015, color: "#c2255c" },
