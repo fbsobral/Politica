@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
+import { ScrollEnd } from "@/components/scroll-end";
 import { ScoreItemPeek } from "@/components/score-item-peek";
 import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
@@ -58,7 +59,7 @@ function Legend() {
 
 function ItemRows({ items, years, sideRow, place, scope }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string; scope: string }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+    <ScrollEnd className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full border-collapse text-sm" style={{ minWidth: Math.max(560, 200 + years.length * 62) }}>
         <thead>
           <tr className="text-xs text-muted">
@@ -112,7 +113,7 @@ function ItemRows({ items, years, sideRow, place, scope }: { items: ScoreItem[];
           </tr>
         </tbody>
       </table>
-    </div>
+    </ScrollEnd>
   );
 }
 

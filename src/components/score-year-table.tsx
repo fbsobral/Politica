@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { ScrollEnd } from "@/components/scroll-end";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 
 export type YearDetailItem = { name: string; side: "economia" | "social"; value: string; prev: string | null; dir: "melhorou" | "piorou" | "igual" | null; note: number | null; bg?: string };
@@ -121,7 +122,7 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
                 <tr className="bg-ink/[0.02]">
                   <td colSpan={6} className="px-3 py-3">
                     <p className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">Resultado de cada indicador no mandato</p>
-                    <div className="overflow-x-auto">
+                    <ScrollEnd className="overflow-x-auto">
                       <table className="w-full border-collapse text-xs tabular-nums" style={{ minWidth: 300 + g.itemYears.length * 78 }}>
                         <thead>
                           <tr className="text-muted">
@@ -161,7 +162,7 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollEnd>
                   </td>
                 </tr>
               )}
