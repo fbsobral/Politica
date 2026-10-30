@@ -188,10 +188,10 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
 
   const ITEM_COLORS = ["#7c3aed", "#0891b2", "#ca8a04", "#be185d", "#4d7c0f", "#c2410c", "#0f766e", "#6d28d9", "#a16207", "#1d4ed8"];
   const lineSeries: LineSeries[] = [
-    { id: "total", label: "Score", color: "#111827", kind: "total", values: Object.fromEntries(shown.map((y) => [y.year, y.total])) },
+    { id: "total", label: "Score", color: "var(--ink)", kind: "total", values: Object.fromEntries(shown.map((y) => [y.year, y.total])) },
     { id: "economia", label: "Econômico", color: "#2563eb", kind: "economia", values: Object.fromEntries(shown.map((y) => [y.year, y.economia])) },
     { id: "social", label: "Social", color: "#db2777", kind: "social", values: Object.fromEntries(shown.map((y) => [y.year, y.social])) },
-    ...r.items.filter((i) => i.considered && i.hasData).map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
+    ...r.items.filter((i) => i.considered && i.hasData).map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", side: i.side, values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
   ];
 
   const firstYear = (xs: { year: number; v: number | null }[]) => xs.find((x) => x.v != null)?.year ?? null;

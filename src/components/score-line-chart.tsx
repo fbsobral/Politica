@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type LineSeries = { id: string; label: string; color: string; kind: "total" | "economia" | "social" | "item"; values: Record<number, number | null> };
+export type LineSeries = { id: string; label: string; color: string; kind: "total" | "economia" | "social" | "item"; /** lado do indicador (só nas linhas por indicador) */ side?: "economia" | "social"; values: Record<number, number | null> };
 export type BandTerm = { id: string; name: string; from: number; to: number; color: string };
 
 const H = 300, PL = 34, PR = 14, PT = 16, PB = 28;
@@ -40,6 +40,15 @@ export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines
     return d;
   };
   const termOf = (yr: number) => terms.find((t) => yr >= t.from && yr <= t.to);
+  const chip = (l: LineSeries) => {
+    const active = on.has(l.id);
+    return (
+      <button key={l.id} type="button" aria-pressed={active} onClick={() => toggle(l.id)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"} ${l.kind === "item" ? "" : "text-[13px]"}`}>
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: active ? l.color : "transparent", border: `2px solid ${l.color}` }} />
+        {l.label}
+      </button>
+    );
+  };
   const hoverYear = hover != null ? years[hover] : null;
 
   return (
@@ -86,14 +95,19 @@ export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines
           </div>
         )}
       </div>
-      <div className="mt-4 flex flex-wrap gap-1.5" role="group" aria-label="Linhas exibidas">
-        {lines.map((l) => {
-          const active = on.has(l.id);
+      <div className="mt-4 space-y-3" role="group" aria-label="Linhas exibidas">
+        <div>
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">Resumo</p>
+          <div className="flex flex-wrap gap-1.5">{lines.filter((l) => l.kind !== "item").map(chip)}</div>
+        </div>
+        {(["economia", "social"] as const).map((side) => {
+          const list = lines.filter((l) => l.kind === "item" && l.side === side);
+          if (!list.length) return null;
           return (
-            <button key={l.id} type="button" aria-pressed={active} onClick={() => toggle(l.id)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"} ${l.kind === "item" ? "" : "text-[13px]"}`}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: active ? l.color : "transparent", border: `2px solid ${l.color}` }} />
-              {l.label}
-            </button>
+            <div key={side}>
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">Indicadores {side === "economia" ? "econômicos" : "sociais"} <span className="font-normal normal-case">({list.length})</span></p>
+              <div className="flex flex-wrap gap-1.5">{list.map(chip)}</div>
+            </div>
           );
         })}
       </div>
