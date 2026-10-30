@@ -153,7 +153,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
   const cfg = (user.scoreConfig ?? {}) as Record<string, unknown>;
   const custom = cfg[scope] as string[] | undefined;
   const customTargets = (cfg.targets ?? {}) as Record<string, number>;
-  const method: ScoreMethod = cfg.method === "nivel-avanco" ? "nivel-avanco" : "nivel";
+  const method: ScoreMethod = cfg.method === "nivel" ? "nivel" : "nivel-avanco";
   const selected = custom?.length ? custom : defaultSelection(scope);
   const terms = scope === "FEDERAL" ? PRESIDENTS : cycleTerms(scope, await getTermNames(scope, geo));
   const r = await computeScore(scope, geo, selected, from, terms, customTargets, method);
@@ -290,7 +290,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
         {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} scope={scope} terms={terms} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
-      <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length) || Object.keys(customTargets).length > 0 || method !== "nivel"} method={method} />
+      <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length) || Object.keys(customTargets).length > 0 || method !== "nivel-avanco"} method={method} />
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function ScoreEditor({ scope, options, selected, isCustom, method }: { sc
       const v = Number(String(val[o.id] ?? "").replace(",", "."));
       targets[o.id] = !reset && mode[o.id] === "personalizada" && String(val[o.id] ?? "").trim() !== "" && Number.isFinite(v) ? v : null;
     }
-    await saveScoreSetup(scope, { ids: reset ? [] : [...sel], targets, method: reset ? "nivel" : m });
+    await saveScoreSetup(scope, { ids: reset ? [] : [...sel], targets, method: reset ? "nivel-avanco" : m });
     router.refresh();
   });
 

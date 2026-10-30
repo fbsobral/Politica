@@ -174,7 +174,7 @@ export async function saveScoreSetup(
     else targets[id] = v;
   }
   next.targets = targets;
-  next.method = input.method === "nivel-avanco" ? "nivel-avanco" : "nivel";
+  next.method = input.method === "nivel" ? "nivel" : "nivel-avanco";
   await db.user.update({ where: { id: user.id }, data: { scoreConfig: next as never } });
   revalidatePath("/score");
   return { ok: true };
