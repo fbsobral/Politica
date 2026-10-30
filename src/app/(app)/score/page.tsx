@@ -155,6 +155,16 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
     ...r.items.map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
   ];
 
+  const firstYear = (xs: { year: number; v: number | null }[]) => xs.find((x) => x.v != null)?.year ?? null;
+  const firstTotal = firstYear(r.years.map((y) => ({ year: y.year, v: y.total })));
+  const gaps = (["economia", "social"] as const).flatMap((side) => {
+    const fy = firstYear(r.years.map((y) => ({ year: y.year, v: y[side] })));
+    return fy != null && fy > from + 1 ? [{ side, fy }] : [];
+  });
+  const gapNote = firstTotal != null && firstTotal > from + 1 && gaps.length > 0
+    ? `O score só começa em ${firstTotal}: ${gaps.map((g) => `o lado ${g.side === "economia" ? "econômico" : "social"} só tem nota a partir de ${g.fy}`).join(" e ")}. Antes disso, os indicadores escolhidos não têm dado publicado (a nota compara com o ano anterior, então precisa de dois anos seguidos). Início das séries: ${r.items.map((i) => `${i.name} ${Math.min(...Object.keys(i.values).map(Number))}`).join(", ")}. Não preenchemos esses anos com estimativas.`
+    : null;
+
   const sideOf = (side: "economia" | "social") => r.years.map((y) => y[side]);
 
   return (
@@ -227,6 +237,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
         <p className="mb-3 text-sm text-muted">Veja a evolução do score, do lado econômico e do social, e escolha abaixo quais indicadores quer ver em linhas. Acima da linha de 50, o ano melhorou mais que o normal; abaixo, menos.</p>
         <div className="rounded-2xl border border-line bg-surface p-4"><ScoreLineChart years={years} lines={lineSeries} terms={terms.filter((t) => t.to >= from).map((t) => ({ id: t.id, name: t.name ?? t.role, from: t.from, to: t.to, color: t.color }))} /></div>
         <div className="mt-3"><ScoreYearTable rows={yearRows} /></div>
+        {gapNote && <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs leading-relaxed"><b>Por que faltam anos no gráfico?</b> {gapNote}</p>}
         <p className="mt-2 text-xs text-faint">Anos sem nota num dos lados ficam sem score. O primeiro ano de cada indicador não tem nota, porque a nota compara com o ano anterior. {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
       </section>
 
