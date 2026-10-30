@@ -253,13 +253,13 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
         {gapNote && <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs leading-relaxed"><b>Por que faltam anos no gráfico?</b> {gapNote}</p>}
       </section>
 
-      <details className="group mb-8">
+      <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Cada quadrado mostra o número publicado (em cima) e a nota do ano (embaixo). Passe o mouse ou toque para ver a explicação.</p>
         {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
-      <details className="group mb-8">
+      <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Mesma leitura: número publicado em cima, nota do ano embaixo.</p>
         {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
