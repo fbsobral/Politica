@@ -14,6 +14,7 @@ export default async function MaisPage() {
     { href: "/eleicoes", t: "Eleições", d: "Candidatos, pesquisas e notícias por cargo", i: <IconVote /> },
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
     { href: "/indicadores", t: "Indicadores", d: "Economia, dívida, segurança e pobreza em 10 anos", i: <IconChart /> },
+    { href: "/score", t: "Score dos governos", d: "Nota por ano: 50% economia, 50% social", i: <IconChart /> },
     { href: "/checagens", t: "Checagem de fatos", d: "Boatos e declarações verificados", i: <IconShield /> },
     { href: "/diario-oficial", t: "Diário Oficial", d: `Edições de ${user.municipality}`, i: <IconStar /> },
     { href: "/favoritos", t: "Favoritos", d: "Notícias salvas", i: <IconStar /> },
