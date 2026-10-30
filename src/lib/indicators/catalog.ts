@@ -139,7 +139,7 @@ export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { 
     return Object.keys(v).length ? v : null;
   }
   const place = scope === "FEDERAL" ? "br" : scope === "ESTADUAL" ? geo.uf : geo.ibge;
-  const key = `ind:v5:${ind.id}:${scope}:${place}`; // v4: só valores publicados pela fonte
+  const key = `ind:v6:${ind.id}:${scope}:${place}`; // v4: só valores publicados pela fonte
   const out = await cached<YearSeries>(key, ind.ttlDays ?? 7, () => f(geo), opts.force);
   return out && Object.keys(out).length ? out : null;
 }

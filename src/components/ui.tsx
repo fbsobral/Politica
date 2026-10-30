@@ -93,15 +93,15 @@ export function Notice({ kind, children }: { kind: "ok" | "erro" | "info"; child
 }
 
 /** Abas Municipal / Estadual / Federal como links (?esfera=...), preservando outros parâmetros. */
-export function ScopeTabs({ base, scope, params = {} }: { base: string; scope: Scope | "ALL"; params?: Record<string, string | undefined> }) {
+export function ScopeTabs({ base, scope, params = {}, noAll = false }: { base: string; scope: Scope | "ALL"; params?: Record<string, string | undefined>; noAll?: boolean }) {
   const href = (s: Scope | "ALL") => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries({ ...params, pagina: undefined, esfera: s === "ALL" ? "todas" : s.toLowerCase() })) if (v) qs.set(k, v);
     return `${base}?${qs}`;
   };
   return (
-    <div role="tablist" aria-label="Esfera" className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid sm:min-w-[30rem]">
-      {(["ALL", "MUNICIPAL", "ESTADUAL", "FEDERAL"] as (Scope | "ALL")[]).map((s) => {
+    <div role="tablist" aria-label="Esfera" className={`mb-4 grid gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:inline-grid ${noAll ? "grid-cols-3 sm:min-w-[23rem]" : "grid-cols-4 sm:min-w-[30rem]"}`}>
+      {((noAll ? ["MUNICIPAL", "ESTADUAL", "FEDERAL"] : ["ALL", "MUNICIPAL", "ESTADUAL", "FEDERAL"]) as (Scope | "ALL")[]).map((s) => {
         const active = s === scope;
         return (
           <Link key={s} role="tab" aria-selected={active} href={href(s)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`}>
@@ -110,6 +110,27 @@ export function ScopeTabs({ base, scope, params = {} }: { base: string; scope: S
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+export const RANGE_YEARS = [5, 10, 20] as const;
+export const rangeOf = (v?: string): number => (RANGE_YEARS as readonly number[]).includes(Number(v)) ? Number(v) : 10;
+
+/** Janela de tempo dos gráficos: últimos 5, 10 ou 20 anos (?anos=...), preservando outros parâmetros. */
+export function RangeTabs({ base, years, params = {} }: { base: string; years: number; params?: Record<string, string | undefined> }) {
+  const href = (y: number) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...params, anos: String(y) })) if (v) qs.set(k, v);
+    return `${base}?${qs}`;
+  };
+  return (
+    <div role="tablist" aria-label="Período" className="mb-6 ml-0 inline-flex items-center gap-1 rounded-2xl border border-line bg-surface p-1 shadow-card sm:ml-3">
+      {RANGE_YEARS.map((y) => (
+        <Link key={y} role="tab" aria-selected={y === years} href={href(y)} className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${y === years ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`}>
+          {y} anos
+        </Link>
+      ))}
     </div>
   );
 }

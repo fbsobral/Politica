@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { sendDigestNow, type DigestKind } from "@/lib/digest";
 import { runJobDetached } from "@/lib/job-runner";
 import { listMunicipalities } from "@/lib/ibge";
+import { INDICATORS } from "@/lib/indicators/catalog";
 import { syncUf } from "@/lib/politicians/sync";
 import { PARTIES } from "@/lib/quiz/data";
 import { UFS } from "@/lib/taxonomy";
@@ -150,5 +151,20 @@ export async function saveMyParty(sigla: string): Promise<{ ok: boolean }> {
   if (!(sigla === "NONE" || PARTIES.some((p) => p.sigla === sigla))) return { ok: false };
   await db.user.update({ where: { id: user.id }, data: { party: sigla } });
   revalidatePath("/partidos", "layout");
+  return { ok: true };
+}
+
+/** Salva quais indicadores o usuário quer no score de uma esfera (vazio = volta ao padrão). */
+export async function saveScoreConfig(scope: "FEDERAL" | "ESTADUAL" | "MUNICIPAL", ids: string[]): Promise<{ ok: boolean }> {
+  const user = await getDbUser();
+  if (!["FEDERAL", "ESTADUAL", "MUNICIPAL"].includes(scope)) return { ok: false };
+  const valid = new Set(INDICATORS.filter((i) => i.better && i.fetch[scope]).map((i) => i.id));
+  const clean = [...new Set(ids)].filter((id) => valid.has(id));
+  const prev = (user.scoreConfig ?? {}) as Record<string, string[]>;
+  const next = { ...prev };
+  if (clean.length) next[scope] = clean;
+  else delete next[scope];
+  await db.user.update({ where: { id: user.id }, data: { scoreConfig: next } });
+  revalidatePath("/score");
   return { ok: true };
 }

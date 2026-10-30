@@ -98,6 +98,8 @@ model User {
   quizAnswers      Json?
   quizWeights      Json?
   quizAt           DateTime?
+  /// indicadores escolhidos para o score de cada esfera: { FEDERAL: ["ipca", ...], ... }
+  scoreConfig      Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
