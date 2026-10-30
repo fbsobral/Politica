@@ -4,11 +4,12 @@ import { Fragment, useState } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 
 export type TermYear = { year: number; economia: string; social: string; total: string; bg?: string };
+export type TermItem = { name: string; side: "economia" | "social"; cells: { year: number; value: string; note: string; bg?: string }[]; avg: string; avgBg?: string };
 export type TermRow = {
   id: string; name: string; role: string; period: string; color: string;
   economia: string; economiaBg?: string; social: string; socialBg?: string;
   score: string; scoreBg?: string; scorePct: number; scoreColor: string;
-  verdict: string; nYears: number; years: TermYear[]; ask: AskFocus;
+  verdict: string; nYears: number; years: TermYear[]; items: TermItem[]; ask: AskFocus;
 };
 
 /** Resultado por governo em tabela, com botão para ver a conta ano a ano. */
@@ -81,6 +82,38 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                           ))}
                         </tbody>
                       </table>
+                      <p className="mb-1 mt-4 text-xs font-bold uppercase tracking-wide text-muted">Resultado de cada indicador</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-xs tabular-nums" style={{ minWidth: 300 + t.years.length * 78 }}>
+                          <thead>
+                            <tr className="text-muted">
+                              <th className="py-1 pr-3 text-left font-medium">Indicador</th>
+                              {t.years.map((y) => <th key={y.year} className="px-1 py-1 text-center font-medium">{y.year}</th>)}
+                              <th className="px-2 py-1 text-center font-medium">Média do governo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(["economia", "social"] as const).map((side) => (
+                              <Fragment key={side}>
+                                <tr><td colSpan={t.years.length + 2} className="pb-0.5 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted">{side === "economia" ? "Econômico" : "Social"}</td></tr>
+                                {t.items.filter((i) => i.side === side).map((it) => (
+                                  <tr key={it.name} className="border-t border-line">
+                                    <td className="py-1.5 pr-3 font-medium">{it.name}</td>
+                                    {it.cells.map((c) => (
+                                      <td key={c.year} className="px-1 py-1 text-center" style={{ background: c.bg }}>
+                                        <div className="font-semibold">{c.value}</div>
+                                        <div className="text-[10px] text-muted">nota {c.note}</div>
+                                      </td>
+                                    ))}
+                                    <td className="px-2 py-1 text-center font-semibold" style={{ background: it.avgBg }}>{it.avg}</td>
+                                  </tr>
+                                ))}
+                                {t.items.filter((i) => i.side === side).length === 0 && <tr><td colSpan={t.years.length + 2} className="py-1 text-muted">Nenhum indicador com nota neste lado.</td></tr>}
+                              </Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                       <p className="mt-2 text-xs text-muted">Nota do governo = média dos scores dos anos acima, todos com o mesmo peso: ({t.years.map((y) => y.total).join(" + ")}) ÷ {t.years.length} = <b>{t.score}</b>.</p>
                     </td>
                   </tr>

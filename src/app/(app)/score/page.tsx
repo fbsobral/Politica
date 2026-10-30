@@ -175,6 +175,11 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       social: n0(mean(ys.map((y) => y.social))), socialBg: heat(mean(ys.map((y) => y.social))),
       score: n0(t.avg), scoreBg: heat(t.avg, 0.4), scorePct: t.avg ?? 0, scoreColor: heatSolid(t.avg), verdict: verdict(t.avg), nYears: t.years.length,
       years: ys.map((y) => ({ year: y.year, economia: n0(y.economia), social: n0(y.social), total: n0(y.total), bg: heat(y.total, 0.4) })),
+      items: r.items.map((i) => {
+        const cells = ys.map((y) => ({ year: y.year, value: i.values[y.year] != null ? formatValue(i.values[y.year], i.unit, i.decimals) : "—", note: n0(i.notes[y.year]), bg: heat(i.notes[y.year]) }));
+        const m = mean(ys.map((y) => i.notes[y.year] ?? null));
+        return { name: i.name, side: i.side, cells, avg: n0(m), avgBg: heat(m, 0.4), has: m != null };
+      }).filter((i) => i.has).map(({ has: _has, ...rest }) => rest),
       ask: { title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${ys.map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] },
     };
   });

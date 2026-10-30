@@ -12,7 +12,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/indicadores", "/score", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -42,6 +42,7 @@ const MENU: Entry[] = [
       { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
       { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, em 10 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
       { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano, 50% economia e 50% social", icon: <IconChart />, match: (p) => p.startsWith("/score") },
+      { href: "/roi", label: "ROI do orçamento", hint: "Quanto o gasto público mudou os indicadores", icon: <IconCoins />, match: (p) => p.startsWith("/roi") },
     ],
   },
   { label: "Pergunte", href: "/conversar", match: (p) => p.startsWith("/conversar") },

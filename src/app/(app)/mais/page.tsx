@@ -15,6 +15,7 @@ export default async function MaisPage() {
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
     { href: "/indicadores", t: "Indicadores", d: "Economia, dívida, segurança e pobreza em 10 anos", i: <IconChart /> },
     { href: "/score", t: "Score dos governos", d: "Nota por ano: 50% economia, 50% social", i: <IconChart /> },
+    { href: "/roi", t: "ROI do orçamento", d: "O gasto público deu resultado nos indicadores?", i: <IconCoins /> },
     { href: "/checagens", t: "Checagem de fatos", d: "Boatos e declarações verificados", i: <IconShield /> },
     { href: "/diario-oficial", t: "Diário Oficial", d: `Edições de ${user.municipality}`, i: <IconStar /> },
     { href: "/favoritos", t: "Favoritos", d: "Notícias salvas", i: <IconStar /> },
