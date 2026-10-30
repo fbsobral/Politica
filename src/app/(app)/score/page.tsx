@@ -45,6 +45,24 @@ function itemFocus(it: ScoreItem, years: number[], place: string): AskFocus {
   };
 }
 
+/** Agrupa anos seguidos do mesmo governo para o cabeçalho das tabelas por indicador. */
+function govSpans(years: number[], terms: Term[]): { span: number; label: string; color?: string }[] {
+  const short = (t: Term) => {
+    const last = (t.name ?? t.role).split(" ").slice(-1)[0];
+    const m = t.role.match(/\((\d)º/);
+    return m ? `${last} · ${m[1]}º` : last;
+  };
+  const out: { id: string; span: number; label: string; color?: string }[] = [];
+  for (const y of years) {
+    const t = terms.find((x) => y >= x.from && y <= x.to);
+    const id = t?.id ?? "-";
+    const last = out[out.length - 1];
+    if (last && last.id === id) last.span++;
+    else out.push({ id, span: 1, label: t ? short(t) : "", color: t?.color });
+  }
+  return out;
+}
+
 const termLabel = (t: Term) => t.name ?? `${t.role} · mandato`;
 
 function Legend() {
@@ -57,11 +75,17 @@ function Legend() {
   );
 }
 
-function ItemRows({ items, years, sideRow, place, scope }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string; scope: string }) {
+function ItemRows({ items, years, sideRow, place, scope, terms }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string; scope: string; terms: Term[] }) {
   return (
     <ScrollEnd className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full border-collapse text-sm" style={{ minWidth: Math.max(560, 200 + years.length * 62) }}>
         <thead>
+          <tr>
+            <th className="sticky left-0 z-10 bg-surface" />
+            {govSpans(years, terms).map((g, i) => (
+              <th key={i} colSpan={g.span} className="border-l border-line px-1 pb-1 pt-2 text-center text-[11px] font-bold" style={{ color: g.color, boxShadow: g.color ? `inset 0 3px 0 ${g.color}` : undefined }}>{g.label}</th>
+            ))}
+          </tr>
           <tr className="text-xs text-muted">
             <th className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-medium">Indicador</th>
             {years.map((y) => <th key={y} className="px-1 py-2 text-center font-medium">{y}</th>)}
@@ -257,13 +281,13 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
       <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Cada quadrado mostra o número publicado (em cima) e a nota do ano (embaixo). Passe o mouse ou toque para ver a explicação.</p>
-        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} scope={scope} terms={terms} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
       <details open className="group mb-8">
         <summary className="mb-1 flex cursor-pointer list-none items-center gap-2"><span className="text-muted transition-transform group-open:rotate-90">▸</span><h2 className="display text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2></summary>
         <p className="mb-3 text-sm text-muted">Mesma leitura: número publicado em cima, nota do ano embaixo.</p>
-        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} scope={scope} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} scope={scope} terms={terms} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
       <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length) || Object.keys(customTargets).length > 0 || method !== "nivel"} method={method} />
