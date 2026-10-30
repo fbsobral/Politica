@@ -69,8 +69,8 @@ export function ScoreTermTable({ rows }: { rows: TermRow[] }) {
                 {isOpen && (
                   <tr className="bg-ink/[0.03]">
                     <td colSpan={7} className="px-3 py-3">
-                      <table className="w-full max-w-xl border-collapse text-xs tabular-nums">
-                        <thead><tr className="text-muted"><th className="py-1 text-left font-medium">Ano</th><th className="py-1 text-center font-medium">Econômico</th><th className="py-1 text-center font-medium">Social</th><th className="py-1 text-center font-medium">Score</th></tr></thead>
+                      <table className="w-full border-collapse text-xs tabular-nums">
+                        <thead><tr className="text-muted"><th className="py-1 pr-3 text-left font-medium">Ano</th><th className="py-1 text-center font-medium">Econômico</th><th className="py-1 text-center font-medium">Social</th><th className="py-1 text-center font-medium">Score</th></tr></thead>
                         <tbody>
                           {t.years.map((y) => (
                             <tr key={y.year} className="border-t border-line">
