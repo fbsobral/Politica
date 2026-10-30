@@ -1,5 +1,5 @@
 import { INDICATORS, getSeries, type Indicator } from "./catalog";
-import { lastClosedYear, type Geo, type Scope, type YearSeries } from "./core";
+import { lastClosedYear, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
 import type { Unit } from "./format";
 import { TARGETS } from "./targets";
 
@@ -112,14 +112,16 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
   }
   items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();
+  // o score é calculado sobre todos os anos guardados; a janela (5/10/20 anos) só limita o que a tela mostra
+  const first = Math.min(from, to - YEARS_BACK + 1);
   const years: ScoreYear[] = [];
-  for (let y = from; y <= to; y++) {
+  for (let y = first; y <= to; y++) {
     const side = (s: Side) => avg(items.filter((i) => i.considered && i.side === s && i.notes[y] != null).map((i) => i.notes[y]));
     const economia = side("economia"), social = side("social");
     years.push({ year: y, economia, social, total: economia != null && social != null ? (economia + social) / 2 : null });
   }
   const outTerms = terms
-    .filter((t) => t.to >= from && t.from <= to)
+    .filter((t) => t.from <= to)
     .map((t) => {
       const ys = years.filter((y) => y.year >= t.from && y.year <= t.to && y.total != null);
       return { ...t, avg: avg(ys.map((y) => y.total!)), years: ys.map((y) => y.year) };

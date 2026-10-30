@@ -132,7 +132,8 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
   const selected = custom?.length ? custom : defaultSelection(scope);
   const terms = scope === "FEDERAL" ? PRESIDENTS : cycleTerms(scope, await getTermNames(scope, geo));
   const r = await computeScore(scope, geo, selected, from, terms, customTargets, method);
-  const years = r.years.map((y) => y.year);
+  const shown = r.years.filter((y) => y.year >= from);
+  const years = shown.map((y) => y.year);
   const econ = r.items.filter((i) => i.side === "economia");
   const soc = r.items.filter((i) => i.side === "social");
   const termOf = (y: number) => terms.find((t) => y >= t.from && y <= t.to);
@@ -145,7 +146,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
     suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
   });
 
-  const yearRows: YearRow[] = [...r.years].reverse().map((y) => {
+  const yearRows: YearRow[] = [...shown].reverse().map((y) => {
     const t = termOf(y.year);
     return {
       year: y.year, gov: t ? termLabel(t) : "—", color: t?.color,
@@ -162,16 +163,16 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
 
   const ITEM_COLORS = ["#7c3aed", "#0891b2", "#ca8a04", "#be185d", "#4d7c0f", "#c2410c", "#0f766e", "#6d28d9", "#a16207", "#1d4ed8"];
   const lineSeries: LineSeries[] = [
-    { id: "total", label: "Score", color: "#111827", kind: "total", values: Object.fromEntries(r.years.map((y) => [y.year, y.total])) },
-    { id: "economia", label: "Econômico", color: "#2563eb", kind: "economia", values: Object.fromEntries(r.years.map((y) => [y.year, y.economia])) },
-    { id: "social", label: "Social", color: "#db2777", kind: "social", values: Object.fromEntries(r.years.map((y) => [y.year, y.social])) },
+    { id: "total", label: "Score", color: "#111827", kind: "total", values: Object.fromEntries(shown.map((y) => [y.year, y.total])) },
+    { id: "economia", label: "Econômico", color: "#2563eb", kind: "economia", values: Object.fromEntries(shown.map((y) => [y.year, y.economia])) },
+    { id: "social", label: "Social", color: "#db2777", kind: "social", values: Object.fromEntries(shown.map((y) => [y.year, y.social])) },
     ...r.items.filter((i) => i.considered && i.hasData).map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
   ];
 
   const firstYear = (xs: { year: number; v: number | null }[]) => xs.find((x) => x.v != null)?.year ?? null;
-  const firstTotal = firstYear(r.years.map((y) => ({ year: y.year, v: y.total })));
+  const firstTotal = firstYear(shown.map((y) => ({ year: y.year, v: y.total })));
   const gaps = (["economia", "social"] as const).flatMap((side) => {
-    const fy = firstYear(r.years.map((y) => ({ year: y.year, v: y[side] })));
+    const fy = firstYear(shown.map((y) => ({ year: y.year, v: y[side] })));
     return fy != null && fy > from + 1 ? [{ side, fy }] : [];
   });
   const gapNote = firstTotal != null && firstTotal > from + 1 && gaps.length > 0
@@ -196,7 +197,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
     };
   });
 
-  const sideOf = (side: "economia" | "social") => r.years.map((y) => y[side]);
+  const sideOf = (side: "economia" | "social") => shown.map((y) => y[side]);
 
   return (
     <div>
