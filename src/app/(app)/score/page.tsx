@@ -146,7 +146,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
     suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
   });
 
-  const yearRows: YearRow[] = [...shown].reverse().map((y) => {
+  const yearRows: YearRow[] = [...r.years].reverse().map((y) => {
     const t = termOf(y.year);
     return {
       year: y.year, gov: t ? termLabel(t) : "—", color: t?.color,
@@ -241,7 +241,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
         <div className="rounded-2xl border border-line bg-surface p-4"><ScoreLineChart years={years} lines={lineSeries} terms={terms.filter((t) => t.to >= from).map((t) => ({ id: t.id, name: t.name ?? t.role, from: t.from, to: t.to, color: t.color }))} /></div>
         <div className="mt-3"><ScoreYearTable rows={yearRows} /></div>
         {gapNote && <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs leading-relaxed"><b>Por que faltam anos no gráfico?</b> {gapNote}</p>}
-        <p className="mt-2 text-xs text-faint">Anos sem nota num dos lados ficam sem score. O primeiro ano de cada indicador não tem nota, porque a nota compara com o ano anterior. {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
+        <p className="mt-2 text-xs text-faint">A tabela lista todos os anos guardados; a janela escolhida vale para o gráfico. Anos sem nota num dos lados ficam sem score.{method === "nivel-avanco" ? " Neste método o primeiro ano de cada indicador não tem nota, porque ela compara com o ano anterior." : ""} {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
       </section>
 
       <details open className="group mb-8">
