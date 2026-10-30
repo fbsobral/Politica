@@ -16,10 +16,17 @@ export type YearRow = {
   ask: AskFocus;
 };
 
+export type TermItem = { name: string; side: "economia" | "social"; cells: { year: number; value: string; note: string; bg?: string }[]; avg: string; avgBg?: string; noData?: boolean; considered?: boolean };
+
 export type YearGroup = {
   id: string; name: string; role: string; period: string; color: string;
   economia: string; economiaBg?: string; social: string; socialBg?: string; score: string; scoreBg?: string;
+  scorePct: number; scoreColor: string; verdict: string;
   rows: YearRow[];
+  /** resultado de cada indicador no mandato (valor e nota por ano) */
+  items: TermItem[];
+  itemYears: number[];
+  ask: AskFocus;
 };
 
 const ICON = { melhorou: "▲", piorou: "▼", igual: "＝" } as const;
@@ -53,6 +60,9 @@ function Side({ title, rows, avg, bg }: { title: string; rows: YearDetailItem[];
 /** Tabela "Ano a ano" agrupada por mandato (cada grupo abre e fecha), com botão de detalhamento por ano. */
 export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
   const [open, setOpen] = useState<number | null>(null);
+  const [itemsOpen, setItemsOpen] = useState<Set<string>>(new Set());
+  const [sidesClosed, setSidesClosed] = useState<Set<string>>(new Set());
+  const flipSet = (set: Set<string>, id: string) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
   // por padrão todos os mandatos ficam expandidos; o usuário pode recolher
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(groups.map((g) => g.id)));
   const flip = (id: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -82,17 +92,79 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
             <tbody key={g.id} className="border-t-2 border-line">
               <tr className="cursor-pointer bg-ink/[0.04] hover:bg-ink/[0.07]" onClick={() => flip(g.id)}>
                 <td colSpan={2} className="px-3 py-2.5">
-                  <button type="button" aria-expanded={gOpen} onClick={(e) => { e.stopPropagation(); flip(g.id); }} className="flex items-center gap-2 text-left">
-                    <span className={`inline-block text-muted transition-transform ${gOpen ? "rotate-90" : ""}`}>▸</span>
-                    <span className="h-5 w-1.5 shrink-0 rounded-full" style={{ background: g.color }} />
-                    <span><b>{g.name}</b> <span className="text-xs text-muted">· {g.role} · {g.period} · {g.rows.length} {g.rows.length === 1 ? "ano" : "anos"}</span></span>
+                  <button type="button" aria-expanded={gOpen} onClick={(e) => { e.stopPropagation(); flip(g.id); }} className="flex items-start gap-2 text-left">
+                    <span className={`mt-1 inline-block text-muted transition-transform ${gOpen ? "rotate-90" : ""}`}>▸</span>
+                    <span className="mt-0.5 h-8 w-1.5 shrink-0 rounded-full" style={{ background: g.color }} />
+                    <span>
+                      <b className="block leading-tight">{g.name}</b>
+                      <span className="block text-xs text-muted">{g.role} · {g.period} · {g.rows.length} {g.rows.length === 1 ? "ano" : "anos"}</span>
+                      <span className="block text-xs text-muted">{g.verdict}</span>
+                    </span>
                   </button>
                 </td>
                 <td className="px-3 py-2.5 text-center font-semibold tabular-nums" style={{ background: g.economiaBg }}>{g.economia}</td>
                 <td className="px-3 py-2.5 text-center font-semibold tabular-nums" style={{ background: g.socialBg }}>{g.social}</td>
-                <td className="px-3 py-2.5 text-center font-bold tabular-nums" style={{ background: g.scoreBg }}>{g.score}</td>
-                <td className="px-3 py-2.5 text-right text-xs text-muted">média do mandato</td>
+                <td className="px-3 py-2.5 text-center tabular-nums" style={{ background: g.scoreBg }}>
+                  <span className="text-lg font-bold" style={{ color: g.scoreColor }}>{g.score}</span>
+                  <div className="mx-auto mt-1 h-1.5 w-full max-w-16 overflow-hidden rounded-full bg-ink/10"><div className="h-full rounded-full" style={{ width: `${g.scorePct}%`, background: g.scoreColor }} /></div>
+                </td>
+                <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1">
+                    {g.items.length > 0 && (
+                      <button type="button" aria-expanded={itemsOpen.has(g.id)} onClick={() => setItemsOpen((x) => flipSet(x, g.id))} className="rounded-full border border-line px-2.5 py-1 text-xs font-semibold hover:bg-ink/5">{itemsOpen.has(g.id) ? "Ocultar indicadores" : "Indicadores"}</button>
+                    )}
+                    <AskButton compact focus={g.ask} />
+                  </div>
+                </td>
               </tr>
+              {itemsOpen.has(g.id) && (
+                <tr className="bg-ink/[0.02]">
+                  <td colSpan={6} className="px-3 py-3">
+                    <p className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">Resultado de cada indicador no mandato</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-xs tabular-nums" style={{ minWidth: 300 + g.itemYears.length * 78 }}>
+                        <thead>
+                          <tr className="text-muted">
+                            <th className="py-1 pr-3 text-left font-medium">Indicador</th>
+                            {g.itemYears.map((y) => <th key={y} className="px-1 py-1 text-center font-medium">{y}</th>)}
+                            <th className="px-2 py-1 text-center font-medium">Média do governo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(["economia", "social"] as const).map((side) => {
+                            const key = `${g.id}:${side}`;
+                            const list = g.items.filter((i) => i.side === side);
+                            return (
+                              <Fragment key={side}>
+                                <tr>
+                                  <td colSpan={g.itemYears.length + 2} className="pb-0.5 pt-2">
+                                    <button type="button" aria-expanded={!sidesClosed.has(key)} onClick={() => setSidesClosed((x) => flipSet(x, key))} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted hover:text-ink">
+                                      <span className={`inline-block transition-transform ${sidesClosed.has(key) ? "" : "rotate-90"}`}>▸</span>
+                                      {side === "economia" ? "Econômico" : "Social"} <span className="font-normal normal-case">({list.length} indicadores)</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                                {!sidesClosed.has(key) && list.map((it) => (
+                                  <tr key={it.name} className={`border-t border-line ${it.considered === false ? "opacity-60" : ""}`}>
+                                    <td className="py-1.5 pr-3 font-medium">{it.name}{it.considered === false && <span className="ml-2 rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-semibold">não considerado</span>}{it.considered !== false && it.noData && <span className="ml-2 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-semibold">sem dados · fora da conta</span>}</td>
+                                    {it.cells.map((c) => (
+                                      <td key={c.year} className="px-1 py-1 text-center" style={{ background: c.bg }}>
+                                        <div className="font-semibold">{c.value}</div>
+                                        <div className="text-[10px] text-muted">nota {c.note}</div>
+                                      </td>
+                                    ))}
+                                    <td className="px-2 py-1 text-center font-semibold" style={{ background: it.avgBg }}>{it.avg}</td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              )}
               {gOpen && g.rows.map((y) => {
                 const isOpen = open === y.year;
                 const econ = y.items.filter((i) => i.side === "economia" && i.note != null);
