@@ -44,17 +44,6 @@ export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Linhas exibidas">
-        {lines.map((l) => {
-          const active = on.has(l.id);
-          return (
-            <button key={l.id} type="button" aria-pressed={active} onClick={() => toggle(l.id)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"} ${l.kind === "item" ? "" : "text-[13px]"}`}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: active ? l.color : "transparent", border: `2px solid ${l.color}` }} />
-              {l.label}
-            </button>
-          );
-        })}
-      </div>
       <div ref={ref} className="relative w-full">
         <svg width={w} height={H} role="img" aria-label="Gráfico de linhas do score ao longo dos anos" onMouseLeave={() => setHover(null)}
           onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.round((e.clientX - r.left - PL) / (step || 1)); setHover(Math.min(n - 1, Math.max(0, i))); }}>
@@ -97,7 +86,18 @@ export function ScoreLineChart({ years, lines, terms }: { years: number[]; lines
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs text-faint">Notas de 0 a 100. A linha tracejada em 50 é a melhora típica; as faixas coloridas são os governos. Lacunas na linha são anos sem nota. Por padrão só o score aparece: toque nos botões acima para mostrar o lado econômico, o social ou cada indicador.</p>
+      <div className="mt-4 flex flex-wrap gap-1.5" role="group" aria-label="Linhas exibidas">
+        {lines.map((l) => {
+          const active = on.has(l.id);
+          return (
+            <button key={l.id} type="button" aria-pressed={active} onClick={() => toggle(l.id)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${active ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"} ${l.kind === "item" ? "" : "text-[13px]"}`}>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: active ? l.color : "transparent", border: `2px solid ${l.color}` }} />
+              {l.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs text-faint">Notas de 0 a 100. A linha tracejada em 50 é a melhora típica; as faixas coloridas são os governos. Lacunas na linha são anos sem nota. Por padrão só o score aparece: toque nos botões abaixo do gráfico para mostrar o lado econômico, o social ou cada indicador.</p>
     </div>
   );
 }
