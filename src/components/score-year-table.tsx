@@ -37,7 +37,7 @@ function Side({ title, rows, avg, bg }: { title: string; rows: YearDetailItem[];
                 <span className="shrink-0 font-semibold tabular-nums">{it.note == null ? "—" : Math.round(it.note)}</span>
               </div>
               <div className="text-xs text-muted">
-                {it.dir && it.prev ? <>{ICON[it.dir]} {it.dir} de {it.prev} para <b>{it.value}</b></> : <>{it.value} · sem ano anterior publicado, não tem nota</>}
+                {it.dir && it.prev ? <>{ICON[it.dir]} {it.dir} de {it.prev} para <b>{it.value}</b></> : <>{it.value} · sem nota neste ano</>}
               </div>
             </li>
           ))}
@@ -115,7 +115,7 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
                   <tr className="bg-ink/[0.03]">
                     <td colSpan={6} className="px-3 py-4">
                       <p className="mb-3 max-w-3xl text-sm text-muted">
-                        Como chegamos ao <b className="text-ink">{y.total}</b> de {y.year}: cada indicador recebe uma nota (0 a 100) pela melhora em relação ao ano anterior; a nota de cada lado é a média das suas notas; o score é a média dos dois lados
+                        Como chegamos ao <b className="text-ink">{y.total}</b> de {y.year}: cada indicador recebe uma nota (0 a 100) pela proximidade da sua meta (100 = meta atingida ou superada); a nota de cada lado é a média das suas notas; o score é a média dos dois lados
                         {econ.length && soc.length ? <> — ({y.economia} + {y.social}) ÷ 2 = <b className="text-ink">{y.total}</b>.</> : "."}
                       </p>
                       <div className="mb-3"><AskButton focus={y.ask} label="Perguntar sobre este ano" /></div>
@@ -124,7 +124,7 @@ export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
                         <Side title="Social · 50%" rows={soc} avg={y.social} bg={y.socialBg} />
                       </div>
                       {y.items.some((i) => i.note == null) && (
-                        <p className="mt-3 text-xs text-faint">Sem nota neste ano: {y.items.filter((i) => i.note == null).map((i) => i.name).join(", ")} (sem o dado do ano anterior para comparar).</p>
+                        <p className="mt-3 text-xs text-faint">Sem nota neste ano: {y.items.filter((i) => i.note == null).map((i) => i.name).join(", ")} (sem dado publicado ou sem meta para calcular a nota).</p>
                       )}
                     </td>
                   </tr>
