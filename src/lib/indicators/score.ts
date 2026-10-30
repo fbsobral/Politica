@@ -12,7 +12,7 @@ export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
 }
 
 /** Conjunto padrão: no Brasil, os 10 indicadores principais; em estado e município, os indicadores principais que existem (as sub-métricas ficam como opção). */
-const FEDERAL_DEFAULT = ["pib-cresc", "desemprego", "ipca", "divida-bruta", "deficit-primario", "homicidios", "pobreza", "gini", "analfabetismo", "mortalidade-infantil", "renda-trabalho", "subutilizacao"];
+const FEDERAL_DEFAULT = ["pib-cresc", "desemprego", "ipca", "divida-bruta", "deficit-primario", "homicidios", "pobreza", "gini", "analfabetismo", "mortalidade-infantil", "renda-trabalho", "subutilizacao", "informalidade", "desalento", "nem-nem", "previdencia", "suicidio", "transito", "mortalidade-5", "mortalidade-materna"];
 export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => (scope === "FEDERAL" ? FEDERAL_DEFAULT.includes(c.ind.id) : !c.ind.parent)).map((c) => c.ind.id);
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };

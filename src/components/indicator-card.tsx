@@ -93,7 +93,7 @@ export function IndicatorCard({ d: base }: { d: CardData }) {
   const [info, setInfo] = useState(false);
   const multi = d.series.length > 1;
   return (
-    <article className="card p-4 sm:p-5">
+    <article id={`ind-${d.id}`} className="card scroll-mt-40 p-4 sm:p-5">
       <header className="mb-3">
         <div className="flex items-start justify-between gap-3">
           <h3 className="display text-lg font-semibold leading-tight">{d.title}</h3>

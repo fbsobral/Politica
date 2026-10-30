@@ -5,7 +5,7 @@ import type { ChartSeries } from "@/components/indicator-chart";
 import { EmptyState, PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
 import { ipcaByYear, UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
-import { BUNDLES, GROUPS, INDICATORS, SECTOR_INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
+import { BUNDLES, GROUPS, INDICATORS, SIDES, SECTOR_INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
 import { clip, lastClosedYear, type Geo, type Scope, type YearSeries } from "@/lib/indicators/core";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -90,7 +90,7 @@ async function Group({ group, scopes, user, from }: { group: (typeof GROUPS)[num
   if (!cards.length) return null;
   return (
     <section aria-label={group.title} className="mb-10">
-      <h2 className="display text-2xl font-semibold">{group.title}</h2>
+      <h3 className="display text-xl font-semibold">{group.title}</h3>
       <p className="mb-4 mt-0.5 text-sm text-muted">{group.blurb}</p>
       <div className="grid grid-cols-1 gap-4">{cards.map((c) => <IndicatorCard key={c.id} d={c} />)}</div>
     </section>
@@ -114,10 +114,36 @@ export default async function IndicadoresPage({ searchParams }: { searchParams: 
       <ScopeTabs base="/indicadores" scope={all ? "ALL" : scope} params={{ anos: sp.anos }} />
       <RangeTabs base="/indicadores" years={years} params={{ esfera: sp.esfera }} />
       {all && <p className="-mt-2 mb-6 max-w-3xl text-sm text-muted">Quando um indicador existe em mais de uma esfera, as linhas aparecem juntas: <b style={{ color: SCOPE_COLOR.MUNICIPAL }}>cidade</b>, <b style={{ color: SCOPE_COLOR.ESTADUAL }}>estado</b> e <b style={{ color: SCOPE_COLOR.FEDERAL }}>Brasil</b>.</p>}
-      {GROUPS.map((g) => (
-        <Suspense key={`${g.id}:${all ? "todas" : scope}:${years}`} fallback={<div className="mb-10"><div className="skeleton mb-3 h-8 w-56" /><div className="grid gap-4"><div className="skeleton h-72" /><div className="skeleton h-72" /></div></div>}>
-          <Group group={g} scopes={scopes} user={user} from={from} />
-        </Suspense>
+      <nav aria-label="Ir para" className="sticky top-14 z-10 -mx-4 mb-6 border-y border-line bg-paper/90 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6">
+        <div className="flex gap-x-6 gap-y-1 overflow-x-auto whitespace-nowrap">
+          {SIDES.map((side) => (
+            <div key={side.id} className="flex items-center gap-1.5">
+              <a href={`#lado-${side.id}`} className="text-xs font-bold uppercase tracking-wide text-ink">{side.id === "economico" ? "Econômicos" : "Sociais"}</a>
+              {side.groups.map((gid) => {
+                const g = GROUPS.find((x) => x.id === gid)!;
+                return <a key={gid} href={`#grupo-${gid}`} className="rounded-full border border-line px-2.5 py-1 text-xs font-medium text-muted hover:bg-ink/5 hover:text-ink">{g.title}</a>;
+              })}
+            </div>
+          ))}
+        </div>
+      </nav>
+      {SIDES.map((side) => (
+        <div key={side.id} id={`lado-${side.id}`} className="scroll-mt-32">
+          <div className="mb-5 flex items-end gap-3 border-b-2 border-ink pb-2">
+            <h2 className="display text-3xl font-semibold">{side.title}</h2>
+            <p className="pb-1 text-sm text-muted">{side.blurb}</p>
+          </div>
+          {side.groups.map((gid) => {
+            const g = GROUPS.find((x) => x.id === gid)!;
+            return (
+              <div key={g.id} id={`grupo-${g.id}`} className="scroll-mt-32">
+                <Suspense key={`${g.id}:${all ? "todas" : scope}:${years}`} fallback={<div className="mb-10"><div className="skeleton mb-3 h-8 w-56" /><div className="grid gap-4"><div className="skeleton h-72" /><div className="skeleton h-72" /></div></div>}>
+                  <Group group={g} scopes={scopes} user={user} from={from} />
+                </Suspense>
+              </div>
+            );
+          })}
+        </div>
       ))}
       {missing.length > 0 && (
         <details className="max-w-3xl rounded-2xl border border-line bg-surface p-4 text-sm">

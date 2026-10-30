@@ -61,6 +61,14 @@ export const unemploymentQ4 = (scope: Scope, variable = 4099): Fetcher => async 
 /** Rendimento médio mensal REAL do trabalho (PNAD Contínua anual, tabela 7444): o IBGE já publica a preços do último ano, então nada é corrigido aqui. */
 export const incomeReal = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7444/${terr(scope, geo)}/v/10774/p/all`), "D3C"));
 
+/** Série anual pronta do IBGE (SIDRA) para Brasil ou UF, exatamente como publicada; `classes` fixa as categorias "Total" quando a tabela tem cortes. Nada é calculado. */
+export const sidraAnnual = (scope: Scope, table: number, variable: number, classes = ""): Fetcher => async (geo) => {
+  const rows = await sidra(`t/${table}/${terr(scope, geo)}/v/${variable}${classes}/p/all`);
+  // com classificações na URL a coluna do ano muda de posição: acha a que traz um ano (1900–2099)
+  const col = ["D3C", "D4C", "D5C", "D6C", "D7C"].find((c) => /^(19|20)\d{2}$/.test(String((rows[0] as Record<string, unknown> | undefined)?.[c] ?? ""))) ?? "D3C";
+  return toRange(sidraYears(rows, col));
+};
+
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
 /**
