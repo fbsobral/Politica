@@ -1,5 +1,26 @@
 /** Metas de referência (globais, quando existem) usadas no score. Valores na mesma unidade da série do indicador. */
-export type Target = { value: number; ref: string; url?: string };
+export type Target = {
+  /** meta fixa, na unidade da série */
+  value?: number;
+  /** meta diferente por esfera (ex.: limites legais de estados e municípios) */
+  byScope?: Partial<Record<"FEDERAL" | "ESTADUAL" | "MUNICIPAL", number>>;
+  /** meta relativa: fração do valor do ano-base (ex.: "reduzir à metade em relação a 2015") */
+  base?: { year: number; factor: number };
+  ref: string;
+  url?: string;
+  /** o número vem de fonte secundária ou de definição próxima, e vale conferir na fonte primária */
+  approx?: boolean;
+};
+
+/** Meta fixa de um indicador para uma esfera; `values` só é usado nas metas relativas ao ano-base. */
+export function fixedTargetFor(id: string, scope: "FEDERAL" | "ESTADUAL" | "MUNICIPAL", values: Record<number, number>): number | null {
+  const t = TARGETS[id];
+  if (!t) return null;
+  if (t.byScope?.[scope] != null) return t.byScope[scope]!;
+  if (t.value != null) return t.value;
+  if (t.base) { const b = values[t.base.year]; return b != null ? b * t.base.factor : null; }
+  return null;
+}
 
 export const TARGETS: Record<string, Target> = {
   "mortalidade-5": { value: 25, ref: "ODS 3.2.1 (ONU): no máximo 25 mortes por mil nascidos vivos", url: "https://brasil.un.org/pt-br/sdgs/3" },
@@ -16,4 +37,18 @@ export const TARGETS: Record<string, Target> = {
   gini: { value: 0.32, ref: "Média da OCDE de desigualdade de renda (Gini ~0,32)", url: "https://www.oecd.org/en/data/indicators/income-inequality.html" },
   analfabetismo: { value: 2, ref: "ODS 4.6 (alfabetização universal); países de alta alfabetização ficam perto de 2%", url: "https://brasil.un.org/pt-br/sdgs/4" },
   "pobreza-int": { value: 3, ref: "Banco Mundial: reduzir a pobreza extrema a 3% da população até 2030", url: "https://www.worldbank.org/en/topic/poverty" },
+  "mortalidade-infantil": { value: 4.2, ref: "Média da OCDE de mortalidade infantil (~4,2 por mil nascidos vivos em 2023, OECD Health Statistics)", url: "https://www.oecd.org/en/topics/sub-issues/health-outcomes.html", approx: true },
+  "nem-nem": { value: 9, ref: "Meta da União Europeia para 2030: no máximo 9% de jovens que não estudam nem trabalham (faixa de 15 a 29 anos, mais ampla que a da série)", url: "https://ec.europa.eu/social/main.jsp?catId=1226", approx: true },
+  "deficit-nominal": { value: 3, ref: "Critério de Maastricht: déficit público de no máximo 3% do PIB", url: "https://economy-finance.ec.europa.eu/economic-and-fiscal-governance/stability-and-growth-pact_en" },
+  "divida-liquida": { value: 60, ref: "Referência fiscal de 60% do PIB (Maastricht e FMI), aplicada também à dívida líquida", url: "https://www.imf.org/en/Topics/fiscal-policy", approx: true },
+  "divida-liquida-gg": { value: 60, ref: "Referência fiscal de 60% do PIB (Maastricht e FMI), aplicada também à dívida líquida", url: "https://www.imf.org/en/Topics/fiscal-policy", approx: true },
+  pobreza: { base: { year: 2015, factor: 0.5 }, ref: "ODS 1.2 (ONU/IPEA): reduzir à metade a proporção de pessoas na pobreza, tomando 2015 como ano-base", url: "https://www.ipea.gov.br/ods/ods1.html" },
+  "pobreza-ocupados": { base: { year: 2015, factor: 0.5 }, ref: "ODS 1.2 (ONU/IPEA): reduzir à metade, tomando 2015 como ano-base", url: "https://www.ipea.gov.br/ods/ods1.html" },
+  subutilizacao: { value: 11, ref: "Referência da OIT: taxa de subutilização de adultos de ~11% (10,8%) na força de trabalho ampliada", url: "https://ilostat.ilo.org/resources/concepts-and-definitions/description-labour-underutilization/", approx: true },
+  informalidade: { value: 13.5, ref: "Informalidade nos países de renda alta (~13,5% do emprego, estimativas da OIT)", url: "https://ilostat.ilo.org/topics/informality/", approx: true },
+  inadimplencia: { value: 5.4, ref: "Média mundial de crédito bancário em atraso (~5,4% da carteira, Banco Mundial FB.AST.NPER.ZS)", url: "https://data.worldbank.org/indicator/FB.AST.NPER.ZS", approx: true },
+  "inadimplencia-total": { value: 5.4, ref: "Média mundial de crédito bancário em atraso (~5,4% da carteira, Banco Mundial FB.AST.NPER.ZS)", url: "https://data.worldbank.org/indicator/FB.AST.NPER.ZS", approx: true },
+  previdencia: { value: 100, ref: "ODS 1.3 (ONU/OIT): cobertura universal de proteção social, ou seja, 100% dos ocupados", url: "https://brasil.un.org/pt-br/sdgs/1" },
+  "dcl-rcl": { byScope: { ESTADUAL: 200, MUNICIPAL: 120 }, ref: "Limites legais do Senado (Resolução 40/2001): dívida de até 200% da receita corrente líquida nos estados e 120% nos municípios", url: "https://www12.senado.leg.br/legislacao/" },
+  "pessoal-rcl": { byScope: { ESTADUAL: 49, MUNICIPAL: 54 }, ref: "Limites da Lei de Responsabilidade Fiscal (art. 20) para o Poder Executivo: 49% da receita nos estados e 54% nos municípios", url: "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp101.htm" },
 };

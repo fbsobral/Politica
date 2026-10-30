@@ -1,7 +1,7 @@
 import { INDICATORS, getSeries, type Indicator } from "./catalog";
 import { lastClosedYear, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
 import type { Unit } from "./format";
-import { TARGETS } from "./targets";
+import { TARGETS, fixedTargetFor } from "./targets";
 
 export type Side = "economia" | "social";
 
@@ -13,7 +13,7 @@ export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
 }
 
 /** Conjunto padrão: os indicadores principais que têm meta de referência (as sub-métricas ficam como opção). */
-export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && TARGETS[c.ind.id]).map((c) => c.ind.id);
+export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && TARGETS[c.ind.id] && (TARGETS[c.ind.id].value != null || TARGETS[c.ind.id].base || TARGETS[c.ind.id].byScope?.[scope] != null)).map((c) => c.ind.id);
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };
 
@@ -59,6 +59,7 @@ export type ScoreItem = {
   targetMode: TargetMode | null;
   fixedTarget: number | null;
   targetRef: string | null;
+  targetApprox: boolean;
   hasData: boolean;
   considered: boolean;
 };
@@ -97,7 +98,7 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
   const items: ScoreItem[] = [];
   for (const { ind, side } of candidates(scope)) {
     const values = (await getSeries(ind, scope, geo, { lazy: true })) ?? {};
-    const fixed = TARGETS[ind.id]?.value ?? null;
+    const fixed = fixedTargetFor(ind.id, scope, values);
     const own = custom[ind.id];
     const target = own != null && Number.isFinite(own) ? own : fixed;
     const targetMode: TargetMode | null = own != null && Number.isFinite(own) ? "personalizada" : fixed != null ? "fixa" : null;
@@ -111,7 +112,7 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
         notes[y] = method === "nivel" ? level[y] : (level[y] + advance[y]) / 2;
       }
     }
-    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, level, advance, target, targetMode, fixedTarget: fixed, targetRef: TARGETS[ind.id]?.ref ?? null, hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
+    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, level, advance, target, targetMode, fixedTarget: fixed, targetRef: TARGETS[ind.id]?.ref ?? null, targetApprox: Boolean(TARGETS[ind.id]?.approx), hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
   }
   items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();

@@ -8,7 +8,7 @@ import { AskButton } from "@/components/agent/ask-button";
 export type EditorOpt = {
   id: string; name: string; side: "economia" | "social";
   /** meta fixa (referência automática) e a fonte dela; nulo = sem meta global */
-  fixed: number | null; ref: string | null; suffix: string;
+  fixed: number | null; ref: string | null; approx?: boolean; suffix: string;
   /** meta personalizada salva pelo usuário */
   custom: number | null;
 };
@@ -73,7 +73,7 @@ export function ScoreEditor({ scope, options, selected, isCustom, method }: { sc
                     </label>
                   )}
                 </div>
-                {o.ref && <p className="ml-6 mt-0.5 text-[11px] text-faint">Referência fixa: {o.ref}</p>}
+                {o.ref && <p className="ml-6 mt-0.5 text-[11px] text-faint">Referência fixa: {o.ref}{o.approx && <b> · valor aproximado, confira na fonte</b>}</p>}
               </div>
             ))}
           </fieldset>

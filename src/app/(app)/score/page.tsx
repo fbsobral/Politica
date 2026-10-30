@@ -12,7 +12,6 @@ import { getTermNames } from "@/lib/indicators/mandates";
 import { lastClosedYear, type Scope } from "@/lib/indicators/core";
 import { formatValue } from "@/lib/indicators/format";
 import { PRESIDENTS, candidates, computeScore, cycleTerms, defaultSelection, type ScoreItem, type ScoreMethod, type Term } from "@/lib/indicators/score";
-import { TARGETS } from "@/lib/indicators/targets";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -75,7 +74,7 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
                   <div>
                     <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
                     <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
-                    <div className="text-xs text-faint">{it.target != null ? <>Meta: <b className="text-muted">{formatValue(it.target, it.unit, it.decimals)}</b> · {it.targetMode === "personalizada" ? <>personalizada{it.fixedTarget != null && <> (fixa: {formatValue(it.fixedTarget, it.unit, it.decimals)})</>}</> : "fixa"}{it.targetRef && it.targetMode === "fixa" && <span title={it.targetRef}> ⓘ</span>}</> : "sem meta global"}</div>
+                    <div className="text-xs text-faint">{it.target != null ? <>Meta: <b className="text-muted">{formatValue(it.target, it.unit, it.decimals)}</b> · {it.targetMode === "personalizada" ? <>personalizada{it.fixedTarget != null && <> (fixa: {formatValue(it.fixedTarget, it.unit, it.decimals)})</>}</> : "fixa"}{it.targetRef && it.targetMode === "fixa" && <span title={`${it.targetRef}${it.targetApprox ? " (valor aproximado: confira na fonte)" : ""}`}> ⓘ{it.targetApprox ? "~" : ""}</span>}</> : "sem meta global"}</div>
                     {it.target == null && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">sem meta · fora da conta (defina uma em Editar)</span>}
                     {!it.considered && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">não considerado no score · existe, mas está desmarcado em Editar indicadores</span>}
                     {it.considered && it.target != null && !it.hasData && <span className="mt-0.5 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-semibold">{Object.keys(it.values).length ? "sem dois anos seguidos para dar nota" : "sem dados publicados"} · considerado, mas fora da conta por falta de dados</span>}
@@ -138,7 +137,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
   const soc = r.items.filter((i) => i.side === "social");
   const termOf = (y: number) => terms.find((t) => y >= t.from && y <= t.to);
   const suffixOf = (u: string) => (u === "pct" ? "%" : "");
-  const opts = candidates(scope).map((c) => ({ id: c.ind.id, name: c.ind.name, side: c.side, fixed: TARGETS[c.ind.id]?.value ?? null, ref: TARGETS[c.ind.id]?.ref ?? null, suffix: suffixOf(c.ind.unit), custom: customTargets[c.ind.id] ?? null }));
+  const opts = candidates(scope).map((c) => { const it = r.items.find((x) => x.id === c.ind.id); return { id: c.ind.id, name: c.ind.name, side: c.side, fixed: it?.fixedTarget ?? null, ref: it?.targetRef ?? null, approx: it?.targetApprox ?? false, suffix: suffixOf(c.ind.unit), custom: customTargets[c.ind.id] ?? null }; });
 
   const yearFocus = (y: (typeof r.years)[number], pl: string, t?: Term): AskFocus => ({
     title: `Score de ${y.year} · ${pl}`,
