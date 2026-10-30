@@ -16,6 +16,12 @@ export type YearRow = {
   ask: AskFocus;
 };
 
+export type YearGroup = {
+  id: string; name: string; role: string; period: string; color: string;
+  economia: string; economiaBg?: string; social: string; socialBg?: string; score: string; scoreBg?: string;
+  rows: YearRow[];
+};
+
 const ICON = { melhorou: "▲", piorou: "▼", igual: "＝" } as const;
 
 function Side({ title, rows, avg, bg }: { title: string; rows: YearDetailItem[]; avg: string; bg?: string }) {
@@ -44,11 +50,18 @@ function Side({ title, rows, avg, bg }: { title: string; rows: YearDetailItem[];
   );
 }
 
-/** Tabela "Ano a ano" com botão de detalhamento: mostra de onde vem cada nota. */
-export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
+/** Tabela "Ano a ano" agrupada por mandato (cada grupo abre e fecha), com botão de detalhamento por ano. */
+export function ScoreYearTable({ groups }: { groups: YearGroup[] }) {
   const [open, setOpen] = useState<number | null>(null);
+  // por padrão só o mandato mais recente fica aberto
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(groups.length ? [groups[groups.length - 1].id] : []));
+  const flip = (id: string) => setOpenGroups((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allOpen = openGroups.size === groups.length;
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+      <div className="flex items-center justify-end border-b border-line px-3 py-2">
+        <button type="button" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(groups.map((g) => g.id)))} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-ink/5">{allOpen ? "Recolher todos os mandatos" : "Expandir todos os mandatos"}</button>
+      </div>
       <table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
         <colgroup>
           <col style={{ width: "9%" }} /><col style={{ width: "27%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "13%" }} /><col style={{ width: "17%" }} />
@@ -63,26 +76,42 @@ export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
             <th className="px-3 py-2 text-right font-medium" />
           </tr>
         </thead>
-        <tbody>
-          {rows.map((y) => {
-            const isOpen = open === y.year;
-            const econ = y.items.filter((i) => i.side === "economia" && i.note != null);
-            const soc = y.items.filter((i) => i.side === "social" && i.note != null);
-            return (
-              <Fragment key={y.year}>
-                <tr className="border-t border-line">
-                  <td className="px-3 py-1.5 font-semibold tabular-nums">{y.year}</td>
-                  <td className="px-3 py-1.5"><span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: y.color }} />{y.gov}</td>
-                  <td className="px-3 py-1.5 text-center tabular-nums" style={{ background: y.economiaBg }}>{y.economia}</td>
-                  <td className="px-3 py-1.5 text-center tabular-nums" style={{ background: y.socialBg }}>{y.social}</td>
-                  <td className="px-3 py-1.5 text-center font-semibold tabular-nums" style={{ background: y.totalBg }}>{y.total}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : y.year)} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-ink/5">
-                      {isOpen ? "Fechar" : "Detalhar"}
-                    </button>
-                  </td>
-                </tr>
-                {isOpen && (
+        {groups.map((g) => {
+          const gOpen = openGroups.has(g.id);
+          return (
+            <tbody key={g.id} className="border-t-2 border-line">
+              <tr className="cursor-pointer bg-ink/[0.04] hover:bg-ink/[0.07]" onClick={() => flip(g.id)}>
+                <td colSpan={2} className="px-3 py-2.5">
+                  <button type="button" aria-expanded={gOpen} onClick={(e) => { e.stopPropagation(); flip(g.id); }} className="flex items-center gap-2 text-left">
+                    <span className={`inline-block text-muted transition-transform ${gOpen ? "rotate-90" : ""}`}>▸</span>
+                    <span className="h-5 w-1.5 shrink-0 rounded-full" style={{ background: g.color }} />
+                    <span><b>{g.name}</b> <span className="text-xs text-muted">· {g.role} · {g.period} · {g.rows.length} {g.rows.length === 1 ? "ano" : "anos"}</span></span>
+                  </button>
+                </td>
+                <td className="px-3 py-2.5 text-center font-semibold tabular-nums" style={{ background: g.economiaBg }}>{g.economia}</td>
+                <td className="px-3 py-2.5 text-center font-semibold tabular-nums" style={{ background: g.socialBg }}>{g.social}</td>
+                <td className="px-3 py-2.5 text-center font-bold tabular-nums" style={{ background: g.scoreBg }}>{g.score}</td>
+                <td className="px-3 py-2.5 text-right text-xs text-muted">média do mandato</td>
+              </tr>
+              {gOpen && g.rows.map((y) => {
+                const isOpen = open === y.year;
+                const econ = y.items.filter((i) => i.side === "economia" && i.note != null);
+                const soc = y.items.filter((i) => i.side === "social" && i.note != null);
+                return (
+                  <Fragment key={y.year}>
+                    <tr className="border-t border-line">
+                      <td className="px-3 py-1.5 pl-8 font-semibold tabular-nums">{y.year}</td>
+                      <td className="px-3 py-1.5"><span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: y.color }} />{y.gov}</td>
+                      <td className="px-3 py-1.5 text-center tabular-nums" style={{ background: y.economiaBg }}>{y.economia}</td>
+                      <td className="px-3 py-1.5 text-center tabular-nums" style={{ background: y.socialBg }}>{y.social}</td>
+                      <td className="px-3 py-1.5 text-center font-semibold tabular-nums" style={{ background: y.totalBg }}>{y.total}</td>
+                      <td className="px-3 py-1.5 text-right">
+                        <button type="button" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : y.year)} className="rounded-full border border-line px-3 py-1 text-xs font-semibold hover:bg-ink/5">
+                          {isOpen ? "Fechar" : "Detalhar"}
+                        </button>
+                      </td>
+                    </tr>
+                    {isOpen && (
                   <tr className="bg-ink/[0.03]">
                     <td colSpan={6} className="px-3 py-4">
                       <p className="mb-3 max-w-3xl text-sm text-muted">
@@ -100,10 +129,12 @@ export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
                     </td>
                   </tr>
                 )}
-              </Fragment>
-            );
-          })}
-        </tbody>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          );
+        })}
       </table>
     </div>
   );

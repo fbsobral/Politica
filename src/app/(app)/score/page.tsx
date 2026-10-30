@@ -5,7 +5,7 @@ import { ScoreItemPeek } from "@/components/score-item-peek";
 import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
 import { ScoreTermTable, type TermRow } from "@/components/score-term-table";
-import { ScoreYearTable, type YearRow } from "@/components/score-year-table";
+import { ScoreYearTable, type YearGroup, type YearRow } from "@/components/score-year-table";
 import { PageSkeleton, PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
 import { UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
@@ -198,6 +198,13 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
     };
   });
 
+  const yearGroups: YearGroup[] = termRows
+    .map((t) => {
+      const rows = yearRows.filter((y) => y.year >= Number(t.period.split("–")[0]) && y.year <= (t.period.endsWith("hoje") ? 9999 : Number(t.period.split("–")[1])));
+      return { id: t.id, name: t.name, role: t.role === "nome em breve" ? "mandato" : t.role, period: t.period, color: t.color, economia: t.economia, economiaBg: t.economiaBg, social: t.social, socialBg: t.socialBg, score: t.score, scoreBg: t.scoreBg, rows };
+    })
+    .filter((g) => g.rows.length > 0);
+
   const sideOf = (side: "economia" | "social") => shown.map((y) => y[side]);
 
   return (
@@ -240,7 +247,7 @@ async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?:
         <h2 className="display mb-1 text-2xl font-semibold">Ano a ano</h2>
         <p className="mb-3 text-sm text-muted">Veja a evolução do score, do lado econômico e do social, e escolha abaixo quais indicadores quer ver em linhas. Acima da linha de 50, o ano melhorou mais que o normal; abaixo, menos.</p>
         <div className="rounded-2xl border border-line bg-surface p-4"><ScoreLineChart years={years} lines={lineSeries} terms={terms.filter((t) => t.to >= from).map((t) => ({ id: t.id, name: t.name ?? t.role, from: t.from, to: t.to, color: t.color }))} /></div>
-        <div className="mt-3"><ScoreYearTable rows={yearRows} /></div>
+        <div className="mt-3"><ScoreYearTable groups={yearGroups} /></div>
         {gapNote && <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 p-3 text-xs leading-relaxed"><b>Por que faltam anos no gráfico?</b> {gapNote}</p>}
         <p className="mt-2 text-xs text-faint">A tabela lista todos os anos guardados; a janela escolhida vale para o gráfico. Anos sem nota num dos lados ficam sem score.{method === "nivel-avanco" ? " Neste método o primeiro ano de cada indicador não tem nota, porque ela compara com o ano anterior." : ""} {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
       </section>
