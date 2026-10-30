@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AskButton, type AskFocus } from "@/components/agent/ask-button";
+import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
 import { ScoreYearTable, type YearRow } from "@/components/score-year-table";
 import { PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
@@ -30,6 +32,15 @@ function verdict(v: number | null | undefined): string {
   return "piorou mais que o normal";
 }
 
+function itemFocus(it: ScoreItem, years: number[], place: string): AskFocus {
+  const rows = years.filter((y) => it.values[y] != null).map((y) => `${y}: ${formatValue(it.values[y], it.unit, it.decimals)}${it.notes[y] != null ? ` (nota ${Math.round(it.notes[y])})` : " (sem nota)"}`);
+  return {
+    title: `Score · ${it.name} · ${place}`,
+    text: `Indicador do score dos governos (lado ${it.side === "economia" ? "econômico" : "social"}, ${it.better === "up" ? "quanto maior melhor" : "quanto menor melhor"}). A nota de cada ano mede a melhora em relação ao ano anterior, comparada com a das outras variações da série (0 a 100, 50 = típica). Valores e notas: ${rows.join("; ")}.`,
+    suggestions: ["Por que esta nota ficou tão alta ou baixa em algum ano?", "O que explica a evolução deste indicador?", "Este indicador depende do governo?"],
+  };
+}
+
 const termLabel = (t: Term) => t.name ?? `${t.role} · mandato`;
 
 function Legend() {
@@ -42,55 +53,7 @@ function Legend() {
   );
 }
 
-function YearChart({ years, terms }: { years: { year: number; total: number | null }[]; terms: Term[] }) {
-  const W = 720, H = 220, pl = 28, pr = 8, pt = 14, pb = 34;
-  const n = years.length;
-  const bw = (W - pl - pr) / n;
-  const y = (v: number) => pt + (H - pt - pb) * (1 - v / 100);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Score de cada ano" className="w-full">
-      {[0, 50, 100].map((g) => (
-        <g key={g}>
-          <line x1={pl} x2={W - pr} y1={y(g)} y2={y(g)} stroke="currentColor" strokeOpacity={g === 50 ? 0.35 : 0.12} strokeDasharray={g === 50 ? "4 4" : undefined} />
-          <text x={pl - 4} y={y(g) + 3} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.6">{g}</text>
-        </g>
-      ))}
-      <text x={W - pr} y={y(50) - 3} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.6">melhora típica</text>
-      {years.map((d, i) => {
-        const t = terms.find((x) => d.year >= x.from && d.year <= x.to);
-        const x = pl + i * bw + bw * 0.18;
-        const w = bw * 0.64;
-        return (
-          <g key={d.year}>
-            {d.total != null ? (
-              <>
-                <rect x={x} y={y(d.total)} width={w} height={y(0) - y(d.total)} rx="3" fill={t?.color ?? "#17407f"} opacity="0.9" />
-                <text x={x + w / 2} y={y(d.total) - 4} textAnchor="middle" fontSize={n > 12 ? 8 : 10} fontWeight="600" fill="currentColor">{Math.round(d.total)}</text>
-              </>
-            ) : (
-              <text x={x + w / 2} y={y(0) - 4} textAnchor="middle" fontSize="9" fill="currentColor" opacity="0.45">—</text>
-            )}
-            <text x={x + w / 2} y={H - pb + 13} textAnchor="middle" fontSize={n > 12 ? 8 : 10} fill="currentColor" opacity="0.75">{n > 12 ? String(d.year).slice(2) : d.year}</text>
-          </g>
-        );
-      })}
-      {terms.map((t) => {
-        const a = years.findIndex((d) => d.year >= t.from && d.year <= t.to);
-        if (a < 0) return null;
-        const b = years.length - 1 - [...years].reverse().findIndex((d) => d.year >= t.from && d.year <= t.to);
-        const x1 = pl + a * bw + 2, x2 = pl + (b + 1) * bw - 2;
-        return (
-          <g key={t.id}>
-            <line x1={x1} x2={x2} y1={H - 8} y2={H - 8} stroke={t.color} strokeWidth="3" strokeLinecap="round" />
-            {x2 - x1 > 46 && <text x={(x1 + x2) / 2} y={H - 12} textAnchor="middle" fontSize="9" fill={t.color} fontWeight="600">{(t.name ?? t.role).split(" ").slice(-1)[0]}</text>}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function ItemRows({ items, years, sideRow }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[] }) {
+function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years: number[]; sideRow: (number | null)[]; place: string }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full border-collapse text-sm" style={{ minWidth: Math.max(560, 200 + years.length * 62) }}>
@@ -104,8 +67,13 @@ function ItemRows({ items, years, sideRow }: { items: ScoreItem[]; years: number
           {items.map((it) => (
             <tr key={it.id} className="border-t border-line">
               <th scope="row" className="sticky left-0 z-10 bg-surface px-3 py-2 text-left align-middle font-normal">
-                <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
-                <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
+                    <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
+                  </div>
+                  <AskButton compact focus={itemFocus(it, years, place)} />
+                </div>
               </th>
               {years.map((y) => {
                 const v = it.values[y];
@@ -158,12 +126,19 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
   const termOf = (y: number) => terms.find((t) => y >= t.from && y <= t.to);
   const opts = candidates(scope).map((c) => ({ id: c.ind.id, name: c.ind.name, side: c.side }));
 
+  const yearFocus = (y: (typeof r.years)[number], pl: string, t?: Term): AskFocus => ({
+    title: `Score de ${y.year} · ${pl}`,
+    text: `Score dos governos, ${pl}, ano ${y.year}${t ? ` (${t.name ?? t.role}, mandato ${t.from}–${t.to})` : ""}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}. Indicadores e notas do ano: ${r.items.filter((i) => i.values[y.year] != null).map((i) => `${i.name} ${formatValue(i.values[y.year], i.unit, i.decimals)}${i.notes[y.year] != null ? ` (nota ${Math.round(i.notes[y.year])})` : ""}`).join("; ")}. Método: cada nota mede a melhora em relação ao ano anterior (0 a 100, 50 = variação típica da série); cada lado é a média das suas notas; o score é a média dos dois lados.`,
+    suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
+  });
+
   const yearRows: YearRow[] = [...r.years].reverse().map((y) => {
     const t = termOf(y.year);
     return {
       year: y.year, gov: t ? termLabel(t) : "—", color: t?.color,
       economia: n0(y.economia), economiaBg: heat(y.economia), social: n0(y.social), socialBg: heat(y.social), total: n0(y.total), totalBg: heat(y.total, 0.4),
       nEcon: 0, nSocial: 0,
+      ask: yearFocus(y, place, termOf(y.year)),
       items: r.items.filter((i) => i.values[y.year] != null).map((i) => {
         const v = i.values[y.year], prev = i.values[y.year - 1];
         const dir = prev == null ? null : v === prev ? "igual" : (i.better === "up" ? v > prev : v < prev) ? "melhorou" : "piorou";
@@ -172,6 +147,14 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
     };
   });
 
+  const ITEM_COLORS = ["#7c3aed", "#0891b2", "#ca8a04", "#be185d", "#4d7c0f", "#c2410c", "#0f766e", "#6d28d9", "#a16207", "#1d4ed8"];
+  const lineSeries: LineSeries[] = [
+    { id: "total", label: "Score", color: "#111827", kind: "total", values: Object.fromEntries(r.years.map((y) => [y.year, y.total])) },
+    { id: "economia", label: "Econômico", color: "#2563eb", kind: "economia", values: Object.fromEntries(r.years.map((y) => [y.year, y.economia])) },
+    { id: "social", label: "Social", color: "#db2777", kind: "social", values: Object.fromEntries(r.years.map((y) => [y.year, y.social])) },
+    ...r.items.map((i, k): LineSeries => ({ id: i.id, label: i.name, color: ITEM_COLORS[k % ITEM_COLORS.length], kind: "item", values: Object.fromEntries(years.map((yr) => [yr, i.notes[yr] ?? null])) })),
+  ];
+
   const sideOf = (side: "economia" | "social") => r.years.map((y) => y[side]);
 
   return (
@@ -179,6 +162,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       <PageHeader eyebrow={`Números · ${place} · últimos ${range} anos`} title="Score dos governos" />
       <ScopeTabs base="/score" scope={scope} noAll params={{ anos: sp.anos }} />
       <RangeTabs base="/score" years={range} params={{ esfera: sp.esfera }} />
+      <AskButton className="mb-6 ml-3 align-top" label="Perguntar sobre o score" focus={{ title: `Score dos governos · ${place}`, text: `Página Score dos governos (${place}, últimos ${range} anos). Resultado por governo: ${r.terms.map((t) => `${termLabel(t)} ${n0(t.avg)}`).join("; ")}. Indicadores usados: ${r.items.map((i) => i.name).join("; ")}. Método: cada indicador recebe nota anual (0 a 100) pela melhora em relação ao ano anterior comparada com as demais variações da série (mesma régua para todos os anos); lados econômico e social valem 50% cada, indicadores com peso igual dentro do lado; o score do governo é a média dos seus anos. É um índice calculado pelo Política, não um dado oficial.`, suggestions: ["Como o score é calculado?", "Por que não usar o nível do indicador em vez da melhora?", "O que o score não consegue mostrar?"] }} />
 
       <section className="mb-6 rounded-2xl border border-line bg-surface p-5">
         <h2 className="display text-xl font-semibold">Como ler esta página</h2>
@@ -206,7 +190,10 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
           <div key={t.id} className="card-flat overflow-hidden p-0">
             <div className="h-1.5" style={{ background: t.color }} />
             <div className="p-4">
-              <p className="font-semibold leading-tight">{t.name ?? t.role}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold leading-tight">{t.name ?? t.role}</p>
+                <AskButton compact focus={{ title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${r.years.filter((y) => t.years.includes(y.year)).map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] }} />
+              </div>
               <p className="text-xs text-muted">{t.name ? `${t.role} · ` : ""}{t.from}–{t.to > 2090 ? "hoje" : t.to}</p>
               <p className="mt-2 flex items-baseline gap-1">
                 <span className="display text-5xl font-semibold tabular-nums" style={{ color: heatSolid(t.avg) }}>{n0(t.avg)}</span>
@@ -237,8 +224,8 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
 
       <section className="mb-8">
         <h2 className="display mb-1 text-2xl font-semibold">Ano a ano</h2>
-        <p className="mb-3 text-sm text-muted">Cada barra é o score do ano; a cor é a do governo. Acima da linha tracejada, o ano melhorou mais que o normal; abaixo, menos.</p>
-        <div className="rounded-2xl border border-line bg-surface p-3"><YearChart years={r.years} terms={terms} /></div>
+        <p className="mb-3 text-sm text-muted">Veja a evolução do score, do lado econômico e do social, e escolha abaixo quais indicadores quer ver em linhas. Acima da linha de 50, o ano melhorou mais que o normal; abaixo, menos.</p>
+        <div className="rounded-2xl border border-line bg-surface p-4"><ScoreLineChart years={years} lines={lineSeries} terms={terms.filter((t) => t.to >= from).map((t) => ({ id: t.id, name: t.name ?? t.role, from: t.from, to: t.to, color: t.color }))} /></div>
         <div className="mt-3"><ScoreYearTable rows={yearRows} /></div>
         <p className="mt-2 text-xs text-faint">Anos sem nota num dos lados ficam sem score. O primeiro ano de cada indicador não tem nota, porque a nota compara com o ano anterior. {scope === "FEDERAL" && "Em 2016, Dilma governou até agosto; o ano está com Temer, que estava no cargo ao fim dele."}</p>
       </section>
@@ -246,13 +233,13 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       <section className="mb-8">
         <h2 className="display mb-1 text-2xl font-semibold">Econômico <span className="text-base font-normal text-muted">· vale 50% do score</span></h2>
         <p className="mb-3 text-sm text-muted">Cada quadrado mostra o número publicado (em cima) e a nota do ano (embaixo). Passe o mouse ou toque para ver a explicação.</p>
-        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {econ.length ? <ItemRows items={econ} years={years} sideRow={sideOf("economia")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </section>
 
       <section className="mb-8">
         <h2 className="display mb-1 text-2xl font-semibold">Social <span className="text-base font-normal text-muted">· vale 50% do score</span></h2>
         <p className="mb-3 text-sm text-muted">Mesma leitura: número publicado em cima, nota do ano embaixo.</p>
-        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
+        {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </section>
 
       <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length)} />

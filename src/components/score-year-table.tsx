@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 
 export type YearDetailItem = { name: string; side: "economia" | "social"; value: string; prev: string | null; dir: "melhorou" | "piorou" | "igual" | null; note: number | null; bg?: string };
 export type YearRow = {
@@ -12,6 +13,7 @@ export type YearRow = {
   total: string; totalBg?: string;
   items: YearDetailItem[];
   nEcon: number; nSocial: number;
+  ask: AskFocus;
 };
 
 const ICON = { melhorou: "▲", piorou: "▼", igual: "＝" } as const;
@@ -47,7 +49,10 @@ export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
+      <table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
+        <colgroup>
+          <col style={{ width: "9%" }} /><col style={{ width: "27%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "13%" }} /><col style={{ width: "17%" }} />
+        </colgroup>
         <thead>
           <tr className="text-xs text-muted">
             <th className="px-3 py-2 text-left font-medium">Ano</th>
@@ -55,7 +60,7 @@ export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
             <th className="px-3 py-2 text-center font-medium">Econômico (50%)</th>
             <th className="px-3 py-2 text-center font-medium">Social (50%)</th>
             <th className="px-3 py-2 text-center font-medium">Score</th>
-            <th className="px-3 py-2" />
+            <th className="px-3 py-2 text-right font-medium" />
           </tr>
         </thead>
         <tbody>
@@ -84,6 +89,7 @@ export function ScoreYearTable({ rows }: { rows: YearRow[] }) {
                         Como chegamos ao <b className="text-ink">{y.total}</b> de {y.year}: cada indicador recebe uma nota (0 a 100) pela melhora em relação ao ano anterior; a nota de cada lado é a média das suas notas; o score é a média dos dois lados
                         {econ.length && soc.length ? <> — ({y.economia} + {y.social}) ÷ 2 = <b className="text-ink">{y.total}</b>.</> : "."}
                       </p>
+                      <div className="mb-3"><AskButton focus={y.ask} label="Perguntar sobre este ano" /></div>
                       <div className="grid gap-5 md:grid-cols-2">
                         <Side title="Econômico · 50%" rows={econ} avg={y.economia} bg={y.economiaBg} />
                         <Side title="Social · 50%" rows={soc} avg={y.social} bg={y.socialBg} />

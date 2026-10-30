@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveScoreConfig } from "@/app/actions";
+import { AskButton } from "@/components/agent/ask-button";
 
 type Opt = { id: string; name: string; side: "economia" | "social" };
 
@@ -35,6 +36,7 @@ export function ScoreEditor({ scope, options, selected, isCustom }: { scope: "FE
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" disabled={pending} onClick={() => save([...sel])} className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-50">{pending ? "Salvando…" : "Salvar escolha"}</button>
+        <AskButton label="Quais indicadores escolher?" focus={{ title: "Escolha de indicadores do score", text: `O usuário está escolhendo quais indicadores entram no score (cada lado vale 50%, peso igual dentro do lado). Opções econômicas: ${options.filter((o) => o.side === "economia").map((o) => o.name).join("; ")}. Opções sociais: ${options.filter((o) => o.side === "social").map((o) => o.name).join("; ")}. Hoje marcados: ${options.filter((o) => sel.has(o.id)).map((o) => o.name).join("; ")}.`, suggestions: ["Quais indicadores fazem mais sentido para avaliar um governo?", "Que diferença faz incluir ou tirar a dívida?", "Como equilibrar economia e social?"] }} />
         <button type="button" disabled={pending} onClick={() => save([])} className="rounded-full border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Voltar ao padrão</button>
       </div>
     </details>
