@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote, IconCoins, IconCompass, IconFlag, IconChart } from "./icons";
@@ -48,9 +48,15 @@ const MENU: Entry[] = [
   { label: "Pergunte", href: "/conversar", match: (p) => p.startsWith("/conversar") },
 ];
 
+/** Aparece dentro de um <Link> enquanto a página de destino carrega. */
+function Pending() {
+  const { pending } = useLinkStatus();
+  return pending ? <span aria-label="Carregando" className="ml-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null;
+}
+
 const topClass = (active: boolean) => `inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${active ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
 
-function Dropdown({ entry, path }: { entry: Entry; path: string }) {
+function Dropdown({ entry, path, onGo }: { entry: Entry; path: string; onGo: (href: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = entry.children!.some((c) => c.match(path));
@@ -83,9 +89,9 @@ function Dropdown({ entry, path }: { entry: Entry; path: string }) {
             {entry.children!.map((c) => {
               const on = c.match(path);
               return (
-                <Link key={c.href} href={c.href} role="menuitem" aria-current={on ? "page" : undefined} className={`flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors ${on ? "bg-brand-soft" : "hover:bg-ink/5"}`}>
+                <Link key={c.href} href={c.href} role="menuitem" aria-current={on ? "page" : undefined} onClick={() => onGo(c.href)} className={`flex items-start gap-3 rounded-xl px-3 py-2.5 transition-colors ${on ? "bg-brand-soft" : "hover:bg-ink/5"}`}>
                   <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand">{c.icon}</span>
-                  <span className="min-w-0"><b className="block text-sm">{c.label}</b><span className="block text-xs text-muted">{c.hint}</span></span>
+                  <span className="min-w-0 flex-1"><b className="block text-sm">{c.label}<Pending /></b><span className="block text-xs text-muted">{c.hint}</span></span>
                 </Link>
               );
             })}
@@ -96,17 +102,25 @@ function Dropdown({ entry, path }: { entry: Entry; path: string }) {
   );
 }
 
+/** Caminho "otimista": o item clicado já aparece ativo na hora, antes da página chegar. */
+function useOptimisticPath() {
+  const real = usePathname();
+  const [next, setNext] = useState<string | null>(null);
+  useEffect(() => setNext(null), [real]);
+  return [next ?? real, setNext] as const;
+}
+
 export function DesktopNav({ isAdmin }: { isAdmin: boolean }) {
-  const path = usePathname();
+  const [path, setNext] = useOptimisticPath();
   void isAdmin; // Alertas, Favoritos, Conta e Admin ficam no menu do avatar
   return (
     <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Principal">
       {MENU.map((e) =>
         e.children ? (
-          <Dropdown key={e.label} entry={e} path={path} />
+          <Dropdown key={e.label} entry={e} path={path} onGo={setNext} />
         ) : (
-          <Link key={e.label} href={e.href!} aria-current={e.match!(path) ? "page" : undefined} className={topClass(e.match!(path))}>
-            {e.label}
+          <Link key={e.label} href={e.href!} onClick={() => setNext(e.href!)} aria-current={e.match!(path) ? "page" : undefined} className={topClass(e.match!(path))}>
+            {e.label}<Pending />
           </Link>
         ),
       )}
@@ -115,7 +129,7 @@ export function DesktopNav({ isAdmin }: { isAdmin: boolean }) {
 }
 
 export function MobileNav() {
-  const path = usePathname();
+  const [path, setNext] = useOptimisticPath();
   const list = MOBILE;
   return (
     <nav
@@ -128,9 +142,9 @@ export function MobileNav() {
           const active = i.match(path);
           return (
             <li key={i.href}>
-              <Link href={i.href} aria-current={active ? "page" : undefined} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${active ? "text-brand" : "text-faint"}`}>
+              <Link href={i.href} onClick={() => setNext(i.href)} aria-current={active ? "page" : undefined} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${active ? "text-brand" : "text-faint"}`}>
                 <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${active ? "bg-brand-soft" : ""}`}>{i.icon}</span>
-                {i.short ?? i.label}
+                <span className="inline-flex items-center">{i.short ?? i.label}<Pending /></span>
               </Link>
             </li>
           );

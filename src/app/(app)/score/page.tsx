@@ -1,16 +1,18 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
 import { ScoreTermTable, type TermRow } from "@/components/score-term-table";
 import { ScoreYearTable, type YearRow } from "@/components/score-year-table";
-import { PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
+import { PageSkeleton, PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
 import { UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
 import { getTermNames } from "@/lib/indicators/mandates";
 import { lastClosedYear, type Scope } from "@/lib/indicators/core";
 import { formatValue } from "@/lib/indicators/format";
-import { PRESIDENTS, candidates, computeScore, cycleTerms, defaultSelection, type ScoreItem, type Term } from "@/lib/indicators/score";
+import { PRESIDENTS, candidates, computeScore, cycleTerms, defaultSelection, type ScoreItem, type ScoreMethod, type Term } from "@/lib/indicators/score";
+import { TARGETS } from "@/lib/indicators/targets";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -35,9 +37,10 @@ function verdict(v: number | null | undefined): string {
 
 function itemFocus(it: ScoreItem, years: number[], place: string): AskFocus {
   const rows = years.filter((y) => it.values[y] != null).map((y) => `${y}: ${formatValue(it.values[y], it.unit, it.decimals)}${it.notes[y] != null ? ` (nota ${Math.round(it.notes[y])})` : " (sem nota)"}`);
+  const meta = it.target != null ? `Meta ${formatValue(it.target, it.unit, it.decimals)} (${it.targetMode === "personalizada" ? "personalizada" : it.targetRef ?? "fixa"}).` : "Sem meta definida (fora da conta).";
   return {
     title: `Score · ${it.name} · ${place}`,
-    text: `Indicador do score dos governos (lado ${it.side === "economia" ? "econômico" : "social"}, ${it.better === "up" ? "quanto maior melhor" : "quanto menor melhor"}). A nota de cada ano mede a melhora em relação ao ano anterior, comparada com a das outras variações da série (0 a 100, 50 = típica). Valores e notas: ${rows.join("; ")}.`,
+    text: `Indicador do score dos governos (lado ${it.side === "economia" ? "econômico" : "social"}, ${it.better === "up" ? "quanto maior melhor" : "quanto menor melhor"}). ${meta} A nota de cada ano mede a proximidade da meta (0 a 100; 100 = meta atingida ou superada). Valores e notas: ${rows.join("; ")}.`,
     suggestions: ["Por que esta nota ficou tão alta ou baixa em algum ano?", "O que explica a evolução deste indicador?", "Este indicador depende do governo?"],
   };
 }
@@ -72,8 +75,10 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
                   <div>
                     <Link href="/indicadores" className="font-medium hover:underline">{it.name}</Link>
                     <div className="text-xs text-faint">{it.better === "up" ? "quanto maior, melhor" : "quanto menor, melhor"}</div>
+                    <div className="text-xs text-faint">{it.target != null ? <>Meta: <b className="text-muted">{formatValue(it.target, it.unit, it.decimals)}</b> · {it.targetMode === "personalizada" ? <>personalizada{it.fixedTarget != null && <> (fixa: {formatValue(it.fixedTarget, it.unit, it.decimals)})</>}</> : "fixa"}{it.targetRef && it.targetMode === "fixa" && <span title={it.targetRef}> ⓘ</span>}</> : "sem meta global"}</div>
+                    {it.target == null && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">sem meta · fora da conta (defina uma em Editar)</span>}
                     {!it.considered && <span className="mt-0.5 inline-block rounded-full bg-ink/10 px-2 py-0.5 text-[11px] font-semibold">não considerado no score · existe, mas está desmarcado em Editar indicadores</span>}
-                    {it.considered && !it.hasData && <span className="mt-0.5 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-semibold">{Object.keys(it.values).length ? "sem dois anos seguidos para dar nota" : "sem dados publicados"} · considerado, mas fora da conta por falta de dados</span>}
+                    {it.considered && it.target != null && !it.hasData && <span className="mt-0.5 inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-semibold">{Object.keys(it.values).length ? "sem dois anos seguidos para dar nota" : "sem dados publicados"} · considerado, mas fora da conta por falta de dados</span>}
                   </div>
                   <AskButton compact focus={itemFocus(it, years, place)} />
                 </div>
@@ -84,7 +89,8 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
                 const prev = it.values[y - 1];
                 const better = v != null && prev != null ? (it.better === "up" ? v > prev : v < prev) : null;
                 const same = v != null && prev != null && v === prev;
-                const tip = v == null ? `${y}: sem dado publicado` : note == null ? `${y}: ${formatValue(v, it.unit, it.decimals)}. Sem ano anterior publicado para comparar, então não tem nota.` : `${y}: ${formatValue(v, it.unit, it.decimals)}. ${same ? "Ficou igual ao" : better ? "Melhorou em relação ao" : "Piorou em relação ao"} ano anterior (${formatValue(prev, it.unit, it.decimals)}). Nota ${Math.round(note)} de 100.`;
+                const lvl = it.level[y], adv = it.advance[y];
+                const tip = v == null ? `${y}: sem dado publicado` : it.target == null ? `${y}: ${formatValue(v, it.unit, it.decimals)}. Sem meta definida: não entra na conta.` : note == null ? `${y}: ${formatValue(v, it.unit, it.decimals)}. Meta ${formatValue(it.target, it.unit, it.decimals)}. Sem ano anterior publicado para comparar, então não tem nota neste método.` : `${y}: ${formatValue(v, it.unit, it.decimals)}. Meta ${formatValue(it.target, it.unit, it.decimals)}. Nível ${Math.round(lvl)}${adv != null ? ` · avanço ${Math.round(adv)}` : ""}. ${same ? "Igual ao" : better ? "Melhor que o" : "Pior que o"} ano anterior (${formatValue(prev, it.unit, it.decimals)}). Nota ${Math.round(note)} de 100.`;
                 return (
                   <td key={y} title={tip} className="px-1 py-1.5 text-center tabular-nums" style={{ background: heat(note) }}>
                     {v == null ? <span className="text-faint">—</span> : (
@@ -110,7 +116,7 @@ function ItemRows({ items, years, sideRow, place }: { items: ScoreItem[]; years:
   );
 }
 
-export default async function ScorePage({ searchParams }: { searchParams: Promise<{ esfera?: string; anos?: string }> }) {
+async function ScoreContent({ searchParams }: { searchParams: Promise<{ esfera?: string; anos?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
   const scope: Scope = (SCOPE_SLUG[sp.esfera ?? "federal"] as Scope | undefined) ?? "FEDERAL";
@@ -119,19 +125,23 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
   const geo = { uf: user.uf ?? "", ufCode: UF_CODE[user.uf ?? ""] ?? 0, ibge: String((await ibgeIdFor(user.uf ?? "", user.municipalityKey ?? "")) ?? ""), municipalityKey: user.municipalityKey ?? "" };
   const place = scope === "FEDERAL" ? "Brasil" : scope === "ESTADUAL" ? UFS[user.uf ?? ""] ?? "Estado" : user.municipality ?? "Município";
 
-  const custom = ((user.scoreConfig ?? {}) as Record<string, string[]>)[scope];
+  const cfg = (user.scoreConfig ?? {}) as Record<string, unknown>;
+  const custom = cfg[scope] as string[] | undefined;
+  const customTargets = (cfg.targets ?? {}) as Record<string, number>;
+  const method: ScoreMethod = cfg.method === "nivel-avanco" ? "nivel-avanco" : "nivel";
   const selected = custom?.length ? custom : defaultSelection(scope);
   const terms = scope === "FEDERAL" ? PRESIDENTS : cycleTerms(scope, await getTermNames(scope, geo));
-  const r = await computeScore(scope, geo, selected, from, terms);
+  const r = await computeScore(scope, geo, selected, from, terms, customTargets, method);
   const years = r.years.map((y) => y.year);
   const econ = r.items.filter((i) => i.side === "economia");
   const soc = r.items.filter((i) => i.side === "social");
   const termOf = (y: number) => terms.find((t) => y >= t.from && y <= t.to);
-  const opts = candidates(scope).map((c) => ({ id: c.ind.id, name: c.ind.name, side: c.side }));
+  const suffixOf = (u: string) => (u === "pct" ? "%" : "");
+  const opts = candidates(scope).map((c) => ({ id: c.ind.id, name: c.ind.name, side: c.side, fixed: TARGETS[c.ind.id]?.value ?? null, ref: TARGETS[c.ind.id]?.ref ?? null, suffix: suffixOf(c.ind.unit), custom: customTargets[c.ind.id] ?? null }));
 
   const yearFocus = (y: (typeof r.years)[number], pl: string, t?: Term): AskFocus => ({
     title: `Score de ${y.year} · ${pl}`,
-    text: `Score dos governos, ${pl}, ano ${y.year}${t ? ` (${t.name ?? t.role}, mandato ${t.from}–${t.to})` : ""}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}. Indicadores e notas do ano: ${r.items.filter((i) => i.considered && i.values[y.year] != null).map((i) => `${i.name} ${formatValue(i.values[y.year], i.unit, i.decimals)}${i.notes[y.year] != null ? ` (nota ${Math.round(i.notes[y.year])})` : ""}`).join("; ")}. Método: cada nota mede a melhora em relação ao ano anterior (0 a 100, 50 = variação típica da série); cada lado é a média das suas notas; o score é a média dos dois lados.`,
+    text: `Score dos governos, ${pl}, ano ${y.year}${t ? ` (${t.name ?? t.role}, mandato ${t.from}–${t.to})` : ""}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}. Indicadores e notas do ano: ${r.items.filter((i) => i.considered && i.values[y.year] != null).map((i) => `${i.name} ${formatValue(i.values[y.year], i.unit, i.decimals)}${i.notes[y.year] != null ? ` (nota ${Math.round(i.notes[y.year])})` : ""}`).join("; ")}. Método: cada nota mede a proximidade da meta de cada indicador (0 a 100; 100 = meta atingida ou superada); cada lado é a média das suas notas; o score é a média dos dois lados.`,
     suggestions: ["Por que este ano teve este score?", "O que puxou a nota para cima ou para baixo?", "Compare com o ano anterior"],
   });
 
@@ -182,7 +192,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
         const m = mean(ys.map((y) => i.notes[y.year] ?? null));
         return { name: i.name, side: i.side, cells, avg: n0(m), avgBg: heat(m, 0.4), has: m != null, considered: i.considered };
       }).map(({ has, ...rest }) => ({ ...rest, noData: !has })),
-      ask: { title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${ys.map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] },
+      ask: { title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${ys.map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = proximidade da sua meta (100 = meta atingida ou superada); lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] },
     };
   });
 
@@ -193,12 +203,12 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       <PageHeader eyebrow={`Números · ${place} · últimos ${range} anos`} title="Score dos governos" />
       <ScopeTabs base="/score" scope={scope} noAll params={{ anos: sp.anos }} />
       <RangeTabs base="/score" years={range} params={{ esfera: sp.esfera }} />
-      <AskButton className="mb-6 ml-3 align-top" label="Perguntar sobre o score" focus={{ title: `Score dos governos · ${place}`, text: `Página Score dos governos (${place}, últimos ${range} anos). Resultado por governo: ${r.terms.map((t) => `${termLabel(t)} ${n0(t.avg)}`).join("; ")}. Indicadores usados: ${r.items.filter((i) => i.considered && i.hasData).map((i) => i.name).join("; ")}${r.items.some((i) => i.considered && !i.hasData) ? `. Escolhidos, mas sem dados: ${r.items.filter((i) => i.considered && !i.hasData).map((i) => i.name).join("; ")}` : ""}${r.items.some((i) => !i.considered) ? `. Existem mas não entram na conta: ${r.items.filter((i) => !i.considered).map((i) => i.name).join("; ")}` : ""}. Método: cada indicador recebe nota anual (0 a 100) pela melhora em relação ao ano anterior comparada com as demais variações da série (mesma régua para todos os anos); lados econômico e social valem 50% cada, indicadores com peso igual dentro do lado; o score do governo é a média dos seus anos. É um índice calculado pelo Política, não um dado oficial.`, suggestions: ["Como o score é calculado?", "Por que não usar o nível do indicador em vez da melhora?", "O que o score não consegue mostrar?"] }} />
+      <AskButton className="mb-6 ml-3 align-top" label="Perguntar sobre o score" focus={{ title: `Score dos governos · ${place}`, text: `Página Score dos governos (${place}, últimos ${range} anos). Resultado por governo: ${r.terms.map((t) => `${termLabel(t)} ${n0(t.avg)}`).join("; ")}. Indicadores usados: ${r.items.filter((i) => i.considered && i.hasData).map((i) => i.name).join("; ")}${r.items.some((i) => i.considered && !i.hasData) ? `. Escolhidos, mas sem dados: ${r.items.filter((i) => i.considered && !i.hasData).map((i) => i.name).join("; ")}` : ""}${r.items.some((i) => !i.considered) ? `. Existem mas não entram na conta: ${r.items.filter((i) => !i.considered).map((i) => i.name).join("; ")}` : ""}. Método: cada indicador recebe nota anual (0 a 100) pela proximidade de uma meta de referência (100 = meta atingida ou superada; mesma régua para todos os anos); lados econômico e social valem 50% cada, indicadores com peso igual dentro do lado; o score do governo é a média dos seus anos. É um índice calculado pelo Política, não um dado oficial.`, suggestions: ["Como o score é calculado?", "Por que não usar o nível do indicador em vez da melhora?", "O que o score não consegue mostrar?"] }} />
 
       <section className="mb-6 rounded-2xl border border-line bg-surface p-5">
         <h2 className="display text-xl font-semibold">Como ler esta página</h2>
         <ol className="mt-3 grid gap-4 text-sm sm:grid-cols-3">
-          <li><span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink text-sm font-bold text-paper">1</span><b>Cada indicador ganha uma nota por ano.</b> Ela mostra se o número <i>melhorou</i> ou <i>piorou</i> em relação ao ano anterior, comparado com os outros anos. 50 é uma variação típica; 100, a maior melhora; 0, a maior piora.</li>
+          <li><span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink text-sm font-bold text-paper">1</span><b>Cada indicador tem uma meta e ganha uma nota por ano.</b> A meta é uma referência global (ODS da ONU, OMS, OCDE etc.) ou uma que você define. Na meta ou além dela, 100; quanto mais longe, menos pontos.{method === "nivel-avanco" ? " A nota também considera quanto da distância até a meta foi fechada em relação ao ano anterior." : ""}</li>
           <li><span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink text-sm font-bold text-paper">2</span><b>Economia e social valem metade cada.</b> A nota do ano é a média dos dois lados. Dentro de cada lado, todos os indicadores pesam igual.</li>
           <li><span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink text-sm font-bold text-paper">3</span><b>O governo recebe a média dos seus anos.</b> Todos os anos e governos usam a mesma régua, sem peso extra para ninguém.</li>
         </ol>
@@ -239,7 +249,17 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
         {soc.length ? <ItemRows items={soc} years={years} sideRow={sideOf("social")} place={place} /> : <p className="text-sm text-muted">Nenhum indicador.</p>}
       </details>
 
-      <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length)} />
+      <ScoreEditor scope={scope} options={opts} selected={selected} isCustom={Boolean(custom?.length) || Object.keys(customTargets).length > 0 || method !== "nivel"} method={method} />
     </div>
+  );
+}
+
+/** A página abre na hora com o esqueleto; os dados chegam em seguida. A chave refaz o esqueleto a cada mudança de filtro. */
+export default async function ScorePage({ searchParams }: { searchParams: Promise<{ esfera?: string; anos?: string }> }) {
+  const sp = await searchParams;
+  return (
+    <Suspense key={JSON.stringify(sp)} fallback={<PageSkeleton />}>
+      <ScoreContent searchParams={Promise.resolve(sp)} />
+    </Suspense>
   );
 }

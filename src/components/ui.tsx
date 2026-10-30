@@ -134,3 +134,17 @@ export function RangeTabs({ base, years, params = {} }: { base: string; years: n
     </div>
   );
 }
+
+/** Esqueleto mostrado na hora enquanto uma página pesada carrega os dados. */
+export function PageSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Carregando">
+      <div className="skeleton mb-2 h-3 w-48" />
+      <div className="skeleton mb-6 h-11 w-80" />
+      <div className="skeleton mb-6 h-11 w-full sm:w-[30rem]" />
+      <div className="skeleton mb-4 h-40 w-full" />
+      <div className="skeleton mb-4 h-56 w-full" />
+      <div className="skeleton h-72 w-full" />
+    </div>
+  );
+}

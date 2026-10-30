@@ -1,13 +1,16 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Fragment } from "react";
 import { AskButton } from "@/components/agent/ask-button";
 import { RoiChart, type RoiPoint } from "@/components/roi-chart";
-import { PageHeader, ScopeTabs } from "@/components/ui";
+import { PageSkeleton, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, getBudgetHistory, UF_CODE, type Series } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
 import { getSeries } from "@/lib/indicators/catalog";
 import { formatValue } from "@/lib/indicators/format";
 import { KIND_LABEL, roiWindows, summarize, type RoiWindow } from "@/lib/indicators/roi";
+import { suggestIndicators } from "@/lib/indicators/roi-suggest";
+import { RoiGastoSelect } from "@/components/roi-gasto-select";
 import { candidates } from "@/lib/indicators/score";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import type { Scope } from "@prisma/client";
@@ -73,7 +76,7 @@ function WindowTable({ ws, unit, decimals, h }: { ws: RoiWindow[]; unit: Paramet
   );
 }
 
-export default async function RoiPage({ searchParams }: { searchParams: Promise<{ esfera?: string; gasto?: string; ind?: string | string[]; h?: string }> }) {
+async function RoiContent({ searchParams }: { searchParams: Promise<{ esfera?: string; gasto?: string; ind?: string | string[]; h?: string }> }) {
   const user = await requireUser();
   const sp = await searchParams;
   const scope: Scope = (SCOPE_SLUG[sp.esfera ?? "federal"] as Scope | undefined) ?? "FEDERAL";
@@ -95,7 +98,12 @@ export default async function RoiPage({ searchParams }: { searchParams: Promise<
   const subOf = subs.find((x) => keyOf("expense", x.code) === sp.gasto);
   const spendSeries: Series | null = subOf ?? chosen?.s ?? null;
   const spendLabel = subOf ? subOf.name : chosen?.label ?? "Despesa total";
-  const indIds = (Array.isArray(sp.ind) ? sp.ind : sp.ind ? [sp.ind] : []).filter((id) => cands.some((c) => c.ind.id === id));
+  const parentName = subOf ? fns.find((f) => f.code === subOf.parent)?.name : null;
+  const sug = suggestIndicators(spendLabel, parentName);
+  const aligned = sug.ids.filter((id) => cands.some((c) => c.ind.id === id));
+  const askedInds = (Array.isArray(sp.ind) ? sp.ind : sp.ind ? [sp.ind] : []).filter((id) => cands.some((c) => c.ind.id === id));
+  const autoPicked = askedInds.length === 0;
+  const indIds = autoPicked ? aligned : askedInds;
 
   const nominal: Record<number, number> = !hist ? {} : spendSeries ? spendSeries.values : hist.totals.expense;
   const real: Record<number, number> = {};
@@ -135,7 +143,7 @@ export default async function RoiPage({ searchParams }: { searchParams: Promise<
         <input type="hidden" name="esfera" value={scope.toLowerCase()} />
         <input type="hidden" name="h" value={h} />
         <label className="block text-sm font-semibold" htmlFor="gasto">1. Gasto do orçamento</label>
-        <select id="gasto" name="gasto" defaultValue={subOf ? keyOf("expense", subOf.code) : chosen?.key} className="mt-1 w-full rounded-xl border border-line bg-paper px-3 py-2.5 text-sm">
+        <RoiGastoSelect base={base} value={subOf ? keyOf("expense", subOf.code) : chosen?.key ?? "total"} h={h}>
           <option value="total">Despesa total</option>
           <optgroup label="Por função de governo">
             {fns.map((f) => (
@@ -148,9 +156,14 @@ export default async function RoiPage({ searchParams }: { searchParams: Promise<
           <optgroup label="Por tipo de gasto">
             {natures.map((n) => <option key={n.code} value={keyOf("nature", n.code)}>{n.name}</option>)}
           </optgroup>
-        </select>
+        </RoiGastoSelect>
 
         <p className="mt-4 text-sm font-semibold">2. Indicadores para medir o resultado <span className="font-normal text-muted">(escolha um ou mais)</span></p>
+        {aligned.length > 0 ? (
+          <p className="mt-1 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs"><b>Alinhados a &ldquo;{spendLabel}&rdquo;{autoPicked ? " (já selecionados)" : ""}:</b> {aligned.map((id) => cands.find((c) => c.ind.id === id)!.ind.name).join(", ")}. {sug.why}</p>
+        ) : (
+          <p className="mt-1 rounded-xl border border-line px-3 py-2 text-xs text-muted">Não há indicador diretamente alinhado a &ldquo;{spendLabel}&rdquo; nos dados atuais. Escolha manualmente o que fizer sentido.</p>
+        )}
         <div className="mt-2 grid gap-x-6 gap-y-4 sm:grid-cols-2">
           {(["economia", "social"] as const).map((side) => (
             <fieldset key={side}>
@@ -220,5 +233,15 @@ export default async function RoiPage({ searchParams }: { searchParams: Promise<
         </>
       )}
     </div>
+  );
+}
+
+/** A página abre na hora com o esqueleto; os dados chegam em seguida. A chave refaz o esqueleto a cada mudança de filtro. */
+export default async function RoiPage({ searchParams }: { searchParams: Promise<{ esfera?: string; gasto?: string; ind?: string | string[]; h?: string }> }) {
+  const sp = await searchParams;
+  return (
+    <Suspense key={JSON.stringify(sp)} fallback={<PageSkeleton />}>
+      <RoiContent searchParams={Promise.resolve(sp)} />
+    </Suspense>
   );
 }

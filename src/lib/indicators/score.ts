@@ -1,19 +1,19 @@
 import { INDICATORS, getSeries, type Indicator } from "./catalog";
 import { lastClosedYear, type Geo, type Scope, type YearSeries } from "./core";
 import type { Unit } from "./format";
+import { TARGETS } from "./targets";
 
 export type Side = "economia" | "social";
 
 const SIDE_OF_GROUP: Record<string, Side> = { economia: "economia", financas: "economia", familias: "economia", seguranca: "social", social: "social", servicos: "social" };
 
-/** Indicadores que podem entrar no score: têm sentido de "melhor" e dado na esfera. Valores em R$ só entram se a própria fonte já os publica em termos reais (senão crescem com a inflação). */
+/** Indicadores que podem entrar no score: têm sentido de "melhor" e dado na esfera. Valores em R$ só entram se a própria fonte já os publica em termos reais. */
 export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
   return INDICATORS.filter((i) => i.better && (i.unit !== "brl" || i.real) && i.unit !== "count" && i.fetch[scope] && SIDE_OF_GROUP[i.group]).map((ind) => ({ ind, side: SIDE_OF_GROUP[ind.group] }));
 }
 
-/** Conjunto padrão: no Brasil, os 10 indicadores principais; em estado e município, os indicadores principais que existem (as sub-métricas ficam como opção). */
-const FEDERAL_DEFAULT = ["pib-cresc", "desemprego", "ipca", "divida-bruta", "deficit-primario", "homicidios", "pobreza", "gini", "analfabetismo", "mortalidade-infantil", "renda-trabalho", "subutilizacao", "informalidade", "desalento", "nem-nem", "previdencia", "suicidio", "transito", "mortalidade-5", "mortalidade-materna"];
-export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => (scope === "FEDERAL" ? FEDERAL_DEFAULT.includes(c.ind.id) : !c.ind.parent)).map((c) => c.ind.id);
+/** Conjunto padrão: os indicadores principais que têm meta de referência (as sub-métricas ficam como opção). */
+export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && TARGETS[c.ind.id]).map((c) => c.ind.id);
 
 export type Term = { id: string; name: string | null; role: string; from: number; to: number; color: string };
 
@@ -28,9 +28,9 @@ export const PRESIDENTS: Term[] = [
 
 const PALETTE = ["#17407f", "#0e8a5f", "#d9480f", "#7048e8", "#e0a800", "#d6336c"];
 
-/** Mandatos fixos por esfera quando não há nomes: governadores e prefeitos têm ciclos de 4 anos. */
+/** Mandatos fixos por esfera, com os nomes dos eleitos quando já foram carregados. */
 export function cycleTerms(scope: Scope, names: { from: number; to: number; name: string }[] = []): Term[] {
-  const start = scope === "ESTADUAL" ? 2007 : 2005; // governador toma posse em janeiro do ano seguinte à eleição; prefeito idem, 2 anos antes
+  const start = scope === "ESTADUAL" ? 2007 : 2005;
   const role = scope === "ESTADUAL" ? "Governador" : "Prefeito";
   const out: Term[] = [];
   for (let from = start, i = 0; from <= lastClosedYear(); from += 4, i++) {
@@ -41,39 +41,74 @@ export function cycleTerms(scope: Scope, names: { from: number; to: number; name
   return out;
 }
 
-export type ScoreItem = { id: string; name: string; unit: Unit; decimals?: number; better: "up" | "down"; side: Side; values: YearSeries; notes: Record<number, number>; /** false = escolhido, mas a fonte não publicou dado (ou não há dois anos seguidos) para calcular nota */ hasData: boolean; /** false = existe na plataforma, mas não está marcado para entrar na conta */ considered: boolean };
+/** "nivel": nota = proximidade da meta. "nivel-avanco": média entre proximidade e avanço em relação ao ano anterior. */
+export type ScoreMethod = "nivel" | "nivel-avanco";
+export type TargetMode = "fixa" | "personalizada";
+export type ScoreItem = {
+  id: string; name: string; unit: Unit; decimals?: number; better: "up" | "down"; side: Side;
+  values: YearSeries;
+  /** nota final do ano (0 a 100) = média de nível e avanço */
+  notes: Record<number, number>;
+  level: Record<number, number>;
+  advance: Record<number, number>;
+  /** meta em uso (nula = sem meta definida: o indicador aparece, mas não entra na conta) */
+  target: number | null;
+  targetMode: TargetMode | null;
+  fixedTarget: number | null;
+  targetRef: string | null;
+  hasData: boolean;
+  considered: boolean;
+};
 export type ScoreYear = { year: number; economia: number | null; social: number | null; total: number | null };
 export type ScoreResult = { items: ScoreItem[]; years: ScoreYear[]; terms: (Term & { avg: number | null; years: number[] })[]; sides: Record<Side, number> };
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+/** Distância até a meta no sentido "pior" (0 = meta atingida ou superada). */
+const gapOf = (v: number, target: number, better: "up" | "down") => Math.max(0, better === "down" ? v - target : target - v);
+
 /**
- * Nota de cada indicador em cada ano = quanto o ano MELHOROU em relação ao anterior, comparado com a melhora de todos os outros anos
- * da mesma série (posição percentual: 100 = a maior melhora, 0 = a maior piora, 50 = mediana). A régua é a mesma para todos os anos
- * e governos; como a nota mede a variação e não o nível, tendências de longo prazo não favorecem quem vem depois.
- * Só compara anos consecutivos que a fonte publicou (nada é preenchido).
+ * Nível (0 a 100): proximidade da meta. Meta atingida ou superada = 100 (teto).
+ * - "menos é melhor", meta > 0: 100 × meta ÷ valor;  "mais é melhor", meta > 0: 100 × valor ÷ meta.
+ * - meta ≤ 0 (ex.: déficit zero): 100 ÷ (1 + distância).
  */
-function improvementNotes(values: YearSeries, better: "up" | "down"): Record<number, number> {
-  const deltas: { y: number; d: number }[] = [];
-  for (const [ys, v] of Object.entries(values)) {
-    const y = Number(ys);
-    if (values[y - 1] != null) deltas.push({ y, d: (better === "up" ? 1 : -1) * (v - values[y - 1]) });
-  }
-  const out: Record<number, number> = {};
-  for (const { y, d } of deltas) {
-    const less = deltas.filter((x) => x.d < d).length;
-    const equal = deltas.filter((x) => x.d === d).length;
-    out[y] = (100 * (less + equal / 2)) / deltas.length;
-  }
-  return out;
+export function levelScore(v: number, target: number, better: "up" | "down"): number {
+  const gap = gapOf(v, target, better);
+  if (gap === 0) return 100;
+  if (target <= 0) return 100 / (1 + gap);
+  return Math.max(0, Math.min(100, better === "down" ? (100 * target) / v : (100 * v) / target));
 }
 
-export async function computeScore(scope: Scope, geo: Geo, selected: string[], from: number, terms: Term[]): Promise<ScoreResult> {
+/**
+ * Avanço (0 a 100): quanto da distância até a meta foi fechada em relação ao ano anterior.
+ * 100 = fechou toda a distância (ou segue na meta); 50 = ficou parado; 0 = a distância dobrou ou mais.
+ */
+export function advanceScore(prev: number, now: number, target: number, better: "up" | "down"): number {
+  const gp = gapOf(prev, target, better), gn = gapOf(now, target, better);
+  if (gn === 0) return 100;
+  const c = gp > 0 ? (gp - gn) / gp : -gn / (Math.abs(target) || 1);
+  return 50 + 50 * Math.max(-1, Math.min(1, c));
+}
+
+export async function computeScore(scope: Scope, geo: Geo, selected: string[], from: number, terms: Term[], custom: Record<string, number> = {}, method: ScoreMethod = "nivel"): Promise<ScoreResult> {
   const items: ScoreItem[] = [];
   for (const { ind, side } of candidates(scope)) {
     const values = (await getSeries(ind, scope, geo)) ?? {};
-    const notes = improvementNotes(values, ind.better!);
-    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
+    const fixed = TARGETS[ind.id]?.value ?? null;
+    const own = custom[ind.id];
+    const target = own != null && Number.isFinite(own) ? own : fixed;
+    const targetMode: TargetMode | null = own != null && Number.isFinite(own) ? "personalizada" : fixed != null ? "fixa" : null;
+    const notes: Record<number, number> = {}, level: Record<number, number> = {}, advance: Record<number, number> = {};
+    if (target != null) {
+      for (const [ys, v] of Object.entries(values)) {
+        const y = Number(ys);
+        if (method === "nivel-avanco" && values[y - 1] == null) continue;
+        level[y] = levelScore(v, target, ind.better!);
+        if (values[y - 1] != null) advance[y] = advanceScore(values[y - 1], v, target, ind.better!);
+        notes[y] = method === "nivel" ? level[y] : (level[y] + advance[y]) / 2;
+      }
+    }
+    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, level, advance, target, targetMode, fixedTarget: fixed, targetRef: TARGETS[ind.id]?.ref ?? null, hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
   }
   items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();

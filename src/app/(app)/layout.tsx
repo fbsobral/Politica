@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { NavProgress } from "@/components/nav-progress";
 import { IconLogo, IconSettings, IconShield } from "@/components/icons";
 import { AgentLauncher } from "@/components/agent/launcher";
 import { DesktopNav, MobileNav } from "@/components/nav";
@@ -11,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isAdmin = user.role === "ADMIN";
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
+      <Suspense fallback={null}><NavProgress /></Suspense>
       <header className="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5" aria-label="Política — início">

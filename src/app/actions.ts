@@ -154,17 +154,28 @@ export async function saveMyParty(sigla: string): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
-/** Salva quais indicadores o usuário quer no score de uma esfera (vazio = volta ao padrão). */
-export async function saveScoreConfig(scope: "FEDERAL" | "ESTADUAL" | "MUNICIPAL", ids: string[]): Promise<{ ok: boolean }> {
+/** Salva o setup do score do usuário: indicadores de uma esfera, metas personalizadas (nulo = volta à meta fixa) e método. */
+export async function saveScoreSetup(
+  scope: "FEDERAL" | "ESTADUAL" | "MUNICIPAL",
+  input: { ids: string[]; targets: Record<string, number | null>; method: "nivel" | "nivel-avanco" },
+): Promise<{ ok: boolean }> {
   const user = await getDbUser();
   if (!["FEDERAL", "ESTADUAL", "MUNICIPAL"].includes(scope)) return { ok: false };
-  const valid = new Set(INDICATORS.filter((i) => i.better && i.fetch[scope]).map((i) => i.id));
-  const clean = [...new Set(ids)].filter((id) => valid.has(id));
-  const prev = (user.scoreConfig ?? {}) as Record<string, string[]>;
-  const next = { ...prev };
-  if (clean.length) next[scope] = clean;
+  const valid = new Set(INDICATORS.filter((i) => i.better).map((i) => i.id));
+  const prev = (user.scoreConfig ?? {}) as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...prev };
+  const ids = [...new Set(input.ids)].filter((id) => valid.has(id));
+  if (ids.length) next[scope] = ids;
   else delete next[scope];
-  await db.user.update({ where: { id: user.id }, data: { scoreConfig: next } });
+  const targets = { ...((prev.targets as Record<string, number> | undefined) ?? {}) };
+  for (const [id, v] of Object.entries(input.targets)) {
+    if (!valid.has(id)) continue;
+    if (v == null || !Number.isFinite(v)) delete targets[id];
+    else targets[id] = v;
+  }
+  next.targets = targets;
+  next.method = input.method === "nivel-avanco" ? "nivel-avanco" : "nivel";
+  await db.user.update({ where: { id: user.id }, data: { scoreConfig: next as never } });
   revalidatePath("/score");
   return { ok: true };
 }
