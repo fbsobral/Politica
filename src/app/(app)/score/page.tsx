@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { ScoreLineChart, type LineSeries } from "@/components/score-line-chart";
 import { ScoreEditor } from "@/components/score-editor";
+import { ScoreTermTable, type TermRow } from "@/components/score-term-table";
 import { ScoreYearTable, type YearRow } from "@/components/score-year-table";
 import { PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/components/ui";
 import { UF_CODE } from "@/lib/budget";
@@ -165,6 +166,19 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
     ? `O score só começa em ${firstTotal}: ${gaps.map((g) => `o lado ${g.side === "economia" ? "econômico" : "social"} só tem nota a partir de ${g.fy}`).join(" e ")}. Antes disso, os indicadores escolhidos não têm dado publicado (a nota compara com o ano anterior, então precisa de dois anos seguidos). Início das séries: ${r.items.map((i) => `${i.name} ${Math.min(...Object.keys(i.values).map(Number))}`).join(", ")}. Não preenchemos esses anos com estimativas.`
     : null;
 
+  const mean = (xs: (number | null)[]) => { const v = xs.filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const termRows: TermRow[] = r.terms.map((t) => {
+    const ys = r.years.filter((y) => t.years.includes(y.year));
+    return {
+      id: t.id, name: t.name ?? t.role, role: t.name ? `${t.role}` : "nome em breve", period: `${t.from}–${t.to > 2090 ? "hoje" : t.to}`, color: t.color,
+      economia: n0(mean(ys.map((y) => y.economia))), economiaBg: heat(mean(ys.map((y) => y.economia))),
+      social: n0(mean(ys.map((y) => y.social))), socialBg: heat(mean(ys.map((y) => y.social))),
+      score: n0(t.avg), scoreBg: heat(t.avg, 0.4), scorePct: t.avg ?? 0, scoreColor: heatSolid(t.avg), verdict: verdict(t.avg), nYears: t.years.length,
+      years: ys.map((y) => ({ year: y.year, economia: n0(y.economia), social: n0(y.social), total: n0(y.total), bg: heat(y.total, 0.4) })),
+      ask: { title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${ys.map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] },
+    };
+  });
+
   const sideOf = (side: "economia" | "social") => r.years.map((y) => y[side]);
 
   return (
@@ -195,42 +209,7 @@ export default async function ScorePage({ searchParams }: { searchParams: Promis
       )}
 
       <h2 className="display mb-3 text-2xl font-semibold">Resultado por governo</h2>
-      <section className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {r.terms.map((t) => (
-          <div key={t.id} className="card-flat overflow-hidden p-0">
-            <div className="h-1.5" style={{ background: t.color }} />
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold leading-tight">{t.name ?? t.role}</p>
-                <AskButton compact focus={{ title: `Score · ${termLabel(t)} · ${place}`, text: `Score do governo ${termLabel(t)} (${t.role}, ${t.from}–${t.to > 2090 ? "hoje" : t.to}) em ${place}: média ${n0(t.avg)} de 100. Scores por ano: ${r.years.filter((y) => t.years.includes(y.year)).map((y) => `${y.year}: econômico ${n0(y.economia)}, social ${n0(y.social)}, score ${n0(y.total)}`).join("; ")}. Método: nota de cada indicador = melhora em relação ao ano anterior comparada com as demais variações da série; lados econômico e social valem 50% cada.`, suggestions: ["Por que este governo teve esta nota?", "Compare este governo com o anterior", "Quais indicadores mais pesaram?"] }} />
-              </div>
-              <p className="text-xs text-muted">{t.name ? `${t.role} · ` : ""}{t.from}–{t.to > 2090 ? "hoje" : t.to}</p>
-              <p className="mt-2 flex items-baseline gap-1">
-                <span className="display text-5xl font-semibold tabular-nums" style={{ color: heatSolid(t.avg) }}>{n0(t.avg)}</span>
-                <span className="text-sm text-muted">/ 100</span>
-              </p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink/10"><div className="h-full rounded-full" style={{ width: `${t.avg ?? 0}%`, background: heatSolid(t.avg) }} /></div>
-              <p className="mt-2 text-sm">{verdict(t.avg)}</p>
-              <p className="mt-0.5 text-xs text-faint">{t.years.length ? `Média de ${t.years.length} ${t.years.length === 1 ? "ano" : "anos"} com nota` : "Nenhum ano com nota completa"}</p>
-              {t.years.length > 0 && (
-                <details className="mt-2 text-sm">
-                  <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-ink">Detalhar nota</summary>
-                  <ul className="mt-2 space-y-1">
-                    {r.years.filter((y) => t.years.includes(y.year)).map((y) => (
-                      <li key={y.year} className="flex items-center justify-between rounded-md px-2 py-1 text-xs tabular-nums" style={{ background: heat(y.total) }}>
-                        <span className="font-semibold">{y.year}</span>
-                        <span className="text-muted">econ. {n0(y.economia)} · social {n0(y.social)}</span>
-                        <span className="font-semibold">{n0(y.total)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-xs text-muted">Nota do governo = média dos scores dos anos acima ({t.years.map((yr) => n0(r.years.find((x) => x.year === yr)?.total)).join(" + ")}) ÷ {t.years.length} = <b>{n0(t.avg)}</b>. Use &ldquo;Detalhar&rdquo; em cada ano, abaixo, para ver os indicadores.</p>
-                </details>
-              )}
-            </div>
-          </div>
-        ))}
-      </section>
+      <section className="mb-8"><ScoreTermTable rows={termRows} /></section>
 
       <section className="mb-8">
         <h2 className="display mb-1 text-2xl font-semibold">Ano a ano</h2>
