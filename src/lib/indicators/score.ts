@@ -63,6 +63,8 @@ export type ScoreItem = {
   fixedTarget: number | null;
   targetRef: string | null;
   targetApprox: boolean;
+  source: string;
+  sourceUrl: string | null;
   hasData: boolean;
   considered: boolean;
 };
@@ -129,7 +131,7 @@ export async function computeScore(scope: Scope, geo: Geo, selected: string[], f
         notes[y] = method === "nivel" ? level[y] : (level[y] + advance[y]) / 2;
       }
     }
-    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, level, advance, target, targetMode, fixedTarget: fixed, targetRef: TARGETS[ind.id]?.ref ?? null, targetApprox: Boolean(TARGETS[ind.id]?.approx), hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
+    items.push({ id: ind.id, name: ind.name, unit: ind.unit, decimals: ind.decimals, better: ind.better!, side, values, notes, level, advance, target, targetMode, fixedTarget: fixed, targetRef: TARGETS[ind.id]?.ref ?? null, targetApprox: Boolean(TARGETS[ind.id]?.approx), source: ind.source, sourceUrl: ind.sourceUrl ?? null, hasData: Object.keys(notes).length > 0, considered: selected.includes(ind.id) });
   }
   items.sort((a, b) => Number(b.considered) - Number(a.considered));
   const to = lastClosedYear();

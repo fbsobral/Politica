@@ -6,7 +6,7 @@ import { useState } from "react";
 type Detail = { desc: string; source: string; sourceUrl: string | null; series: Record<string, number> };
 
 /** Botão que abre, sob demanda, a explicação e o gráfico do indicador — sem sair da página nem pesar o carregamento inicial. */
-export function ScoreItemPeek({ id, scope, name, targetText, valueLabels, cols }: { id: string; scope: string; name: string; targetText: string; valueLabels: Record<number, string>; cols: number }) {
+export function ScoreItemPeek({ id, scope, name, targetText, valueLabels, noteLabels, cols }: { id: string; scope: string; name: string; targetText: string; valueLabels: Record<number, string>; noteLabels: Record<number, string>; cols: number }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<"idle" | "loading" | "error" | "ok">("idle");
   const [d, setD] = useState<Detail | null>(null);
@@ -44,6 +44,24 @@ export function ScoreItemPeek({ id, scope, name, targetText, valueLabels, cols }
               <p className="text-muted">Fonte: {d.sourceUrl ? <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="underline">{d.source}</a> : d.source}</p>
               <p>{targetText}</p>
               <MiniChart series={d.series} labels={valueLabels} />
+              <details className="rounded-lg border border-line">
+                <summary className="cursor-pointer px-2.5 py-1.5 font-semibold">Fonte de cada número, ano a ano</summary>
+                <div className="max-h-64 overflow-y-auto">
+                  <table className="w-full border-collapse text-[11px] tabular-nums">
+                    <thead><tr className="sticky top-0 bg-paper text-muted"><th className="px-2 py-1 text-left font-medium">Ano</th><th className="px-2 py-1 text-right font-medium">Valor</th><th className="px-2 py-1 text-right font-medium">Nota</th><th className="px-2 py-1 text-left font-medium">Fonte</th></tr></thead>
+                    <tbody>
+                      {Object.keys(d.series).map(Number).sort((a, b) => a - b).map((y) => (
+                        <tr key={y} className="border-t border-line">
+                          <td className="px-2 py-1 font-semibold">{y}</td>
+                          <td className="px-2 py-1 text-right">{valueLabels[y] ?? d.series[y]}</td>
+                          <td className="px-2 py-1 text-right">{noteLabels[y] ?? "—"}</td>
+                          <td className="px-2 py-1">{d.sourceUrl ? <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="underline">{d.source}</a> : d.source}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
               <Link href={`/indicadores?esfera=${scope.toLowerCase()}`} className="inline-block font-semibold text-brand hover:underline">Abrir na aba Indicadores →</Link>
             </div>
           )}
