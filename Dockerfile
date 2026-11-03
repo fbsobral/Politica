@@ -22,7 +22,9 @@ RUN npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 TZ=America/Sao_Paulo
-COPY --from=build /app ./
+# roda sem privilégios de root: um problema no app não vira acesso ao container inteiro
+COPY --from=build --chown=node:node /app ./
+USER node
 EXPOSE 3000
 # o mesmo container serve o site (npm start) ou roda o robô (npm run worker)
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

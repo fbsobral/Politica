@@ -1,3 +1,4 @@
+import { safeFetch } from "@/lib/safe-url";
 import Parser from "rss-parser";
 import type { Branch, Scope } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -311,7 +312,8 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
 /** Testa um feed RSS (usado ao cadastrar): devolve quantos itens e o título do primeiro. */
 export async function probeFeed(url: string): Promise<{ ok: true; items: number; title: string } | { ok: false; error: string }> {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(15000) });
+    const res = await safeFetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(15000) });
+    if (!res) return { ok: false, error: "Endereço não permitido (precisa ser um site público em http ou https)" };
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
     const feed = await parser.parseString(await readXml(res));
     if (!feed.items.length) return { ok: false, error: "O feed não tem itens" };

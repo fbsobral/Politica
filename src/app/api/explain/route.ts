@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { kind?: string; text?: string } | null;
   const kind = body?.kind ?? "";
   const text = (body?.text ?? "").trim().slice(0, 900);
-  if (!(kind in PROMPTS) || text.length < 8) return NextResponse.json({ error: "bad request" }, { status: 400 });
+  if (!Object.hasOwn(PROMPTS, kind) || text.length < 8) return NextResponse.json({ error: "bad request" }, { status: 400 });
 
   const key = createHash("sha1").update(`${kind}:${text}`).digest("hex");
   const hit = await db.explanation.findUnique({ where: { key } });

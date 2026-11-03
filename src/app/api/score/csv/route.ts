@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { UF_CODE } from "@/lib/budget";
 import { db } from "@/lib/db";
+import { allow } from "@/lib/rate-limit";
 import { ibgeIdFor } from "@/lib/ibge";
 import { SCOPE_SLUG } from "@/lib/taxonomy";
 import type { Scope } from "@/lib/indicators/core";
@@ -11,7 +12,13 @@ import { computeScore, defaultSelection, type ScoreMethod } from "@/lib/indicato
 
 export const dynamic = "force-dynamic";
 
-const q = (v: string | number | null | undefined) => (v == null ? "" : `"${String(v).replace(/"/g, '""')}"`);
+/** Campo de CSV entre aspas; textos que começam com = + @ ou tab viram texto puro (evita "injeção de fórmula" no Excel). */
+const q = (v: string | number | null | undefined) => {
+  if (v == null) return "";
+  let t = String(v);
+  if (/^[=+@\t\r]/.test(t)) t = `'${t}`;
+  return `"${t.replace(/"/g, '""')}"`;
+};
 
 /** Todos os números do score com a fonte de cada um, ano a ano (CSV). */
 export async function GET(req: Request) {
@@ -19,6 +26,7 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const user = await db.user.findUnique({ where: { clerkId: userId } });
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!allow(`csv:${userId}`, 10, 60_000)) return NextResponse.json({ error: "muitas solicitações" }, { status: 429 });
   const slug = new URL(req.url).searchParams.get("esfera") ?? "federal";
   const scope = (SCOPE_SLUG[slug] as Scope | undefined) ?? "FEDERAL";
   const uf = user.uf ?? "";

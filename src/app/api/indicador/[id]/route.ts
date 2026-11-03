@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { UF_CODE } from "@/lib/budget";
 import { db } from "@/lib/db";
+import { allow } from "@/lib/rate-limit";
 import { ibgeIdFor } from "@/lib/ibge";
 import { INDICATORS, getSeries } from "@/lib/indicators/catalog";
 import type { Scope } from "@/lib/indicators/core";
@@ -14,6 +15,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const user = await db.user.findUnique({ where: { clerkId: userId } });
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!allow(`indicador:${userId}`, 120, 60_000)) return NextResponse.json({ error: "muitas solicitações" }, { status: 429 });
   const { id } = await ctx.params;
   const ind = INDICATORS.find((i) => i.id === id);
   if (!ind) return NextResponse.json({ error: "not_found" }, { status: 404 });

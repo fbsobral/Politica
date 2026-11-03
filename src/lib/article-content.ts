@@ -1,20 +1,10 @@
+import { safeFetch, safeUrl } from "@/lib/safe-url";
 import * as cheerio from "cheerio";
 import { aiEnabled, ask } from "@/lib/ai";
 import { db } from "@/lib/db";
 
 const UA = "Mozilla/5.0 (compatible; PoliticaBot/1.0; +https://politica.felipesobral.com)";
 
-function safeUrl(u: string): URL | null {
-  try {
-    const url = new URL(u);
-    if (!/^https?:$/.test(url.protocol)) return null;
-    const h = url.hostname.toLowerCase();
-    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.)/.test(h) || h === "::1") return null;
-    return url;
-  } catch {
-    return null;
-  }
-}
 
 /** Links do Google News são redirecionamentos por JavaScript; resolve o endereço real do veículo. */
 export async function resolveGoogleNews(url: string): Promise<string | null> {
@@ -63,8 +53,8 @@ export async function fetchPageContent(url: string): Promise<PageContent | null>
   const safe = safeUrl(url);
   if (!safe) return null;
   try {
-    const res = await fetch(safe, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" }, redirect: "follow", signal: AbortSignal.timeout(12000) });
-    if (!res.ok || !/html/i.test(res.headers.get("content-type") ?? "")) return null;
+    const res = await safeFetch(safe.toString(), { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" }, signal: AbortSignal.timeout(12000) });
+    if (!res || !res.ok || !/html/i.test(res.headers.get("content-type") ?? "")) return null;
     const $ = cheerio.load(await readHtml(res));
     const meta = (sel: string) => $(sel).attr("content")?.replace(/\s+/g, " ").trim() || null;
     const description = meta('meta[property="og:description"]') ?? meta('meta[name="description"]') ?? meta('meta[name="twitter:description"]');

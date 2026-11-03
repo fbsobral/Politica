@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { sendDigestNow, type DigestKind } from "@/lib/digest";
 import { runJobDetached } from "@/lib/job-runner";
 import { listMunicipalities } from "@/lib/ibge";
+import { allow } from "@/lib/rate-limit";
 import { INDICATORS } from "@/lib/indicators/catalog";
 import { syncUf } from "@/lib/politicians/sync";
 import { PARTIES } from "@/lib/quiz/data";
@@ -56,6 +57,9 @@ export async function savePrefs(formData: FormData) {
 
 export async function sendTestDigest(kind: DigestKind = "daily") {
   const user = await getDbUser();
+  // evita usar o botão para disparar e-mails em massa
+  if (!allow(`digest-test:${user.id}`, 5, 3600_000)) redirect("/configuracoes?digest=erro");
+  if (!(["daily", "weekly", "monthly"] as string[]).includes(kind)) redirect("/configuracoes?digest=erro");
   const r = await sendDigestNow(user, kind);
   redirect(`/configuracoes?digest=${r === true ? "ok" : r === "empty" ? "vazio" : "erro"}`);
 }
