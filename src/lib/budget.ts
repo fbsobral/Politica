@@ -31,6 +31,22 @@ export type Current = {
   period: number; // bimestre
   revenue: { initial: number; updated: number; realized: number };
   expense: { initial: number; updated: number; committed: number };
+  /** previsto x realizado por categoria (RREO Anexos 01 e 02); ausente em caches antigos */
+  plan?: { expense: PlanItem[]; revenue: PlanItem[]; nature: PlanItem[] };
+};
+
+/** Uma linha do previsto x realizado: previsto inicial, atualizado e o realizado até o bimestre. */
+export type PlanItem = {
+  code: string;
+  name: string;
+  initial: number;
+  updated: number;
+  /** receita arrecadada ou despesa empenhada até o bimestre */
+  done: number;
+  /** só despesa: liquidada e paga até o bimestre (quando o anexo traz) */
+  liquidated?: number;
+  paid?: number;
+  children?: PlanItem[];
 };
 
 export type BudgetData = {
@@ -176,6 +192,109 @@ async function fetchAnnual(id: number, year: number): Promise<{ annual: Annual |
   };
 }
 
+/** As 28 funções de governo (Portaria 42/1999) + reserva: no Anexo 02 do RREO cada função vem antes das suas subfunções. */
+const FUNCTIONS = [
+  "Legislativa", "Judiciária", "Essencial à Justiça", "Administração", "Defesa Nacional", "Segurança Pública", "Relações Exteriores",
+  "Assistência Social", "Previdência Social", "Saúde", "Trabalho", "Educação", "Cultura", "Direitos da Cidadania", "Urbanismo",
+  "Habitação", "Saneamento", "Gestão Ambiental", "Ciência e Tecnologia", "Agricultura", "Organização Agrária", "Indústria",
+  "Comércio e Serviços", "Comunicações", "Energia", "Transporte", "Desporto e Lazer", "Encargos Especiais", "Reserva de Contingência",
+];
+/** Origens da receita (MCASP): no Anexo 01 cada origem vem antes dos seus desdobramentos. */
+const ORIGINS = [
+  "Impostos, Taxas e Contribuições de Melhoria", "Contribuições", "Receita Patrimonial", "Receita Agropecuária", "Receita Industrial",
+  "Receita de Serviços", "Transferências Correntes", "Outras Receitas Correntes", "Operações de Crédito", "Alienação de Bens",
+  "Amortização de Empréstimos", "Transferências de Capital", "Outras Receitas de Capital",
+];
+const NATURE_ROTULO_NAME: Record<string, string> = {
+  PessoalEEncargosSociais: "Pessoal e encargos sociais",
+  JurosEEncargosDaDivida: "Juros e encargos da dívida",
+  OutrasDespesasCorrentes: "Outras despesas correntes",
+  Investimentos: "Investimentos",
+  InversoesFinanceiras: "Inversões financeiras",
+  AmortizacaoDaDivida: "Amortização da dívida",
+};
+
+const strip = (n: string) => n.replace(/\s*\([^)]*\)\s*$/g, "").replace(/^\d+(\.\d+)*\s*-\s*/, "").trim();
+const nkey = (n: string) => strip(n).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const FN_KEYS = new Map(FUNCTIONS.map((f) => [nkey(f), f]));
+const ORIGIN_KEYS = new Map(ORIGINS.map((f) => [nkey(f), f]));
+
+type Cols = Record<string, RegExp>;
+
+/**
+ * Monta a árvore categoria → subcategoria de um anexo do RREO percorrendo as linhas na ordem publicada:
+ * uma linha que é categoria conhecida abre um grupo; as seguintes são subcategorias até a próxima categoria ou um cabeçalho.
+ * A seção intra-orçamentária (que repete as mesmas linhas) é ignorada.
+ */
+function planTree(rows: Item[], cols: Cols, tops: Map<string, string>, isHeader: (k: string, raw: string) => boolean, stop: (raw: string) => boolean): PlanItem[] {
+  const vals = new Map<string, Record<string, number>>(); // chave "top" ou "top>sub"
+  const order: { key: string; top: string; name: string }[] = [];
+  for (const [field, re] of Object.entries(cols)) {
+    let top: string | null = null;
+    for (const i of rows) {
+      if (!re.test(i.coluna)) continue;
+      if (stop(i.conta)) break;
+      const k = nkey(i.conta);
+      if (!k) continue;
+      let key: string;
+      if (tops.has(k)) {
+        top = k;
+        key = k;
+      } else if (isHeader(k, i.conta)) {
+        top = null;
+        continue;
+      } else if (top) key = `${top}>${k}`;
+      else continue;
+      let v = vals.get(key);
+      if (!v) {
+        v = {};
+        vals.set(key, v);
+        order.push({ key, top: top!, name: tops.has(k) ? tops.get(k)! : strip(i.conta) });
+      }
+      if (!(field in v)) v[field] = Number(i.valor) || 0; // a primeira ocorrência vale
+    }
+  }
+  const mk = (o: { key: string; name: string }): PlanItem => {
+    const v = vals.get(o.key) ?? {};
+    return { code: o.key, name: o.name, initial: v.initial ?? 0, updated: v.updated ?? v.initial ?? 0, done: v.done ?? 0, liquidated: v.liquidated, paid: v.paid };
+  };
+  const has = (p: PlanItem) => p.initial > 0 || p.updated > 0 || p.done > 0;
+  return order
+    .filter((o) => o.key === o.top)
+    .map((o) => {
+      const kids = order.filter((c) => c.top === o.top && c.key !== o.key).map(mk).filter(has).sort((a, b) => b.updated - a.updated || b.done - a.done);
+      const it = mk(o);
+      return kids.length ? { ...it, children: kids } : it;
+    })
+    .filter(has)
+    .sort((a, b) => b.updated - a.updated || b.done - a.done);
+}
+
+const EXP_COLS: Cols = {
+  initial: /DOTA..O INICIAL/i,
+  updated: /DOTA..O ATUALIZADA/i,
+  done: /DESPESAS EMPENHADAS AT. O BIME/i,
+  liquidated: /DESPESAS LIQUIDADAS AT. O BIME/i,
+  paid: /DESPESAS PAGAS AT. O BIME/i,
+};
+const REV_COLS: Cols = { initial: /PREVIS.O INICIAL/i, updated: /PREVIS.O ATUALIZADA/i, done: /^At. o Bimestre \(c\)/i };
+
+export function parsePlan(a1: Item[], a2: Item[]): NonNullable<Current["plan"]> {
+  const intra = (raw: string) => /INTRA-?OR/i.test(raw) && !/EXCETO/i.test(raw);
+  const expense = planTree(a2, EXP_COLS, FN_KEYS, (k, raw) => /^(despesas|total|subtotal)\b/.test(k) || raw === raw.toUpperCase(), intra);
+  // receita: só a parte de cima do Anexo 01 (as despesas vêm depois)
+  const revRows = a1.filter((i) => REV_COLS.initial.test(i.coluna) || REV_COLS.updated.test(i.coluna) || REV_COLS.done.test(i.coluna));
+  const revenue = planTree(revRows, REV_COLS, ORIGIN_KEYS, (k) => /^(receitas|total|subtotal|deducoes|deficit|saldos|operacoes de credito refinanciamento)\b/.test(k) || k.startsWith("receitas "), intra);
+  const nature: PlanItem[] = [];
+  for (const [rot, name] of Object.entries(NATURE_ROTULO_NAME)) {
+    const pick = (re: RegExp) => a1.find((i) => i.cod_conta === rot && re.test(i.coluna))?.valor;
+    const it: PlanItem = { code: `nat:${rot}`, name, initial: pick(EXP_COLS.initial) ?? 0, updated: pick(EXP_COLS.updated) ?? pick(EXP_COLS.initial) ?? 0, done: pick(EXP_COLS.done) ?? 0, liquidated: pick(EXP_COLS.liquidated), paid: pick(EXP_COLS.paid) };
+    if (it.updated > 0 || it.done > 0) nature.push(it);
+  }
+  nature.sort((a, b) => b.updated - a.updated);
+  return { expense, revenue, nature };
+}
+
 async function fetchCurrent(id: number, year: number): Promise<{ current: Current | null; pop: number | null; name: string | null }> {
   for (let period = 6; period >= 1; period--) {
     let rows: Item[] = [];
@@ -185,15 +304,23 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
       continue;
     }
     if (!rows.length) continue;
+    const a2 = await siconfi("rreo", { an_exercicio: year, nr_periodo: period, co_tipo_demonstrativo: "RREO", no_anexo: "RREO-Anexo 02", id_ente: id }).catch(() => [] as Item[]);
     const val = (cod: string, col: RegExp) => rows.find((i) => i.cod_conta === cod && col.test(i.coluna))?.valor ?? 0;
     const R = "ReceitasExcetoIntraOrcamentarias";
     const D = "DespesasExcetoIntraOrcamentarias";
+    let plan: Current["plan"];
+    try {
+      plan = parsePlan(rows, a2);
+    } catch (err) {
+      console.warn("[budget:plan]", id, year, period, (err as Error).message);
+    }
     return {
       current: {
         year,
         period,
         revenue: { initial: val(R, /PREVIS.O INICIAL/i), updated: val(R, /PREVIS.O ATUALIZADA/i), realized: val(R, /^At. o Bimestre \(c\)/i) },
         expense: { initial: val(D, /DOTA..O INICIAL/i), updated: val(D, /DOTA..O ATUALIZADA/i), committed: val(D, /DESPESAS EMPENHADAS AT. O BIME/i) },
+        plan,
       },
       pop: rows[0].populacao ?? null,
       name: rows[0].instituicao ?? null,
@@ -206,7 +333,7 @@ async function fetchCurrent(id: number, year: number): Promise<{ current: Curren
 export async function peekBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }): Promise<BudgetData | null> {
   const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
   if (!id) return null;
-  const hit = await db.budgetCache.findUnique({ where: { key: `budget:v4:${id}` } });
+  const hit = await db.budgetCache.findUnique({ where: { key: `budget:v5:${id}` } });
   return (hit?.data as unknown as BudgetData | undefined) ?? null;
 }
 
@@ -214,7 +341,7 @@ export async function peekBudget(scope: BudgetScope, user: { uf: string; municip
 export async function getBudget(scope: BudgetScope, user: { uf: string; municipalityKey: string }, opts: { force?: boolean } = {}): Promise<BudgetData | null> {
   const id = scope === "FEDERAL" ? 1 : scope === "ESTADUAL" ? UF_CODE[user.uf] : await ibgeIdFor(user.uf, user.municipalityKey);
   if (!id) return null;
-  const key = `budget:v4:${id}`;
+  const key = `budget:v5:${id}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   if (hit && !opts.force && Date.now() - hit.fetchedAt.getTime() < DAY) return hit.data as unknown as BudgetData;
 

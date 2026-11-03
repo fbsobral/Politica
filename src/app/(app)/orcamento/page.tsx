@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
+import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
-import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
+import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type PlanItem, type Slice } from "@/lib/budget";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -70,6 +71,14 @@ function sliceText(items: Slice[], depth = 0): string {
     .filter((i) => i.code !== "outros")
     .slice(0, depth === 0 ? 12 : 6)
     .map((i) => `${"  ".repeat(depth)}- ${i.name}: ${brlShort(i.value)} (${pct(i.share, 1)})${i.children?.length && depth < 1 ? `\n${sliceText(i.children, depth + 1)}` : ""}`)
+    .join("\n");
+}
+
+/** Previsto x realizado em texto compacto para o assistente. */
+function planText(items: PlanItem[], depth = 0): string {
+  return items
+    .slice(0, depth === 0 ? 12 : 5)
+    .map((i) => `${"  ".repeat(depth)}- ${i.name}: ${brlShort(i.done)} de ${brlShort(i.updated)}${i.updated > 0 ? ` (${pct(i.done / i.updated, 0)})` : ""}${i.children?.length && depth < 1 ? `\n${planText(i.children, depth + 1)}` : ""}`)
     .join("\n");
 }
 
@@ -197,6 +206,16 @@ function Detail({ b }: { b: BudgetData }) {
             <Progress label="Receita arrecadada" done={c.revenue.realized} of={c.revenue.updated} scope={b.scope} sub={`Previsão inicial: ${brlShort(c.revenue.initial)} · atualizada: ${brlShort(c.revenue.updated)}`} />
             <Progress label="Despesa empenhada" done={c.expense.committed} of={c.expense.updated} scope={b.scope} sub={`Dotação inicial: ${brlShort(c.expense.initial)} · atualizada: ${brlShort(c.expense.updated)}`} />
           </div>
+          {c.plan && (c.plan.expense.length > 0 || c.plan.revenue.length > 0 || c.plan.nature.length > 0) && (
+            <div className="mt-8">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="display text-lg font-semibold">Por categoria e subcategoria</h3>
+                <AskButton focus={{ title: `${c.year}: previsto x realizado por categoria · ${b.entity}`, text: `Execução do orçamento de ${c.year} até o ${c.period}º bimestre, por categoria (previsto atualizado → realizado):\nDespesa por função:\n${planText(c.plan.expense)}\nReceita por origem:\n${planText(c.plan.revenue)}`, suggestions: ["Quais áreas estão mais atrasadas na execução?", "Alguma receita está abaixo do previsto?", "O que explica a diferença entre previsto e realizado?"] }} />
+              </div>
+              <p className="mb-4 mt-1 text-xs text-muted">Quanto de cada área já foi realizado frente ao que estava previsto para o ano.</p>
+              <BudgetPlanChart scope={b.scope} year={c.year} period={c.period} plan={c.plan} />
+            </div>
+          )}
         </section>
       )}
 
