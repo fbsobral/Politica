@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { PlanItem } from "@/lib/budget";
+import type { PlanItem, Projection } from "@/lib/fiscal";
 
 type Scope = "MUNICIPAL" | "ESTADUAL" | "FEDERAL";
 type View = "expense" | "revenue" | "nature";
 type Stage = "done" | "liquidated" | "paid";
 type Base = "updated" | "initial";
 type Show = "brl" | "pct";
-type Sort = "size" | "high" | "low";
+type Sort = "size" | "high" | "low" | "dev";
 
 const FILL: Record<Scope, string> = { MUNICIPAL: "var(--municipal)", ESTADUAL: "var(--estadual)", FEDERAL: "var(--federal)" };
 const SOFT: Record<Scope, string> = { MUNICIPAL: "var(--municipal-soft)", ESTADUAL: "var(--estadual-soft)", FEDERAL: "var(--federal-soft)" };
@@ -30,16 +30,20 @@ export type PlanChartProps = {
   year: number;
   period: number;
   plan: { expense: PlanItem[]; revenue: PlanItem[]; nature: PlanItem[] };
+  /** projeção do fechamento por "<visão>:<código>" (empenho ou arrecadação) */
+  projection?: Record<string, Projection>;
 };
 
+const TOL = 0.05;
+
 /** Previsto x realizado do ano corrente por categoria, com detalhamento por subcategoria. */
-export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
+export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanChartProps) {
   const views = (["expense", "revenue", "nature"] as View[]).filter((v) => plan[v]?.length);
   const [view, setView] = useState<View>(views[0] ?? "expense");
   const [stage, setStage] = useState<Stage>("done");
-  const [base, setBase] = useState<Base>("updated");
+  const [base, setBase] = useState<Base>(projection ? "initial" : "updated");
   const [show, setShow] = useState<Show>("brl");
-  const [sort, setSort] = useState<Sort>("size");
+  const [sort, setSort] = useState<Sort>(projection ? "dev" : "size");
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
 
@@ -55,18 +59,25 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
   const baseOf = (i: PlanItem) => (base === "initial" ? i.initial : i.updated);
   const rate = (i: PlanItem) => (baseOf(i) > 0 ? doneOf(i) / baseOf(i) : null);
   const pace = period / 6; // fração do ano já decorrida no bimestre
+  // projeção só existe para o empenho/arrecadação; comparada sempre com a LOA (previsto inicial)
+  const projOf = (i: PlanItem) => (st === "done" ? projection?.[`${view}:${i.code}`] : undefined);
+  const devOf = (i: PlanItem) => {
+    const p = projOf(i);
+    return p && i.initial > 0 ? p.value / i.initial - 1 : null;
+  };
 
   const rows = useMemo(() => {
     const list = items.filter((i) => baseOf(i) > 0 || doneOf(i) > 0);
     const r = (i: PlanItem) => rate(i) ?? -1;
     if (sort === "high") return [...list].sort((a, b) => r(b) - r(a));
     if (sort === "low") return [...list].sort((a, b) => r(a) - r(b));
+    if (sort === "dev") return [...list].sort((a, b) => Math.abs(devOf(b) ?? 0) - Math.abs(devOf(a) ?? 0) || baseOf(b) - baseOf(a));
     return [...list].sort((a, b) => baseOf(b) - baseOf(a) || doneOf(b) - doneOf(a));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, sort, base, st]);
 
-  const max = Math.max(1, ...rows.map((i) => Math.max(baseOf(i), doneOf(i))));
-  const maxPct = Math.max(1, ...rows.map((i) => rate(i) ?? 0));
+  const max = Math.max(1, ...rows.map((i) => Math.max(baseOf(i), doneOf(i), projOf(i)?.value ?? 0)));
+  const maxPct = Math.max(1, ...rows.map((i) => Math.max(rate(i) ?? 0, baseOf(i) > 0 && projOf(i) ? projOf(i)!.value / baseOf(i) : 0)));
   const tot = rows.reduce((a, i) => ({ b: a.b + baseOf(i), d: a.d + doneOf(i) }), { b: 0, d: 0 });
 
   const doneLabel = !isExp ? "Arrecadado" : st === "liquidated" ? "Liquidado" : st === "paid" ? "Pago" : "Empenhado";
@@ -107,10 +118,11 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
         </div>
         <label className="flex items-center gap-2 text-sm text-muted">
           Ordenar
-          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="input !w-44 !py-1.5">
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="input !w-52 !py-1.5">
             <option value="size">Maior previsto</option>
             <option value="high">Mais executado</option>
             <option value="low">Menos executado</option>
+            {projection && <option value="dev">Maior desvio da LOA</option>}
           </select>
         </label>
       </div>
@@ -134,6 +146,7 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: SOFT[scope], boxShadow: "inset 0 0 0 1px var(--line-strong)" }} />{baseLabel}</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: FILL[scope] }} />{doneLabel} até {MONTH[period]}</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-3 w-0.5 bg-ink" />Ritmo esperado ({pc(pace)} do ano)</span>
+        {projection && st === "done" && period < 6 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 bg-surface" style={{ borderColor: FILL[scope] }} />Projeção do fechamento</span>}
       </div>
 
       <div className="card p-4 sm:p-5">
@@ -150,6 +163,12 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
             const behind = r !== null && r < pace * 0.75;
             const over = r !== null && r > 1;
             const on = hover === i.code;
+            const p = projOf(i);
+            const dev = devOf(i);
+            const projX = p ? (show === "pct" ? (b > 0 ? p.value / b / scale : null) : p.value / scale) : null;
+            const status = dev === null ? null : Math.abs(dev) <= TOL ? "segue" : dev > 0 ? "acima" : "abaixo";
+            // receita abaixo da LOA e despesa acima dela são os desvios que pedem atenção
+            const bad = status !== null && status !== "segue" && (isExp ? status === "acima" : status === "abaixo");
             const Row = kids ? "button" : "div";
             return (
               <li key={i.code} className="relative" onMouseEnter={() => setHover(i.code)} onMouseLeave={() => setHover((h) => (h === i.code ? null : h))}>
@@ -171,7 +190,14 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
                     <div className="absolute inset-y-0 left-0 rounded-[4px]" style={{ width: `${Math.min(100, trackW * 100)}%`, background: SOFT[scope], boxShadow: "inset 0 0 0 1px var(--line-strong)" }} />
                     <div className="absolute left-0 top-[3px] h-2 rounded-[4px]" style={{ width: `${Math.max(d > 0 ? 0.6 : 0, Math.min(100, fillW * 100))}%`, background: FILL[scope] }} />
                     {b > 0 && <div className="absolute -top-0.5 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, paceX * 100)}% - 1px)` }} />}
+                    {projX !== null && period < 6 && <div className="absolute top-[1px] h-3 w-3 rounded-full border-2 bg-surface" style={{ left: `calc(${Math.min(100, projX * 100)}% - 6px)`, borderColor: FILL[scope] }} />}
                   </div>
+                  {status && (
+                    <p className={`mt-1 text-[11px] font-semibold ${status === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
+                      {status === "segue" ? "✓ Segue a LOA" : `${status === "acima" ? "▲" : "▼"} ${pc(Math.abs(dev!))} ${status} da LOA`}
+                      <span className="font-normal text-faint"> · projeção {brl(p!.value)} de {brl(i.initial)} previstos{p!.seasonal ? "" : " (estimativa linear)"}</span>
+                    </p>
+                  )}
                 </Row>
                 {on && (
                   <div className="pointer-events-none absolute right-2 top-full z-10 mt-1 w-64 rounded-xl border border-line bg-surface/95 p-3 text-xs shadow-pop backdrop-blur">
@@ -183,6 +209,7 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
                       {i.liquidated !== undefined && (<><dt className="text-muted">Liquidado</dt><dd className="text-right tabular-nums">{brl(i.liquidated)}</dd></>)}
                       {i.paid !== undefined && (<><dt className="text-muted">Pago</dt><dd className="text-right tabular-nums">{brl(i.paid)}</dd></>)}
                       <dt className="text-muted">{over ? "Acima do previsto" : "Falta realizar"}</dt><dd className="text-right tabular-nums">{brl(Math.abs(b - d))}</dd>
+                      {p && (<><dt className="text-muted">Projeção do ano</dt><dd className="text-right tabular-nums">{brl(p.value)}</dd></>)}
                     </dl>
                     {r !== null && <p className="mt-1.5 text-faint">{over ? "Já passou do previsto para o ano." : behind ? `Abaixo do ritmo: esperado ~${pc(pace)} até ${MONTH[period]}.` : r >= pace ? "No ritmo ou à frente do esperado." : "Um pouco abaixo do ritmo esperado."}</p>}
                   </div>
@@ -211,6 +238,8 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
                 {hasLiq && <th className="p-3 text-right">Liquidado</th>}
                 {hasPaid && <th className="p-3 text-right">Pago</th>}
                 <th className="p-3 text-right">% exec.</th>
+                {projection && <th className="p-3 text-right">Projeção</th>}
+                {projection && <th className="p-3 text-right">vs LOA</th>}
               </tr>
             </thead>
             <tbody>
@@ -223,6 +252,8 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
                   {hasLiq && <td className="p-3 text-right tabular-nums">{i.liquidated !== undefined ? brl(i.liquidated) : "—"}</td>}
                   {hasPaid && <td className="p-3 text-right tabular-nums">{i.paid !== undefined ? brl(i.paid) : "—"}</td>}
                   <td className="p-3 text-right font-semibold tabular-nums">{rate(i) === null ? "—" : pc(rate(i)!)}</td>
+                  {projection && <td className="p-3 text-right tabular-nums">{projection[`${view}:${i.code}`] ? brl(projection[`${view}:${i.code}`].value) : "—"}</td>}
+                  {projection && <td className="p-3 text-right tabular-nums">{(() => { const q = projection[`${view}:${i.code}`]; return q && i.initial > 0 ? `${q.value >= i.initial ? "+" : "−"}${pc(Math.abs(q.value / i.initial - 1))}` : "—"; })()}</td>}
                 </tr>
               ))}
             </tbody>
@@ -233,6 +264,7 @@ export function BudgetPlanChart({ scope, year, period, plan }: PlanChartProps) {
       <p className="mt-3 text-xs leading-relaxed text-faint">
         Acumulado de {year} até {MONTH[period]} ({period}º bimestre), do relatório bimestral (RREO) do Tesouro. O traço vertical marca quanto seria executado se o ritmo fosse uniforme no ano; receitas e despesas sazonais (como IPTU e 13º salário) fogem dessa linha.
         {isExp ? " Empenhado é o valor já reservado; liquidado, o que foi entregue; pago, o que saiu do caixa." : ""}
+        {projection ? ` A projeção divide o acumulado pela fração que estava acumulada no mesmo bimestre do ano anterior; “segue a LOA” é ficar a até ${pc(TOL)} do previsto na lei orçamentária.` : ""}
       </p>
     </div>
   );

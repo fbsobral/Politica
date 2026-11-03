@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
-import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
-import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type PlanItem, type Slice } from "@/lib/budget";
+import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -74,30 +73,8 @@ function sliceText(items: Slice[], depth = 0): string {
     .join("\n");
 }
 
-/** Previsto x realizado em texto compacto para o assistente. */
-function planText(items: PlanItem[], depth = 0): string {
-  return items
-    .slice(0, depth === 0 ? 12 : 5)
-    .map((i) => `${"  ".repeat(depth)}- ${i.name}: ${brlShort(i.done)} de ${brlShort(i.updated)}${i.updated > 0 ? ` (${pct(i.done / i.updated, 0)})` : ""}${i.children?.length && depth < 1 ? `\n${planText(i.children, depth + 1)}` : ""}`)
-    .join("\n");
-}
-
 function askBudget(b: BudgetData, what: string, body: string, suggestions: string[]): AskFocus {
   return { title: `${what} · ${b.entity}`, text: `${what} (${b.entity}, ano ${b.annual?.year}). Valores do ano fechado, como declarados ao Tesouro Nacional (Siconfi):\n${body}`, suggestions };
-}
-
-function Progress({ label, done, of, scope, sub }: { label: string; done: number; of: number; scope: BudgetScope; sub: string }) {
-  const p = of > 0 ? Math.min(1, done / of) : 0;
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="text-xs text-muted"><b className="text-ink">{brlShort(done)}</b> de {brlShort(of)} · {pct(p, 0)}</span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-line"><div className={`h-full rounded-full ${BAR[scope]}`} style={{ width: `${Math.max(1, p * 100)}%` }} /></div>
-      <p className="mt-1 text-[11px] text-faint">{sub}</p>
-    </div>
-  );
 }
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -120,7 +97,7 @@ function Detail({ b }: { b: BudgetData }) {
         <Kpi label={`Despesa ${a?.year ?? ""}`} value={a ? brlShort(a.expenseTotal) : "—"} hint="empenhada no ano fechado" />
         <Kpi label={`Receita ${a?.year ?? ""}`} value={a && a.revenueTotal ? brlShort(a.revenueTotal) : "—"} hint="realizada (bruta)" />
         <Kpi label="Gasto por habitante" value={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} hint={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"} />
-        <Kpi label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]})` : "sem dados do ano corrente"} />
+        <Kpi label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]}) · detalhes em Expectativa fiscal` : "sem dados do ano corrente"} />
       </section>
 
       <section aria-label="Evolução em 10 anos">
@@ -196,27 +173,13 @@ function Detail({ b }: { b: BudgetData }) {
       )}
 
       {c && (
-        <section aria-label="Ano corrente" className="card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="display text-xl font-semibold">{c.year}: previsto x realizado</h2>
-            <AskButton focus={{ title: `${c.year}: previsto x realizado · ${b.entity}`, text: `Execução do orçamento de ${c.year} até o ${c.period}º bimestre (${PERIOD_LABEL[c.period]}). Receita: prevista inicial ${brlShort(c.revenue.initial)}, atualizada ${brlShort(c.revenue.updated)}, realizada ${brlShort(c.revenue.realized)}. Despesa: dotação inicial ${brlShort(c.expense.initial)}, atualizada ${brlShort(c.expense.updated)}, empenhada ${brlShort(c.expense.committed)}. Fonte: relatório bimestral (RREO) do Tesouro.`, suggestions: ["O que é dotação e empenho?", "A execução está no ritmo esperado?"] }} />
-          </div>
-          <p className="mb-5 text-xs text-muted">Acumulado até o {c.period}º bimestre ({PERIOD_LABEL[c.period]}), segundo o relatório bimestral de execução orçamentária.</p>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Progress label="Receita arrecadada" done={c.revenue.realized} of={c.revenue.updated} scope={b.scope} sub={`Previsão inicial: ${brlShort(c.revenue.initial)} · atualizada: ${brlShort(c.revenue.updated)}`} />
-            <Progress label="Despesa empenhada" done={c.expense.committed} of={c.expense.updated} scope={b.scope} sub={`Dotação inicial: ${brlShort(c.expense.initial)} · atualizada: ${brlShort(c.expense.updated)}`} />
-          </div>
-          {c.plan && (c.plan.expense.length > 0 || c.plan.revenue.length > 0 || c.plan.nature.length > 0) && (
-            <div className="mt-8">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="display text-lg font-semibold">Por categoria e subcategoria</h3>
-                <AskButton focus={{ title: `${c.year}: previsto x realizado por categoria · ${b.entity}`, text: `Execução do orçamento de ${c.year} até o ${c.period}º bimestre, por categoria (previsto atualizado → realizado):\nDespesa por função:\n${planText(c.plan.expense)}\nReceita por origem:\n${planText(c.plan.revenue)}`, suggestions: ["Quais áreas estão mais atrasadas na execução?", "Alguma receita está abaixo do previsto?", "O que explica a diferença entre previsto e realizado?"] }} />
-              </div>
-              <p className="mb-4 mt-1 text-xs text-muted">Quanto de cada área já foi realizado frente ao que estava previsto para o ano.</p>
-              <BudgetPlanChart scope={b.scope} year={c.year} period={c.period} plan={c.plan} />
-            </div>
-          )}
-        </section>
+        <Link href={`/expectativa-fiscal?esfera=${b.scope.toLowerCase()}`} className="card-flat flex items-center justify-between gap-4 p-4 transition-shadow hover:shadow-card sm:p-5">
+          <span>
+            <b className="block">{c.year}: previsto x realizado</b>
+            <span className="text-sm text-muted">Veja se a arrecadação e os gastos estão seguindo a LOA, por área e subárea, em Expectativa fiscal.</span>
+          </span>
+          <span className="flex-none text-sm font-semibold text-brand">Abrir →</span>
+        </Link>
       )}
 
       {!a && !c && <EmptyState title="Sem dados para esta esfera">O Tesouro Nacional ainda não tem os demonstrativos deste ente, ou a fonte não respondeu agora. Tente de novo mais tarde.</EmptyState>}

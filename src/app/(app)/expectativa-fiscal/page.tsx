@@ -1,0 +1,226 @@
+import { Suspense } from "react";
+import { AskButton } from "@/components/agent/ask-button";
+import { BudgetPlanChart } from "@/components/budget-plan-chart";
+import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
+import { brlShort, pct, PERIOD_LABEL, type BudgetScope } from "@/lib/budget";
+import { getFiscal, LOA_TOLERANCE, loaStatus, type FiscalData, type PlanItem } from "@/lib/fiscal";
+import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
+import { requireUser } from "@/lib/user";
+
+export const metadata = { title: "Expectativa fiscal" };
+export const dynamic = "force-dynamic";
+
+const BAR: Record<BudgetScope, string> = { MUNICIPAL: "bg-municipal", ESTADUAL: "bg-estadual", FEDERAL: "bg-federal" };
+const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro"];
+
+const signed = (d: number) => `${d >= 0 ? "+" : "−"}${pct(Math.abs(d), 1)}`;
+
+/** Cartão de veredito: projeção do fechamento frente ao previsto na LOA. */
+function Verdict({ title, projected, loa, updated, kind, seasonal, period }: { title: string; projected: number; loa: number; updated: number; kind: "revenue" | "expense"; seasonal: boolean; period: number }) {
+  const st = loaStatus(projected, loa);
+  const d = loa > 0 ? projected / loa - 1 : 0;
+  const bad = st !== null && st !== "segue" && (kind === "revenue" ? st === "abaixo" : st === "acima");
+  const label = st === "segue" ? "Segue a LOA" : st === "acima" ? "Acima da LOA" : st === "abaixo" ? "Abaixo da LOA" : "Sem LOA declarada";
+  const msg =
+    kind === "revenue"
+      ? st === "abaixo"
+        ? "A arrecadação deve ficar abaixo do que a lei orçamentária previu: falta dinheiro para o que foi planejado."
+        : st === "acima"
+          ? "A arrecadação deve superar o previsto na lei orçamentária."
+          : "A arrecadação caminha para o valor previsto na lei orçamentária."
+      : st === "acima"
+        ? "Os gastos devem passar do que a lei orçamentária aprovou, com créditos adicionais."
+        : st === "abaixo"
+          ? "Os gastos devem ficar abaixo do aprovado: parte do orçamento não deve ser executada."
+          : "Os gastos caminham para o valor aprovado na lei orçamentária.";
+  return (
+    <section className="card p-5">
+      <p className="eyebrow">{title}</p>
+      <p className={`mt-1 text-sm font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
+        {st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}
+        {st && st !== "segue" ? ` (${signed(d)})` : ""}
+      </p>
+      <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(projected)}</p>
+      <p className="text-xs text-faint">projeção para o fechamento{period < 6 ? (seasonal ? ", pela sazonalidade do ano passado" : ", proporcional a 12 meses") : " (ano fechado)"}</p>
+      <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+        <dt className="text-muted">Previsto na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loa)}</dd>
+        <dt className="text-muted">Previsto atualizado</dt><dd className="text-right tabular-nums">{brlShort(updated)}{loa > 0 && updated !== loa ? <span className="text-faint"> ({signed(updated / loa - 1)})</span> : null}</dd>
+      </dl>
+      <p className="mt-3 text-xs leading-relaxed text-muted">{msg}</p>
+    </section>
+  );
+}
+
+function Progress({ label, done, of, pace, scope, sub }: { label: string; done: number; of: number; pace: number; scope: BudgetScope; sub: string }) {
+  const p = of > 0 ? done / of : 0;
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="text-xs text-muted"><b className="text-ink">{brlShort(done)}</b> de {brlShort(of)} · {pct(p, 0)}</span>
+      </div>
+      <div className="relative h-2.5 rounded-full bg-line">
+        <div className={`h-full rounded-full ${BAR[scope]}`} style={{ width: `${Math.max(1, Math.min(1, p) * 100)}%` }} />
+        <div className="absolute -top-1 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${pace * 100}% - 1px)` }} title="Ritmo esperado" />
+      </div>
+      <p className="mt-1 text-[11px] text-faint">{sub}</p>
+    </div>
+  );
+}
+
+function planText(items: PlanItem[], f: FiscalData, kind: string, depth = 0): string {
+  return items
+    .slice(0, depth === 0 ? 12 : 5)
+    .map((i) => {
+      const p = f.projection[`${kind}:${i.code}`];
+      return `${"  ".repeat(depth)}- ${i.name}: realizado ${brlShort(i.done)}; LOA ${brlShort(i.initial)}; projeção ${p ? brlShort(p.value) : "?"}${p && i.initial > 0 ? ` (${signed(p.value / i.initial - 1)} vs LOA)` : ""}${i.children?.length && depth < 1 ? `\n${planText(i.children, f, kind, depth + 1)}` : ""}`;
+    })
+    .join("\n");
+}
+
+/** Categorias que mais se afastam da LOA na projeção (para o resumo). */
+function deviations(f: FiscalData, kind: "revenue" | "expense") {
+  return f.plan[kind]
+    .map((i) => ({ i, p: f.projection[`${kind}:${i.code}`]?.value }))
+    .filter((x) => x.p !== undefined && x.i.initial > 0 && x.i.initial >= 0.01 * (kind === "revenue" ? f.totals.revenue.initial : f.totals.expense.initial))
+    .map((x) => ({ name: x.i.name, d: x.p! / x.i.initial - 1, gap: x.p! - x.i.initial }))
+    .filter((x) => Math.abs(x.d) > LOA_TOLERANCE)
+    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
+    .slice(0, 4);
+}
+
+function Detail({ f }: { f: FiscalData }) {
+  const t = f.totals;
+  const pace = f.period / 6;
+  const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
+  const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
+  const loaBalance = t.revenue.initial - t.expense.initial;
+  const projBalance = pr.value - pe.value;
+  const revDev = deviations(f, "revenue");
+  const expDev = deviations(f, "expense");
+  const prim = f.primary;
+  return (
+    <div className="space-y-8">
+      <p className="max-w-3xl text-sm text-muted">
+        A lei orçamentária (LOA) fixa quanto se espera arrecadar e quanto se pode gastar no ano. Aqui comparamos o que já foi realizado até {MONTH[f.period]} de {f.year} com essas metas e projetamos onde o ano deve fechar.
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Verdict title="Receita" projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
+        <Verdict title="Despesa (empenhada)" projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
+        <section className="card p-5">
+          <p className="eyebrow">Saldo do orçamento</p>
+          <p className={`mt-1 text-sm font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</p>
+          <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(projBalance)}</p>
+          <p className="text-xs text-faint">receita projetada menos despesa projetada</p>
+          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+            <dt className="text-muted">Saldo na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loaBalance)}</dd>
+            {prim?.meta != null && (<><dt className="text-muted">Meta de resultado primário (LDO)</dt><dd className="text-right font-semibold tabular-nums">{brlShort(prim.meta)}</dd></>)}
+            {prim?.realized != null && (<><dt className="text-muted">Resultado primário até {MONTH[f.period]}</dt><dd className="text-right tabular-nums">{brlShort(prim.realized)}</dd></>)}
+          </dl>
+          {prim?.meta != null && prim.realized != null && (
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              {prim.realized >= prim.meta ? "Até agora o resultado primário está acima da meta da LDO." : "Até agora o resultado primário está abaixo da meta da LDO."} A meta vale para o ano inteiro; o resultado costuma oscilar entre os bimestres.
+            </p>
+          )}
+          {f.scope === "FEDERAL" && <p className="mt-3 text-xs leading-relaxed text-faint">Na União a receita inclui a emissão de títulos para rolar a dívida, por isso o saldo do orçamento é diferente do resultado primário.</p>}
+        </section>
+      </div>
+
+      {(revDev.length > 0 || expDev.length > 0) && (
+        <section className="card p-5 sm:p-6" aria-label="Maiores desvios">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="display text-xl font-semibold">Onde a LOA não deve ser cumprida</h2>
+            <AskButton focus={{ title: `Expectativa fiscal ${f.year} · ${f.entity}`, text: `Comparação do realizado até o ${f.period}º bimestre de ${f.year} com a LOA e projeção do fechamento (${f.entity}). Receita: LOA ${brlShort(t.revenue.initial)}, projeção ${brlShort(pr.value)}. Despesa: LOA ${brlShort(t.expense.initial)}, projeção ${brlShort(pe.value)}.\nReceita por origem:\n${planText(f.plan.revenue, f, "revenue")}\nDespesa por função:\n${planText(f.plan.expense, f, "expense")}`, suggestions: ["A LOA deste ano está sendo cumprida?", "Quais áreas devem gastar mais do que o previsto?", "Por que a receita pode ficar abaixo do previsto?"] }} />
+          </div>
+          <p className="mb-4 mt-1 text-xs text-muted">Categorias com projeção a mais de {pct(LOA_TOLERANCE, 0)} do previsto na LOA, pelo tamanho da diferença.</p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {[{ t: "Receita", list: revDev, rev: true }, { t: "Despesa", list: expDev, rev: false }].map((g) => (
+              <div key={g.t}>
+                <p className="mb-2 text-sm font-semibold">{g.t}</p>
+                {g.list.length ? (
+                  <ul className="space-y-1.5 text-sm">
+                    {g.list.map((x) => {
+                      const bad = g.rev ? x.d < 0 : x.d > 0;
+                      return (
+                        <li key={x.name} className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 truncate">{x.name}</span>
+                          <span className={`flex-none text-xs font-semibold tabular-nums ${bad ? "text-danger" : "text-muted"}`}>{x.d > 0 ? "▲" : "▼"} {signed(x.d)} · {x.gap >= 0 ? "+" : "−"}{brlShort(Math.abs(x.gap))}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-ok">✓ Todas as categorias seguem a LOA.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="card p-5 sm:p-6" aria-label="Ritmo do ano">
+        <h2 className="display text-xl font-semibold">{f.year}: previsto x realizado</h2>
+        <p className="mb-5 text-xs text-muted">Acumulado até o {f.period}º bimestre ({PERIOD_LABEL[f.period]}), sobre o previsto atualizado. O traço marca o ritmo uniforme ({pct(pace, 0)} do ano).</p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Progress label="Receita arrecadada" done={t.revenue.done} of={t.revenue.updated} pace={pace} scope={f.scope} sub={`Previsão na LOA: ${brlShort(t.revenue.initial)} · atualizada: ${brlShort(t.revenue.updated)}`} />
+          <Progress label="Despesa empenhada" done={t.expense.done} of={t.expense.updated} pace={pace} scope={f.scope} sub={`Dotação na LOA: ${brlShort(t.expense.initial)} · atualizada: ${brlShort(t.expense.updated)}${t.expense.paid ? ` · paga: ${brlShort(t.expense.paid)}` : ""}`} />
+        </div>
+      </section>
+
+      {(f.plan.expense.length > 0 || f.plan.revenue.length > 0 || f.plan.nature.length > 0) && (
+        <section aria-label="Por categoria">
+          <p className="eyebrow">Por categoria e subcategoria</p>
+          <h2 className="display text-2xl font-semibold">Cada área frente à LOA</h2>
+          <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Barra clara: previsto. Barra cheia: realizado até agora. Círculo: onde o ano deve fechar. Toque numa área para ver as subáreas.</p>
+          <BudgetPlanChart scope={f.scope} year={f.year} period={f.period} plan={f.plan} projection={f.projection} />
+        </section>
+      )}
+
+      {!f.hasHistory && f.period < 6 && <Notice kind="info">Não encontrei os relatórios do ano anterior para medir a sazonalidade; a projeção usa a média proporcional a 12 meses e é menos precisa.</Notice>}
+    </div>
+  );
+}
+
+function Skeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Carregando">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-64" />)}</div>
+      <div className="skeleton h-40" />
+      <div className="skeleton h-[28rem]" />
+      <p className="text-center text-sm text-muted">Buscando os relatórios bimestrais no Tesouro Nacional… na primeira vez pode levar alguns segundos.</p>
+    </div>
+  );
+}
+
+async function Content({ scope }: { scope: BudgetScope }) {
+  const user = await requireUser();
+  const f = await getFiscal(scope, user);
+  return (
+    <>
+      {f ? <Detail f={f} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
+      <div className="mt-8 max-w-3xl">
+        <Notice kind="info">
+          Fonte: Relatório Resumido da Execução Orçamentária (RREO), que prefeituras, estados e a União enviam a cada dois meses ao Tesouro Nacional (Siconfi): Anexo 1 (receitas e despesas), Anexo 2 (despesa por função) e Anexo 6 (metas fiscais da LDO).
+          {f && <> Dados consultados em {new Date(f.fetchedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.</>}
+        </Notice>
+      </div>
+    </>
+  );
+}
+
+export default async function ExpectativaFiscalPage({ searchParams }: { searchParams: Promise<{ esfera?: string }> }) {
+  const user = await requireUser();
+  const sp = await searchParams;
+  const scope: BudgetScope = (SCOPE_SLUG[sp.esfera ?? "municipal"] as BudgetScope | undefined) ?? "MUNICIPAL";
+  const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
+  return (
+    <div>
+      <PageHeader eyebrow="Expectativa fiscal · previsto x realizado" title={place} />
+      <ScopeTabs base="/expectativa-fiscal" scope={scope} noAll />
+      <Suspense key={scope} fallback={<Skeleton />}>
+        <Content scope={scope} />
+      </Suspense>
+    </div>
+  );
+}
