@@ -391,6 +391,43 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <p className="text-[8.5px] text-muted"><span className="text-estadual">━</span> gasto com saúde · <span className="text-brand">┅</span> mortalidade infantil</p>
     </Frame>
   ),
+  "ibov-chart": () => (
+    <Frame title="Ibovespa" scope="F">
+      <Hl className="flex gap-1 p-0.5"><Chip>1 mês</Chip><Chip>6 meses</Chip><Chip on>1 ano</Chip><Chip>2 anos</Chip><Chip>5 anos</Chip></Hl>
+      <div className="rounded-lg border border-line bg-surface p-1">
+        <svg viewBox="0 0 260 62" className="w-full" aria-hidden>
+          <line x1="96" x2="96" y1="2" y2="60" stroke="var(--gold)" strokeDasharray="2 2" />
+          <polyline points="4,44 24,40 44,46 64,34 84,36 104,22 124,28 144,18 164,30 184,24 204,14 224,20 256,10" fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <p className="text-[8.5px] text-muted">132.480 pts · <b className="text-ok">▲ +18,2% no período</b></p>
+    </Frame>
+  ),
+  "ibov-move": () => (
+    <Frame title="Ibovespa · 12 de março" scope="F">
+      <div className="rounded-lg border border-line bg-surface p-1">
+        <svg viewBox="0 0 260 44" className="w-full" aria-hidden>
+          <polyline points="4,14 40,16 76,12 112,18 148,36 184,32 220,28 256,24" fill="none" stroke="var(--brand)" strokeWidth="2" />
+          <path d="M148 42 L154 33 L142 33Z" fill="var(--danger)" />
+          <circle cx="148" cy="37" r="9" fill="none" stroke="var(--gold)" strokeWidth="2" />
+        </svg>
+      </div>
+      <Hl className="rounded-lg border border-line bg-surface p-1.5">
+        <p className="text-[9.5px] font-semibold"><span className="text-danger">▼ −2,9%</span> · provável motivo: <b>Contas públicas</b> <span className="font-normal text-muted">· confiança alta</span></p>
+        <p className="mt-0.5 truncate text-[8.5px] text-muted">“Mercado reage a mudança na meta fiscal” · Portal Nacional</p>
+      </Hl>
+    </Frame>
+  ),
+  "ibov-infer": () => (
+    <Frame title="O que moveu a bolsa" scope="F">
+      <Hl className="space-y-1 p-0.5">
+        {[["Contas públicas", 72], ["Juros e Copom", 48], ["Exterior", 30]].map(([n, v]) => (
+          <div key={n} className="flex items-center gap-1.5 text-[8.5px]"><span className="w-[4.8rem] truncate">{n}</span><span className="h-1.5 rounded-[3px] bg-danger" style={{ width: `${Number(v) * 0.6}%` }} /></div>
+        ))}
+      </Hl>
+      <p className="text-[8.5px] leading-snug text-muted">• Quando o dólar sobe, o Ibovespa tende a cair (correlação −0,58).</p>
+    </Frame>
+  ),
   chat: () => (
     <Frame title="Pergunte">
       <Bubble me>A prefeitura está gastando o que prometeu em saúde?</Bubble>
