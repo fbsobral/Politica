@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { markTourSeen } from "@/app/actions";
 import { IconBell, IconCalendar, IconChart, IconCoins, IconCompass, IconFeed, IconFilter, IconFlag, IconLogo, IconPeople, IconShield, IconStar, IconVote } from "@/components/icons";
 import { findModuleTour, generalTour, type Tour } from "@/lib/tours";
+import { SCREENS } from "./screens";
 
 export const TOUR_EVENT = "tour:open";
 
@@ -144,10 +145,19 @@ export function Onboarding({ seen: initialSeen, city }: { seen: string[]; city: 
 
         <div className="overflow-y-auto px-5 pb-4 sm:px-7" aria-live="polite">
           <div key={`${tour.id}-${step}`} className="tour-step">
-            <div className="relative mb-5 mt-1 flex h-28 items-center justify-center overflow-hidden rounded-2xl bg-brand-soft sm:h-32" aria-hidden>
-              <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(60% 80% at 20% 0%, color-mix(in srgb, var(--gold) 28%, transparent), transparent 70%), radial-gradient(50% 70% at 90% 100%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 70%)" }} />
-              <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-surface text-brand shadow-card [&_svg]:h-8 [&_svg]:w-8">{ART[s.art ?? "logo"] ?? ART.logo}</span>
-            </div>
+            {s.screen && SCREENS[s.screen] ? (
+              // miniatura da tela, saindo de baixo como uma janela entreaberta
+              <div className="relative mb-5 mt-1 flex h-44 items-end justify-center overflow-hidden rounded-2xl bg-brand-soft px-5 pt-4 sm:h-52" aria-hidden>
+                <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(60% 80% at 15% 0%, color-mix(in srgb, var(--gold) 30%, transparent), transparent 70%), radial-gradient(50% 70% at 95% 100%, color-mix(in srgb, var(--brand) 20%, transparent), transparent 70%)" }} />
+                <div className="tour-screen relative h-full w-full max-w-[21rem]">{SCREENS[s.screen]()}</div>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-brand-soft to-transparent" />
+              </div>
+            ) : (
+              <div className="relative mb-5 mt-1 flex h-28 items-center justify-center overflow-hidden rounded-2xl bg-brand-soft sm:h-32" aria-hidden>
+                <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(60% 80% at 20% 0%, color-mix(in srgb, var(--gold) 28%, transparent), transparent 70%), radial-gradient(50% 70% at 90% 100%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 70%)" }} />
+                <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-surface text-brand shadow-card [&_svg]:h-8 [&_svg]:w-8">{ART[s.art ?? "logo"] ?? ART.logo}</span>
+              </div>
+            )}
             <h2 id="tour-title" className="display text-2xl font-semibold leading-tight sm:text-[1.7rem]">{s.title}</h2>
             <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted">{s.text}</p>
             {s.tips && (
