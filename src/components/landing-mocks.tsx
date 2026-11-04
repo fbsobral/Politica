@@ -103,3 +103,73 @@ export function EmailMock() {
     </div>
   );
 }
+
+const PILLARS = [
+  { n: "Alimentação e bebidas", v: 6.8 },
+  { n: "Habitação", v: 5.1 },
+  { n: "Transportes", v: 2.6 },
+  { n: "Comunicação", v: 1.1 },
+];
+
+/** Números do governo: LOA x projeção e inflação por pilar frente à meta (dados fictícios). */
+export function NumbersMock() {
+  const X = (v: number) => (v / 8) * 100;
+  return (
+    <div className="space-y-3 text-left" aria-hidden>
+      <div className="card p-4">
+        <div className="flex items-center justify-between">
+          <p className="eyebrow">Expectativa fiscal · 2026</p>
+          <span className="text-[11px] font-bold text-ok">✓ Segue a LOA</span>
+        </div>
+        <p className="display mt-1 text-2xl font-semibold">R$ 12,6 bi <span className="text-sm font-normal text-muted">projeção da despesa</span></p>
+        {[{ n: "Saúde", d: 74, p: 96 }, { n: "Educação", d: 54, p: 71 }, { n: "Urbanismo", d: 36, p: 48 }].map((r) => (
+          <div key={r.n} className="mt-2.5">
+            <div className="mb-1 flex justify-between text-[12px]"><span className="font-medium">{r.n}</span><span className="text-muted">{r.d}% executado</span></div>
+            <div className="relative h-3 rounded-[4px] bg-municipal-soft" style={{ boxShadow: "inset 0 0 0 1px var(--line-strong)" }}>
+              <div className="absolute left-0 top-[2px] h-2 rounded-[4px] bg-municipal" style={{ width: `${r.d}%` }} />
+              <div className="absolute top-0 h-3 w-3 rounded-full border-2 border-municipal bg-surface" style={{ left: `calc(${r.p}% - 6px)` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="card p-4">
+        <div className="flex items-center justify-between">
+          <p className="eyebrow">Inflação · 12 meses</p>
+          <span className="text-[11px] font-bold text-danger">▲ IPCA 4,9% · acima da meta</span>
+        </div>
+        <div className="relative mt-3 space-y-2">
+          <div className="pointer-events-none absolute inset-y-0 bg-ok/10" style={{ left: `calc(7.5rem + (100% - 10.25rem) * ${X(1.5) / 100})`, width: `calc((100% - 10.25rem) * ${(X(4.5) - X(1.5)) / 100})` }} />
+          {PILLARS.map((p) => (
+            <div key={p.n} className="relative flex items-center gap-2 text-[12px]">
+              <span className="w-[7rem] flex-none truncate">{p.n}</span>
+              <span className="relative h-2.5 flex-1"><span className="absolute left-0 top-0 h-2.5 rounded-[4px] bg-brand" style={{ width: `${X(p.v)}%` }} /></span>
+              <b className="w-9 text-right tabular-nums">{p.v.toLocaleString("pt-BR")}%</b>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-faint">Faixa verde: intervalo da meta. Focus 2027: 4,1%.</p>
+      </div>
+    </div>
+  );
+}
+
+/** Assistente: uma pergunta e a resposta (texto fictício). */
+export function AssistantMock() {
+  return (
+    <div className="card overflow-hidden text-left" aria-hidden>
+      <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-2.5 text-[11px] text-muted">
+        <span className="h-2 w-2 rounded-full bg-brand" /> <b className="text-ink">Pergunte</b> · assistente
+      </div>
+      <div className="space-y-3 p-4 text-[13px] leading-relaxed">
+        <p className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-brand px-3.5 py-2 text-white">A prefeitura está gastando o que prometeu em saúde?</p>
+        <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-surface-2 px-3.5 py-2.5 text-muted">
+          Até outubro, a cidade empenhou <b className="text-ink">74%</b> do previsto para saúde. Pelo ritmo dos anos anteriores, deve fechar o ano perto do valor da LOA. Atenção básica está um pouco à frente; hospitais, um pouco atrás.
+          <span className="mt-1.5 block text-[11px] text-faint">Fonte: relatório bimestral (RREO), Tesouro Nacional</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {["E a educação?", "O que é empenho?"].map((t) => <span key={t} className="rounded-full border border-line-strong px-2.5 py-1 text-[11px] font-semibold text-muted">{t}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}

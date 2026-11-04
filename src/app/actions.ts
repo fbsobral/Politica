@@ -183,3 +183,24 @@ export async function saveScoreSetup(
   revalidatePath("/score");
   return { ok: true };
 }
+
+/* ───────── Tours de boas-vindas ───────── */
+
+const TOUR_ID = /^[a-z0-9-]{1,40}$/;
+
+/** Marca um tour (geral ou de um módulo) como visto, para não abrir sozinho de novo. */
+export async function markTourSeen(id: string) {
+  if (!TOUR_ID.test(id)) return;
+  const user = await getDbUser();
+  const prev = (user.onboarding ?? {}) as Record<string, string>;
+  if (prev[id]) return;
+  await db.user.update({ where: { id: user.id }, data: { onboarding: { ...prev, [id]: new Date().toISOString() } } });
+}
+
+/** Volta a mostrar todos os tours (botão em Configurações). */
+export async function resetTours() {
+  const user = await getDbUser();
+  await db.user.update({ where: { id: user.id }, data: { onboarding: {} } });
+  revalidatePath("/", "layout");
+  redirect("/");
+}

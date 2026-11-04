@@ -5,6 +5,7 @@ import { IconLogo, IconSettings, IconShield } from "@/components/icons";
 import { AgentLauncher } from "@/components/agent/launcher";
 import { DesktopNav, MobileNav } from "@/components/nav";
 import { UserMenu } from "@/components/user-menu";
+import { Onboarding, TourButton } from "@/components/onboarding/tour";
 import { UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -15,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen pb-24 lg:pb-0">
       <Suspense fallback={null}><NavProgress /></Suspense>
       <header className="sticky top-0 z-20 border-b border-line bg-paper/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5" aria-label="Política — início">
             <IconLogo />
             <span className="display text-xl font-semibold tracking-tight">Política</span>
@@ -23,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="hidden flex-1 lg:block">
             <DesktopNav isAdmin={isAdmin} />
           </div>
-          <Link href="/configuracoes" className="ml-auto flex max-w-[12rem] items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-muted hover:text-ink sm:text-xs" title="Alterar localização">
+          <Link href="/configuracoes" className="ml-auto flex min-w-0 max-w-[9.5rem] items-center sm:max-w-[12rem] gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-medium text-muted hover:text-ink sm:text-xs" title="Alterar localização">
             <span className="h-1.5 w-1.5 flex-none rounded-full bg-municipal" />
             <span className="truncate">{user.municipality} · {user.uf}</span>
           </Link>
@@ -35,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/configuracoes" aria-label="Configurações da conta" title="Configurações" className="hidden h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-ink/5 hover:text-ink lg:flex">
             <IconSettings width={19} height={19} />
           </Link>
+          <TourButton />
           <UserMenu isAdmin={isAdmin} />
         </div>
       </header>
@@ -46,6 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </footer>
       <AgentLauncher hints={{ city: user.municipality ?? "sua cidade", party: user.party && user.party !== "NONE" ? user.party : null, hasQuiz: Boolean(user.quizAnswers) }} />
       <MobileNav />
+      <Onboarding seen={Object.keys((user.onboarding ?? {}) as Record<string, string>)} city={user.municipality} />
     </div>
   );
 }

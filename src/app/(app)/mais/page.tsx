@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { IconBell, IconChart, IconCoins, IconCompass, IconFlag, IconShield, IconStar, IconUser, IconVote } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
+import { GeneralTourButton } from "@/components/onboarding/tour";
 import { requireUser } from "@/lib/user";
 
 export const metadata = { title: "Mais" };
@@ -38,6 +39,10 @@ export default async function MaisPage() {
           </li>
         ))}
       </ul>
+      <GeneralTourButton className="card-flat mt-2.5 flex w-full items-center gap-4 p-4 text-left transition-shadow hover:shadow-card">
+        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/25 text-lg font-bold text-ink" aria-hidden>?</span>
+        <span><b className="block">Tour de boas-vindas</b><span className="text-sm text-muted">Reveja como o app funciona; o ? no topo explica cada tela</span></span>
+      </GeneralTourButton>
     </div>
   );
 }

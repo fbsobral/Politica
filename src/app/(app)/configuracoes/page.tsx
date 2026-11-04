@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { savePrefs, sendTestDigest } from "@/app/actions";
+import { resetTours, savePrefs, sendTestDigest } from "@/app/actions";
+import { GeneralTourButton } from "@/components/onboarding/tour";
 import { LocationForm } from "@/app/onboarding/location-form";
 import { Notice, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -97,6 +98,15 @@ export default async function ConfigPage({ searchParams }: { searchParams: Promi
         <h2 className="display mb-1 text-xl font-semibold">Onde você vota</h2>
         <p className="mb-4 text-sm text-muted">Define o feed municipal/estadual e os representantes exibidos.</p>
         <LocationForm ufs={UFS} initialUf={user.uf} initialCity={user.municipality} submitLabel="Atualizar localização" />
+      </section>
+
+      <section className="card p-5 sm:p-6">
+        <h2 className="display mb-1 text-xl font-semibold">Tours e dicas</h2>
+        <p className="mb-4 text-sm text-muted">Reveja a apresentação do app ou volte a ver a explicação de cada tela na primeira vez que abrir. Em qualquer tela, o botão ? no topo explica como ela funciona.</p>
+        <div className="flex flex-wrap gap-2">
+          <GeneralTourButton className="btn btn-secondary">Rever boas-vindas</GeneralTourButton>
+          <form action={resetTours}><SubmitButton className="btn btn-secondary" pendingText="Reativando…">Reativar todas as dicas</SubmitButton></form>
+        </div>
       </section>
     </div>
   );
