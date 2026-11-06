@@ -148,7 +148,11 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
     if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastOkAt: new Date(), lastError: null, lastCount: out.length } }).catch(() => undefined);
     // a busca por partido traz ruído (siglas e nomes comuns): só fica o que cita o partido de fato
     const partyOrigin = o.label.match(/^gnews:party:(.+)$/)?.[1];
-    return partyOrigin ? out.filter((c) => detectParties(c.title).includes(partyOrigin)) : out;
+    if (partyOrigin) return out.filter((c) => detectParties(c.title).includes(partyOrigin));
+    // buscas oficiais por domínio (ex.: sp.gov.br) trazem todas as prefeituras do estado: filtra pela esfera certa
+    if (o.official && o.scope === "MUNICIPAL" && o.municipalityKey) return out.filter((c) => officialAboutCity(c, o.municipalityKey!));
+    if (o.official && o.scope === "ESTADUAL") return out.filter((c) => !isMunicipalBody(c.sourceName, c.sourceHomepage));
+    return out;
   } catch (err) {
     console.warn(`[ingest] falha em ${o.label}:`, (err as Error).message);
     if (o.feedId) await db.feedSource.update({ where: { id: o.feedId }, data: { lastError: (err as Error).message.slice(0, 200) } }).catch(() => undefined);
@@ -346,12 +350,46 @@ export function isOfficialUrl(url: string | null | undefined): boolean {
   }
 }
 
+const padded = (t: string) => ` ${normalize(t)} `;
+
+/** Fonte de prefeitura ou câmara municipal (pelo nome do veículo). */
+export function isMunicipalBody(sourceName: string, homepage?: string | null): boolean {
+  const n = padded(sourceName);
+  if (/ (prefeitura|prefeito|camara municipal|camara de vereadores|camara dos vereadores) /.test(n)) return true;
+  // "Câmara de Taubaté" é municipal; "Câmara dos Deputados" não
+  if (/ camara de /.test(n) && !/ deputados /.test(n)) return true;
+  try {
+    return homepage ? /(^|\.)(prefeitura|camara)[a-z0-9-]*\./.test(new URL(homepage).hostname) : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Notícia oficial que é mesmo da cidade: a fonte é a prefeitura/câmara da própria cidade
+ * ou o título fala da cidade. Evita que a prefeitura vizinha (que só cita a cidade no texto) entre no feed municipal.
+ */
+export function officialAboutCity(c: { title: string; sourceName: string; sourceHomepage?: string | null }, cityKey: string): boolean {
+  const key = ` ${cityKey} `;
+  const src = padded(c.sourceName);
+  const ownSource = src.includes(key) || (() => {
+    try {
+      return c.sourceHomepage ? new URL(c.sourceHomepage).hostname.replace(/[^a-z0-9]/g, "").includes(cityKey.replace(/ /g, "")) : false;
+    } catch {
+      return false;
+    }
+  })();
+  if (ownSource) return true;
+  // fonte de outra cidade só entra se o título for sobre esta cidade
+  return padded(c.title).includes(key);
+}
+
 /** Buscas no Google News restritas a sites oficiais, por esfera. */
 const OFFICIAL_QUERY = {
   federal: () => "(site:gov.br OR site:leg.br OR site:jus.br) (governo OR ministério OR ministro OR Congresso OR Senado OR Câmara OR tribunal OR STF)",
   state: (uf: string) => {
     const u = uf.toLowerCase();
-    return `(site:${u}.gov.br OR site:tj${u}.jus.br OR site:mp${u}.mp.br) (governo OR governador OR assembleia OR deputado OR secretaria OR tribunal)`;
+    return `(site:${u}.gov.br OR site:tj${u}.jus.br OR site:mp${u}.mp.br) (governo OR governador OR assembleia OR deputado OR secretaria OR tribunal) -prefeitura -vereador`;
   },
   city: (uf: string, city: string) => {
     const u = uf.toLowerCase();
@@ -361,6 +399,22 @@ const OFFICIAL_QUERY = {
 
 function isLocalOrigin(origin: string | null): boolean {
   return Boolean(origin && (origin.startsWith("gnews:uf") || origin.startsWith("gnews:city") || origin.startsWith("local:")));
+}
+
+/** Remove notícias oficiais que entraram na esfera errada (antes do filtro por cidade/estado). */
+async function cleanupOfficialStrays(): Promise<number> {
+  const rows = await db.article.findMany({
+    where: { origin: { endsWith: ":OFICIAL" }, createdAt: { gte: new Date(Date.now() - 45 * 86400000) }, favorites: { none: {} } },
+    select: { id: true, title: true, scope: true, municipalityKey: true, source: { select: { name: true, homepage: true } } },
+    take: 5000,
+  });
+  const bad = rows.filter((a) =>
+    a.scope === "MUNICIPAL" && a.municipalityKey
+      ? !officialAboutCity({ title: a.title, sourceName: a.source.name, sourceHomepage: a.source.homepage }, a.municipalityKey)
+      : a.scope === "ESTADUAL" && isMunicipalBody(a.source.name, a.source.homepage),
+  );
+  if (bad.length) await db.article.deleteMany({ where: { id: { in: bad.map((b) => b.id) } } });
+  return bad.length;
 }
 
 export type IngestResult = { fetched: number; created: number; classified: number; removed: number; newArticleIds: string[] };
@@ -496,6 +550,7 @@ export async function runIngest(): Promise<IngestResult> {
     }
   }
 
+  await cleanupOfficialStrays().catch((err) => console.warn("[ingest] limpeza de oficiais", (err as Error).message));
   // veículos já cadastrados com site de órgão público passam a contar como oficiais
   await db.source.updateMany({
     where: { category: { notIn: ["ORGAO_OFICIAL", "PARTIDO"] }, OR: [".gov.br", ".leg.br", ".jus.br", ".mp.br", ".def.br", "//gov.br"].map((d) => ({ homepage: { contains: d } })) },
