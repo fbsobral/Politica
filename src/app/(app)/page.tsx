@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { ArticleCard, type ArticleView } from "@/components/article-card";
 import { FeedFilters } from "@/components/feed-filters";
-import { IconFilter, IconX } from "@/components/icons";
+import { IconFilter, IconOfficial, IconX } from "@/components/icons";
 import { RememberFilters } from "@/components/remember-filters";
 import { EmptyState, SCOPE_DOT } from "@/components/ui";
 import { db } from "@/lib/db";
@@ -31,12 +31,12 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const user = await requireUser();
   const raw = await searchParams;
   // filtros guardados: valem quando a URL não traz nenhum filtro (links explícitos sempre vencem)
-  const FILTER_KEYS = ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo", "q", "pagina"];
+  const FILTER_KEYS = ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo", "oficial", "q", "pagina"];
   let sp: SP = raw;
   if (!FILTER_KEYS.some((k) => raw[k])) {
     try {
       const saved = JSON.parse(decodeURIComponent((await cookies()).get("pol_feed")?.value ?? "{}")) as SP;
-      sp = Object.fromEntries(Object.entries(saved).filter(([k, v]) => ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo"].includes(k) && typeof v === "string"));
+      sp = Object.fromEntries(Object.entries(saved).filter(([k, v]) => ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo", "oficial"].includes(k) && typeof v === "string"));
     } catch {
       sp = raw;
     }
@@ -44,12 +44,14 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const scope: FeedScope = sp.esfera === "todas" ? "ALL" : (SCOPE_SLUG[sp.esfera ?? "municipal"] ?? "MUNICIPAL");
   const agrupar = ["veiculo", "tipo", "categoria"].includes(sp.agrupar ?? "") ? sp.agrupar! : "";
   const page = Math.max(1, Number(sp.pagina) || 1);
-  const params = { scope, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, nivel: sp.nivel, q: sp.q, seguindo: sp.seguindo === "1" };
+  const oficial = sp.oficial === "so" || sp.oficial === "sem" ? sp.oficial : undefined;
+  const params = { scope, oficial, tipo: sp.tipo, veiculo: sp.veiculo, cat: sp.cat, poder: sp.poder, nivel: sp.nivel, q: sp.q, seguindo: sp.seguindo === "1" };
 
   const where = await buildWhere(user, params);
   const facetWhere = (await buildWhere(user, { scope }))!;
   const branchFacetWhere = (await buildWhere(user, { ...params, poder: undefined }))!;
-  const [rows, scopeCounts, bySource, byCat, byBranch] = await Promise.all([
+  const officialFacetWhere = (await buildWhere(user, { ...params, oficial: "so" }))!;
+  const [rows, scopeCounts, bySource, byCat, byBranch, officialCount] = await Promise.all([
     where
       ? db.article.findMany({
           where,
@@ -63,6 +65,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     db.article.groupBy({ by: ["sourceId"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["category"], where: facetWhere, _count: true }),
     db.article.groupBy({ by: ["branch"], where: branchFacetWhere, _count: true }),
+    sp.seguindo === "1" && !where ? Promise.resolve(0) : db.article.count({ where: officialFacetWhere }),
   ]);
   const lastRun = await db.jobRun.findFirst({ where: { job: "ingest", ok: true, finishedAt: { not: null } }, orderBy: { finishedAt: "desc" }, select: { finishedAt: true } });
   const hasMore = !agrupar && rows.length > PAGE;
@@ -79,6 +82,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const filterData = {
     scope,
     sp,
+    officialCount,
     tipos: [...tipoCount.entries()].sort((a, b) => b[1] - a[1]),
     sources: sources
       .filter((s) => !sp.tipo || s.category === sp.tipo)
@@ -93,6 +97,8 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   for (const r of pageRows) clusters.set(r.clusterKey, [...(clusters.get(r.clusterKey) ?? []), r]);
   const views: ArticleView[] = [...clusters.values()].map((group) => {
     const a = group[0];
+    // assunto coberto pela imprensa e por um órgão público: a versão oficial aparece junto
+    const off = a.source.category === "ORGAO_OFICIAL" ? null : group.find((g) => g.source.category === "ORGAO_OFICIAL");
     return {
       id: a.id,
       url: a.url,
@@ -105,6 +111,8 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       source: a.source,
       favorited: favSet.has(a.id),
       scope: scope === "ALL" ? a.scope : undefined,
+      officialScope: a.scope,
+      official: off ? { source: off.source.name, url: off.url, title: off.title } : undefined,
       alsoIn: [...new Set(group.slice(1).map((g) => g.source.name).filter((n) => n !== a.source.name))].slice(0, 4),
       related: group.slice(1).filter((g) => g.source.name !== a.source.name).slice(0, 5).map((g) => ({ source: g.source.name, url: g.url, title: g.title })),
     };
@@ -122,7 +130,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   const place = scope === "ALL" ? "Todas as esferas" : scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   const today = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(new Date());
-  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.nivel, sp.q, sp.seguindo, sp.agrupar].filter(Boolean).length;
+  const activeCount = [sp.tipo, sp.veiculo, sp.cat, sp.poder, sp.nivel, sp.q, sp.seguindo, sp.agrupar, oficial].filter(Boolean).length;
   const chips: { label: string; clear: SP }[] = [];
   if (sp.q) chips.push({ label: `“${sp.q}”`, clear: { q: undefined } });
   if (sp.tipo) chips.push({ label: SOURCE_CATEGORY_LABEL[sp.tipo as SourceCategory] ?? sp.tipo, clear: { tipo: undefined, veiculo: undefined } });
@@ -131,6 +139,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   if (sp.nivel) chips.push({ label: sp.nivel === "1" ? "Só Tier 1" : "Tier 1 e 2", clear: { nivel: undefined } });
   if (sp.cat) chips.push({ label: NEWS_CATEGORY_LABEL[sp.cat as NewsCategory] ?? sp.cat, clear: { cat: undefined } });
   if (sp.seguindo) chips.push({ label: "Quem eu sigo", clear: { seguindo: undefined } });
+  if (oficial) chips.push({ label: oficial === "so" ? "Só fontes oficiais" : "Sem fontes oficiais", clear: { oficial: undefined } });
 
 
   return (
@@ -183,6 +192,15 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
             </Link>
           );
         })}
+        <span aria-hidden className="mx-1 w-px flex-none self-stretch bg-line-strong" />
+        <Link
+          href={href({ ...sp, pagina: undefined }, { oficial: oficial === "so" ? undefined : "so" })}
+          aria-current={oficial === "so" ? "true" : undefined}
+          title="Notícias de governos, legislativos e tribunais da sua cidade, do estado e do país"
+          className={`flex flex-none items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${oficial === "so" ? "border-ink bg-ink text-paper" : "border-line-strong bg-surface text-muted hover:text-ink"}`}
+        >
+          <IconOfficial /> Só oficiais <span className="text-xs font-medium opacity-60">{officialCount}</span>
+        </Link>
       </nav>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_17.5rem]">

@@ -90,3 +90,8 @@ export const IconCompass = (p: P) => (
 export const IconChart = (p: P) => (
   <svg {...base(p)}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
 );
+
+/** Prédio público (fonte oficial). */
+export const IconOfficial = (p: P) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}><path d="M3 10 12 4l9 6" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" /></svg>
+);

@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import type { Branch, NewsCategory, Scope, SourceCategory } from "@prisma/client";
 import { toggleFavorite } from "@/app/actions";
 import { AskButton } from "@/components/agent/ask-button";
-import { IconExternal, IconStar } from "@/components/icons";
+import { IconExternal, IconOfficial, IconStar } from "@/components/icons";
 import { ArticleSheet } from "@/components/article-sheet";
 import { ScopeBadge, SourceAvatar } from "@/components/ui";
 import { TIER_LEGEND } from "@/lib/tier-legend";
@@ -24,7 +24,22 @@ export type ArticleView = {
   /** esfera da notícia; mostrada quando o feed está em "Todas" */
   scope?: Scope;
   related?: { source: string; url: string; title: string }[];
+  /** esfera da notícia, para o selo "Oficial · Municipal" (mesmo fora do modo "Todas") */
+  officialScope?: Scope;
+  /** versão oficial do mesmo assunto, quando o veículo principal não é oficial */
+  official?: { source: string; url: string; title: string };
 };
+
+const OFFICIAL_SCOPE: Record<Scope, string> = { MUNICIPAL: "Municipal", ESTADUAL: "Estadual", FEDERAL: "Federal" };
+
+/** Selo de fonte oficial (governo, legislativo, tribunal), com a esfera. */
+export function OfficialBadge({ scope }: { scope?: Scope }) {
+  return (
+    <span title="Fonte oficial: site de governo, legislativo, tribunal ou outro órgão público" className="inline-flex items-center gap-1 rounded-full bg-ink px-2 py-px text-[10px] font-bold uppercase tracking-wide text-paper">
+      <IconOfficial width={11} height={11} /> Oficial{scope ? ` · ${OFFICIAL_SCOPE[scope]}` : ""}
+    </span>
+  );
+}
 
 function timeAgo(d: Date) {
   return formatDistanceToNowStrict(d, { addSuffix: false, locale: ptBR }).replace(" minutos", " min").replace(" minuto", " min").replace(" horas", " h").replace(" hora", " h").replace(" dias", " d").replace(" dia", " d");
@@ -68,7 +83,7 @@ function Meta({ a }: { a: ArticleView }) {
       <SourceAvatar name={a.source.name} size={22} />
       <span className="truncate font-semibold text-ink">{a.source.name}</span>
       <span aria-hidden className="text-line-strong">•</span>
-      <span>{SOURCE_CATEGORY_LABEL[a.source.category]}</span>
+      {a.source.category === "ORGAO_OFICIAL" ? <OfficialBadge scope={a.officialScope ?? a.scope} /> : <span>{SOURCE_CATEGORY_LABEL[a.source.category]}</span>}
       {a.source.tier && (
         <span title={`${TIER_LEGEND[a.source.tier as 1 | 2 | 3].label}: ${TIER_LEGEND[a.source.tier as 1 | 2 | 3].desc}`} className={`rounded px-1.5 py-px text-[10px] font-bold tracking-wide ${a.source.tier === 1 ? "bg-gold/25 text-ink" : a.source.tier === 2 ? "bg-ink/8 text-muted" : "bg-ink/5 text-faint"}`}>T{a.source.tier}</span>
       )}
@@ -84,6 +99,11 @@ function Tags({ a }: { a: ArticleView }) {
       {a.scope && <ScopeBadge scope={a.scope} />}
       <span className="chip !bg-brand-soft !text-brand">{NEWS_CATEGORY_LABEL[a.category]}</span>
       {a.branch && <span className="chip">{BRANCH_LABEL[a.branch]}</span>}
+      {a.official && (
+        <a href={a.official.url} target="_blank" rel="noopener noreferrer" className="relative z-10 inline-flex max-w-full items-center gap-1.5 rounded-full border border-ink/20 bg-surface px-2.5 py-0.5 text-xs font-semibold text-ink hover:border-ink" title={a.official.title}>
+          <IconOfficial width={12} height={12} /> <span className="truncate">Versão oficial: {a.official.source}</span> <span aria-hidden>→</span>
+        </a>
+      )}
       {a.alsoIn.length > 0 && (
         <span className="text-xs text-faint">
           também em <span className="text-muted">{a.alsoIn.join(", ")}</span>

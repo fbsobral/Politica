@@ -12,6 +12,8 @@ export type FilterData = {
   tipos: [SourceCategory, number][];
   sources: { id: string; name: string; n: number }[];
   cats: { category: NewsCategory; n: number }[];
+  /** notícias de fontes oficiais com os filtros atuais */
+  officialCount?: number;
 };
 
 const GROUPS = [
@@ -64,6 +66,19 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
         </details>
       </fieldset>
 
+      <fieldset>
+        <legend className="eyebrow mb-2">Fontes oficiais</legend>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[{ v: "", l: "Todas" }, { v: "so", l: "Só oficiais" }, { v: "sem", l: "Sem oficiais" }].map((o) => (
+            <label key={o.v} className="cursor-pointer">
+              <input type="radio" name="oficial" value={o.v} defaultChecked={(sp.oficial ?? "") === o.v} className="peer sr-only" />
+              <span className="block rounded-lg border border-line-strong px-2 py-2 text-center text-[13px] font-medium text-muted transition peer-checked:border-brand peer-checked:bg-brand-soft peer-checked:text-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand">{o.l}</span>
+            </label>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-faint">Prefeitura, câmara, governo do estado, assembleia, tribunais, ministérios e Congresso{d.officialCount !== undefined ? ` · ${d.officialCount} agora` : ""}.</p>
+      </fieldset>
+
       <div className="space-y-3">
         <div>
           <label htmlFor={id("tipo")} className="eyebrow mb-1.5 block">Tipo de veículo</label>
@@ -107,7 +122,7 @@ export function FeedFilters({ d, idPrefix }: { d: FilterData; idPrefix: string }
         <button className="btn btn-primary w-full">Aplicar filtros</button>
       </noscript>
 
-      {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.nivel || sp.q || sp.seguindo || sp.agrupar) && (
+      {(sp.tipo || sp.veiculo || sp.cat || sp.poder || sp.nivel || sp.q || sp.seguindo || sp.agrupar || sp.oficial) && (
         <Link href={`/?esfera=${feedScopeSlug(scope)}`} className="btn btn-ghost btn-sm w-full">Limpar filtros</Link>
       )}
     </AutoForm>

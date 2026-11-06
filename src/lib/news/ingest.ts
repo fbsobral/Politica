@@ -46,6 +46,8 @@ type Candidate = {
   publishedAt: Date;
   sourceName: string;
   sourceHomepage?: string;
+  /** veio de busca restrita a sites oficiais ou de domínio oficial (.gov.br, .leg.br, .jus.br...) */
+  official?: boolean;
   factCheck?: boolean;
   party?: string | null;
   scope: Scope;
@@ -64,6 +66,8 @@ type Origin = {
   municipalityKey: string | null;
   fixedSource?: { name: string; homepage: string };
   feedId?: string;
+  /** busca restrita a sites oficiais: tudo o que vier dela é fonte oficial */
+  official?: boolean;
   branch?: Branch | null;
   factCheck?: boolean;
   party?: string | null;
@@ -105,9 +109,12 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
 
       let title = stripHtml(rawTitle);
       let sourceName = o.fixedSource?.name ?? "";
+      let sourceHomepage = o.fixedSource?.homepage;
       if (!o.fixedSource) {
-        // Google News: "Título - Veículo"
+        // Google News: "Título - Veículo"; a tag <source url="..."> traz o site do veículo
         const fromTag = typeof item.sourceName === "string" ? item.sourceName : item.sourceName?._;
+        const srcUrl = typeof item.sourceName === "object" ? item.sourceName?.$?.url : undefined;
+        if (typeof srcUrl === "string" && /^https?:\/\//.test(srcUrl)) sourceHomepage = srcUrl;
         const m = title.match(/^(.*) - ([^-]+)$/);
         sourceName = (fromTag || m?.[2] || "").trim();
         if (m && (!fromTag || m[2].trim() === fromTag.trim())) title = m[1].trim();
@@ -126,7 +133,8 @@ async function fetchOrigin(o: Origin, maxAgeMs: number, localMaxAgeMs: number): 
         imageUrl: imageOf(item),
         publishedAt,
         sourceName,
-        sourceHomepage: o.fixedSource?.homepage,
+        sourceHomepage,
+        official: Boolean(o.official) || isOfficialUrl(sourceHomepage) || (!!o.fixedSource && isOfficialUrl(url)),
         factCheck: o.factCheck,
         party: o.party ?? null,
         scope: o.scope,
@@ -274,6 +282,10 @@ async function buildOrigins(cfg: Settings): Promise<Origin[]> {
         origins.push({ label: `gnews:city:${c.uf}:${c.key}:PRIO:${d}`, url: googleNewsUrl(`site:${d} "${c.name}" (prefeito OR prefeitura OR vereador OR câmara OR eleição)`, localDays), scope: "MUNICIPAL", uf: c.uf, municipalityKey: c.key });
       }
     }
+    // fontes oficiais de cada esfera (governos, legislativos, tribunais), sempre coletadas
+    origins.push({ label: "gnews:official:federal", url: googleNewsUrl(OFFICIAL_QUERY.federal(), days), scope: "FEDERAL", uf: null, municipalityKey: null, official: true });
+    for (const uf of ufs) origins.push({ label: `gnews:uf:${uf}:OFICIAL`, url: googleNewsUrl(OFFICIAL_QUERY.state(uf), localDays), scope: "ESTADUAL", uf, municipalityKey: null, official: true });
+    for (const c of cities.values()) origins.push({ label: `gnews:city:${c.uf}:${c.key}:OFICIAL`, url: googleNewsUrl(OFFICIAL_QUERY.city(c.uf, c.name), localDays), scope: "MUNICIPAL", uf: c.uf, municipalityKey: c.key, official: true });
     // eleições: nacional e por estado (inclui pesquisas)
     if (cfg.queryElectionFederal.trim()) {
       origins.push({ label: "gnews:elec:federal", url: googleNewsUrl(cfg.queryElectionFederal, days), scope: "FEDERAL", uf: null, municipalityKey: null });
@@ -322,6 +334,30 @@ export async function probeFeed(url: string): Promise<{ ok: true; items: number;
     return { ok: false, error: (err as Error).message };
   }
 }
+
+/** Domínios de órgãos públicos brasileiros: governo, legislativo, judiciário, ministério público, defensoria e tribunais de contas. */
+export function isOfficialUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return /(^|\.)(gov|leg|jus|mp|def)\.br$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Buscas no Google News restritas a sites oficiais, por esfera. */
+const OFFICIAL_QUERY = {
+  federal: () => "(site:gov.br OR site:leg.br OR site:jus.br) (governo OR ministério OR ministro OR Congresso OR Senado OR Câmara OR tribunal OR STF)",
+  state: (uf: string) => {
+    const u = uf.toLowerCase();
+    return `(site:${u}.gov.br OR site:tj${u}.jus.br OR site:mp${u}.mp.br) (governo OR governador OR assembleia OR deputado OR secretaria OR tribunal)`;
+  },
+  city: (uf: string, city: string) => {
+    const u = uf.toLowerCase();
+    return `(site:${u}.gov.br OR site:${u}.leg.br) "${city}" (prefeitura OR prefeito OR câmara OR vereador OR secretaria OR município)`;
+  },
+};
 
 function isLocalOrigin(origin: string | null): boolean {
   return Boolean(origin && (origin.startsWith("gnews:uf") || origin.startsWith("gnews:city") || origin.startsWith("local:")));
@@ -384,7 +420,7 @@ export async function runIngest(): Promise<IngestResult> {
     if (rej.size) {
       for (let i = fresh.length - 1; i >= 0; i--) {
         const c = fresh[i];
-        if (!c.factCheck && !c.municipalityKey && !isLocalOrigin(c.origin) && rej.has(keysOf[i])) fresh.splice(i, 1);
+        if (!c.factCheck && !c.official && !c.municipalityKey && !isLocalOrigin(c.origin) && rej.has(keysOf[i])) fresh.splice(i, 1);
       }
     }
   }
@@ -396,18 +432,24 @@ export async function runIngest(): Promise<IngestResult> {
   const partySourceNames = new Map<string, "PARTIDO">(PARTY_FEEDS.map((p) => [partyFeedName(p), "PARTIDO" as const]));
   for (const name of names) {
     const feed = knownFeeds.get(name);
-    const guessed = feed?.category ?? partySourceNames.get(name) ?? guessSourceCategory(name);
+    const mine = fresh.filter((c) => c.sourceName === name);
+    // veículo oficial: domínio de órgão público ou resultado de busca restrita a sites oficiais
+    const official = !partySourceNames.has(name) && mine.some((c) => c.official);
+    const guessed = official ? "ORGAO_OFICIAL" : (feed?.category ?? partySourceNames.get(name) ?? guessSourceCategory(name));
     const src = await db.source.upsert({
       where: { name },
       create: {
         name,
-        homepage: feed?.homepage ?? fresh.find((c) => c.sourceName === name)?.sourceHomepage ?? null,
+        homepage: feed?.homepage ?? mine.find((c) => c.sourceHomepage)?.sourceHomepage ?? null,
         category: guessed ?? "OUTRO",
         categoryKnown: guessed !== null,
         ...(partySourceNames.has(name) ? { tier: 3, tierBy: "default" } : {}),
-        factCheck: fresh.find((c) => c.sourceName === name)?.factCheck ?? false,
+        factCheck: mine.find((c) => c.factCheck)?.factCheck ?? false,
       },
-      update: fresh.find((c) => c.sourceName === name)?.factCheck ? { factCheck: true } : {},
+      update: {
+        ...(mine.some((c) => c.factCheck) ? { factCheck: true } : {}),
+        ...(official ? { category: "ORGAO_OFICIAL", categoryKnown: true } : {}),
+      },
     });
     sourceIds.set(name, src.id);
   }
@@ -454,6 +496,11 @@ export async function runIngest(): Promise<IngestResult> {
     }
   }
 
+  // veículos já cadastrados com site de órgão público passam a contar como oficiais
+  await db.source.updateMany({
+    where: { category: { notIn: ["ORGAO_OFICIAL", "PARTIDO"] }, OR: [".gov.br", ".leg.br", ".jus.br", ".mp.br", ".def.br", "//gov.br"].map((d) => ({ homepage: { contains: d } })) },
+    data: { category: "ORGAO_OFICIAL", categoryKnown: true },
+  }).catch((err) => console.warn("[ingest] fontes oficiais", (err as Error).message));
   await applyTiers();
   let classified = 0;
   let removed = 0;
@@ -497,7 +544,8 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   let classified = 0;
   let reused = 0;
   for (const a of pending) {
-    const keep = a.source.factCheck || a.factCheck || a.source.category === "PARTIDO";
+    // notícias oficiais (governos, legislativos, tribunais) aparecem sempre, mesmo quando a IA não as considera política
+    const keep = a.source.factCheck || a.factCheck || a.source.category === "PARTIDO" || a.source.category === "ORGAO_OFICIAL";
     if (!keep && !a.municipalityKey && !isLocalOrigin(a.origin) && rejected.has(a.clusterKey)) {
       toRemove.push(a.id); // mesmo assunto já julgado "não é política"
       continue;
@@ -535,7 +583,7 @@ export async function classifyPending(limit = 300): Promise<{ classified: number
   const newlyRejected = new Set<string>();
   for (const r of results) {
     const orig = toAi.find((p) => p.id === r.id)!;
-    if (!r.political && !orig.source.factCheck && !orig.factCheck && orig.source.category !== "PARTIDO") {
+    if (!r.political && !orig.source.factCheck && !orig.factCheck && orig.source.category !== "PARTIDO" && orig.source.category !== "ORGAO_OFICIAL") {
       toRemove.push(r.id);
       if (!orig.municipalityKey && !isLocalOrigin(orig.origin)) newlyRejected.add(orig.clusterKey);
       continue;

@@ -81,7 +81,7 @@ export const MODULE_TOURS: Tour[] = [
     match: (p) => p === "/",
     steps: [
       { screen: "feed-tabs", art: "feed", title: "Notícias por esfera", text: "As abas Municipal, Estadual e Federal mostram a política de cada nível de governo. Todas junta tudo, da mais recente para a mais antiga.", tips: ["A data no topo mostra quando o robô coletou notícias pela última vez"] },
-      { screen: "feed-filters", art: "filter", title: "Filtre do seu jeito", text: "Escolha o poder (Legislativo, Executivo, Judiciário), busque por palavra, filtre por assunto, veículo e nível do veículo.", tips: ["No celular os filtros ficam recolhidos no botão Filtros", "O nível (tier) indica o alcance do veículo, não a qualidade"] },
+      { screen: "feed-filters", art: "filter", title: "Filtre do seu jeito", text: "Escolha o poder (Legislativo, Executivo, Judiciário), busque por palavra, filtre por assunto, veículo e nível do veículo.", tips: ["Só oficiais mostra o que publicaram a prefeitura, a câmara, o governo do estado, a assembleia, os tribunais e o governo federal; o selo Oficial marca essas fontes", "No celular os filtros ficam recolhidos no botão Filtros", "O nível (tier) indica o alcance do veículo, não a qualidade"] },
       { screen: "feed-summary", art: "star", title: "Leia o essencial", text: "Toque numa notícia para abrir um resumo em 3 parágrafos, feito por IA a partir do texto publicado, com link para a matéria completa.", tips: ["A estrela guarda a notícia em Favoritos"] },
     ],
   },

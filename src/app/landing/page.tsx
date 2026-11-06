@@ -26,6 +26,7 @@ const IconTarget = () => svg(<><circle cx="12" cy="12" r="8.5" /><circle cx="12"
 const IconTrend = () => svg(<><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></>);
 const IconGauge = () => svg(<><path d="M4 18a8 8 0 1 1 16 0" /><path d="M12 18l4-6" /></>);
 const IconChat = () => svg(<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />);
+const IconOfficialSvg = () => svg(<><path d="M3 10 12 4l9 6" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" /></>);
 const IconHelp = () => svg(<><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2M12 16.5h.01" /></>);
 
 type Feature = { icon: React.ReactNode; title: string; text: string };
@@ -37,6 +38,7 @@ const GROUPS: { id: string; eyebrow: string; title: string; text: string; items:
     text: "Coletadas a cada hora de dezenas de veículos e fontes oficiais.",
     items: [
       { icon: <IconFeed />, title: "Feed por esfera e por poder", text: "Municipal, estadual e federal, com filtros por Legislativo, Executivo e Judiciário, assunto e veículo." },
+      { icon: <IconOfficialSvg />, title: "Fontes oficiais com selo", text: "O que publicam prefeitura, câmara, governo do estado, assembleia, tribunais e governo federal, sempre no feed — com o selo Oficial e um filtro só para elas." },
       { icon: <IconSearch />, title: "Resumo em 3 parágrafos", text: "Abra uma notícia e leia o essencial, com link para a matéria completa." },
       { icon: <IconShield />, title: "Checagem de fatos", text: "Boatos e declarações verificados por agências, do país à sua cidade." },
       { icon: <IconDoc />, title: "Diário Oficial da cidade", text: "Edições recentes e busca por texto nos atos da prefeitura." },

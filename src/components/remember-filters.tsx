@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const KEYS = ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo"] as const;
+const KEYS = ["esfera", "tipo", "veiculo", "cat", "poder", "nivel", "agrupar", "seguindo", "oficial"] as const;
 
 /** Guarda os filtros do feed em um cookie (1 ano), para voltarem sozinhos na próxima visita. */
 export function RememberFilters() {

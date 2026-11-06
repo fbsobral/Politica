@@ -12,6 +12,8 @@ export const feedScopeSlug = (s: FeedScope) => (s === "ALL" ? "todas" : s.toLowe
 
 export type FeedParams = {
   scope: FeedScope;
+  /** fontes oficiais: "so" = só oficiais, "sem" = sem oficiais */
+  oficial?: string;
   tipo?: string;
   veiculo?: string;
   cat?: string;
@@ -47,6 +49,8 @@ export async function buildWhere(user: FeedUser, p: FeedParams, opts: { ignore?:
   if (!ignore.includes("veiculo") && p.veiculo) and.push({ sourceId: p.veiculo });
   if (!ignore.includes("cat") && p.cat && (NEWS_CATEGORY_VALUES as string[]).includes(p.cat)) and.push({ category: p.cat as NewsCategory });
   if (!ignore.includes("poder") && p.poder && (BRANCH_VALUES as string[]).includes(p.poder)) and.push({ branch: p.poder as Branch });
+  if (p.oficial === "so") and.push({ source: { category: "ORGAO_OFICIAL" } });
+  else if (p.oficial === "sem") and.push({ source: { category: { not: "ORGAO_OFICIAL" } } });
   const tiers = tiersFor(p.nivel);
   if (tiers) and.push({ source: { tier: { in: tiers } } });
   if (p.q) {

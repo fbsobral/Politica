@@ -138,7 +138,7 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
     <Frame title="Feed">
       <Tabs items={SCOPES} />
       <Hl className="space-y-1 p-0.5">
-        <div className="flex gap-1"><Chip on>Todos os poderes</Chip><Chip>Legislativo</Chip><Chip>Executivo</Chip><Chip>Judiciário</Chip></div>
+        <div className="flex gap-1"><Chip on>Todos os poderes</Chip><Chip>Legislativo</Chip><Chip>Executivo</Chip><span className="whitespace-nowrap rounded-full bg-ink px-1.5 py-px text-[8.5px] font-semibold text-paper">🏛 Só oficiais</span></div>
         <div className="flex items-center gap-1 rounded-md border border-line bg-surface px-1.5 py-0.5 text-[8.5px] text-faint">⌕ Buscar notícias…<span className="ml-auto rounded bg-ink/5 px-1 text-muted">Filtros · 2</span></div>
       </Hl>
       <News src="Portal Nacional" s="F" title="STF julga ação sobre royalties" tag="Justiça" />
