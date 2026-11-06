@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Band, FocusYear, Pillar } from "@/lib/inflation";
+import { ControlBar, Segmented } from "@/components/controls";
 
 const MES = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const p2 = (v: number, d = 2) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%`;
@@ -54,7 +55,6 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
   const ticks: number[] = [];
   for (let t = bot; t <= top; t += step) ticks.push(t);
   const h = hover !== null ? pts[hover] : null;
-  const seg = (on: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
 
   return (
     <div>
@@ -64,9 +64,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded-sm bg-ok/15" style={{ boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--ok) 40%, transparent)" }} />Intervalo da meta</span>
           {fut.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-brand bg-surface" />Expectativa do mercado (Focus) para dezembro</span>}
         </div>
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Período">
-          {[2, 5].map((n) => <button key={n} type="button" onClick={() => setYears(n)} className={seg(years === n)}>{n} anos</button>)}
-        </div>
+        <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }]} />
       </div>
       <div className="card relative p-3 sm:p-5">
         <div ref={box} className="w-full" />
@@ -161,19 +159,18 @@ export function InflationPillars({ groups, bc, cores, intl, br, headline }: { gr
   const hi = Math.max(...vals, band.center + band.tol, headline ?? 0) * 1.05;
   const X = (v: number) => ((v - lo) / (hi - lo)) * 100;
   const counts = rows.reduce((a, r) => ({ ...a, [statusOf(r.y12!, band)]: (a[statusOf(r.y12!, band)] ?? 0) + 1 }), {} as Record<St, number>);
-  const seg = (on: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
   const level = view === "groups" ? ["grupo", "subgrupo", "item"][trail.length] ?? "item" : "indicador";
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Como dividir">
-          {views.map((v) => <button key={v} type="button" onClick={() => { setView(v); setPath([]); }} className={seg(view === v)}>{VIEW_LABEL[v]}</button>)}
-        </div>
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Comparar com">
-          <button type="button" onClick={() => setRef("intl")} className={seg(ref === "intl")} title={intl.source}>Padrão internacional (2%)</button>
-          <button type="button" onClick={() => setRef("br")} className={seg(ref === "br")} title={br.source}>Meta do Brasil ({br.center.toLocaleString("pt-BR")}%)</button>
-        </div>
+      <ControlBar
+        summary={`Comparando com ${ref === "intl" ? "o padrão internacional (2%)" : `a meta do Brasil (${br.center.toLocaleString("pt-BR")}%)`} · ${sort === "weight" && hasWeight ? "maior peso" : sort === "low" ? "menor inflação" : "maior inflação"}`}
+        primary={<Segmented label="Como dividir" value={view} onChange={(v) => { setView(v); setPath([]); }} options={views.map((v) => ({ v, l: VIEW_LABEL[v] }))} />}
+      >
+        <Segmented label="Comparar com" value={ref} onChange={setRef} options={[
+          { v: "intl", l: "Padrão internacional (2%)", title: intl.source },
+          { v: "br", l: `Meta do Brasil (${br.center.toLocaleString("pt-BR")}%)`, title: br.source },
+        ]} />
         <label className="flex items-center gap-2 text-sm text-muted">
           Ordenar
           <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="input !w-40 !py-1.5">
@@ -182,7 +179,7 @@ export function InflationPillars({ groups, bc, cores, intl, br, headline }: { gr
             <option value="low">Menor inflação</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         {trail.length ? (

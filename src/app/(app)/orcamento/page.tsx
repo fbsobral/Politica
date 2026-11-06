@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
-import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
+import { EmptyState, Notice, PageHeader, ScopeTabs, StatTile } from "@/components/ui";
 import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -77,16 +77,6 @@ function askBudget(b: BudgetData, what: string, body: string, suggestions: strin
   return { title: `${what} · ${b.entity}`, text: `${what} (${b.entity}, ano ${b.annual?.year}). Valores do ano fechado, como declarados ao Tesouro Nacional (Siconfi):\n${body}`, suggestions };
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="card-flat p-4">
-      <p className="eyebrow">{label}</p>
-      <p className="display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}
-    </div>
-  );
-}
-
 function Detail({ b }: { b: BudgetData }) {
   const a = b.annual;
   const c = b.current;
@@ -94,10 +84,10 @@ function Detail({ b }: { b: BudgetData }) {
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo">
-        <Kpi label={`Despesa ${a?.year ?? ""}`} value={a ? brlShort(a.expenseTotal) : "—"} hint="empenhada no ano fechado" />
-        <Kpi label={`Receita ${a?.year ?? ""}`} value={a && a.revenueTotal ? brlShort(a.revenueTotal) : "—"} hint="realizada (bruta)" />
-        <Kpi label="Gasto por habitante" value={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} hint={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"} />
-        <Kpi label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]}) · detalhes em Expectativa fiscal` : "sem dados do ano corrente"} />
+        <StatTile label={`Despesa ${a?.year ?? ""}`} value={a ? brlShort(a.expenseTotal) : "—"} hint="empenhada no ano fechado" />
+        <StatTile label={`Receita ${a?.year ?? ""}`} value={a && a.revenueTotal ? brlShort(a.revenueTotal) : "—"} hint="realizada (bruta)" />
+        <StatTile label="Gasto por habitante" value={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} hint={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"} />
+        <StatTile label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]}) · detalhes em Expectativa fiscal` : "sem dados do ano corrente"} />
       </section>
 
       <section aria-label="Evolução em 10 anos">
@@ -262,7 +252,7 @@ export default async function OrcamentoPage({ searchParams }: { searchParams: Pr
   // cabeçalho e abas aparecem na hora; os dados (lentos) carregam dentro do Suspense, que reinicia a cada esfera
   return (
     <div>
-      <PageHeader eyebrow="Orçamento público · Tesouro Nacional (Siconfi)" title={place} />
+      <PageHeader eyebrow={`Números · ${place} · Tesouro Nacional (Siconfi)`} title="Orçamento" />
       <ScopeTabs base="/orcamento" scope={all ? "ALL" : scope} />
       <Suspense key={all ? "todas" : scope} fallback={<Skeleton />}>
         <Content user={user} all={all} scope={scope} />

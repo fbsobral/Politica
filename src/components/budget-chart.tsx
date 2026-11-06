@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PartialYear } from "@/lib/budget";
+import { ControlBar, Segmented } from "@/components/controls";
 
 type Series = { code: string; name: string; parent?: string; values: Record<number, number> };
 export type HistoryProps = {
@@ -21,6 +22,7 @@ type Metric = "expense" | "revenue" | "nature";
 type Mode = "real" | "nominal";
 type Unit = "brl" | "percap" | "share";
 
+const UNIT_LABEL: Record<Unit, string> = { brl: "R$", percap: "Por habitante", share: "% do total" };
 const PERIODO: Record<number, string> = { 1: "fevereiro", 2: "abril", 3: "junho", 4: "agosto", 5: "outubro", 6: "dezembro" };
 
 const COLORS = ["#17407f", "#e0a800", "#0e8a5f", "#d9480f", "#7048e8", "#d6336c", "#0c8599", "#6b7280", "#2b8a3e", "#a61e4d"];
@@ -149,7 +151,6 @@ export function BudgetChart(raw: HistoryProps) {
   }
   const selectOne = (code: string) => setSelected([code]);
 
-  const seg = (on: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
   const hoverYear = hover !== null ? yrs[hover] : null;
 
   const summary = visible.map((l) => {
@@ -160,28 +161,28 @@ export function BudgetChart(raw: HistoryProps) {
 
   return (
     <div>
-      {/* filtros */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="O que mostrar">
-          <button type="button" onClick={() => setMetric("expense")} className={seg(metric === "expense")}>Para onde vai</button>
-          <button type="button" onClick={() => setMetric("revenue")} className={seg(metric === "revenue")}>De onde vem</button>
-          {props.nature.length > 0 && <button type="button" onClick={() => setMetric("nature")} className={seg(metric === "nature")}>Em que se gasta</button>}
-        </div>
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Unidade">
-          <button type="button" onClick={() => setUnit("brl")} className={seg(unit === "brl")}>R$</button>
-          <button type="button" onClick={() => setUnit("percap")} className={seg(unit === "percap")}>Por habitante</button>
-          <button type="button" onClick={() => setUnit("share")} className={seg(unit === "share")}>% do total</button>
-        </div>
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Valores">
-          <button type="button" onClick={() => setMode("real")} disabled={!Object.keys(props.deflator).length} className={seg(mode === "real")} title="Corrigidos pela inflação (IPCA) para os preços de hoje">Corrigidos (IPCA)</button>
-          <button type="button" onClick={() => setMode("nominal")} className={seg(mode === "nominal")}>Nominais</button>
-        </div>
+      {/* filtros: o que mostrar sempre à vista; o resto em "Ajustes" no celular */}
+      <ControlBar
+        summary={[UNIT_LABEL[unit], mode === "real" ? "Corrigidos (IPCA)" : "Nominais", partial ? (pmode === "off" ? "Anos fechados" : pmode === "actual" ? `${partial.year} parcial` : `${partial.year} projeção`) : null, `${from}–${to}`].filter(Boolean).join(" · ")}
+        primary={
+          <Segmented label="O que mostrar" value={metric} onChange={setMetric} options={[
+            { v: "expense", l: "Para onde vai" },
+            { v: "revenue", l: "De onde vem" },
+            ...(props.nature.length > 0 ? [{ v: "nature" as Metric, l: "Em que se gasta" }] : []),
+          ]} />
+        }
+      >
+        <Segmented label="Unidade" value={unit} onChange={setUnit} options={[{ v: "brl", l: "R$" }, { v: "percap", l: "Por habitante" }, { v: "share", l: "% do total" }]} />
+        <Segmented label="Valores" value={mode} onChange={setMode} options={[
+          { v: "real", l: "Corrigidos (IPCA)", title: "Corrigidos pela inflação (IPCA) para os preços de hoje", disabled: !Object.keys(props.deflator).length },
+          { v: "nominal", l: "Nominais" },
+        ]} />
         {partial && (
-          <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label={`Ano corrente (${partial.year})`}>
-            <button type="button" onClick={() => setPmode("off")} className={seg(pmode === "off")} title="Só anos fechados">Fechados</button>
-            <button type="button" onClick={() => setPmode("actual")} className={seg(pmode === "actual")} title={`Acumulado de ${partial.year} até o ${partial.period}º bimestre`}>+ {partial.year} parcial</button>
-            <button type="button" onClick={() => setPmode("proj")} className={seg(pmode === "proj")} title={`Projeção de ${partial.year} fechado`}>+ {partial.year} projeção</button>
-          </div>
+          <Segmented label={`Ano corrente (${partial.year})`} value={pmode} onChange={setPmode} options={[
+            { v: "off", l: "Fechados", title: "Só anos fechados" },
+            { v: "actual", l: `+ ${partial.year} parcial`, title: `Acumulado de ${partial.year} até o ${partial.period}º bimestre` },
+            { v: "proj", l: `+ ${partial.year} projeção`, title: `Projeção de ${partial.year} fechado` },
+          ]} />
         )}
         <label className="flex items-center gap-2 text-sm text-muted">
           De
@@ -214,8 +215,9 @@ export function BudgetChart(raw: HistoryProps) {
                 <option key={s.code} value={s.code}>{s.name}</option>
               );
             })}
-          </select>        </label>
-      </div>
+          </select>
+        </label>
+      </ControlBar>
 
       {partial && pmode !== "off" && (
         <p className="mb-3 rounded-xl bg-brand-soft/70 px-3 py-2 text-xs leading-relaxed text-muted">

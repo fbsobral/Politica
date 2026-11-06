@@ -216,7 +216,7 @@ export default async function ExpectativaFiscalPage({ searchParams }: { searchPa
   const place = scope === "MUNICIPAL" ? user.municipality : scope === "ESTADUAL" ? UFS[user.uf] : "Brasil";
   return (
     <div>
-      <PageHeader eyebrow="Expectativa fiscal · previsto x realizado" title={place} />
+      <PageHeader eyebrow={`Números · ${place} · previsto x realizado (RREO)`} title="Expectativa fiscal" />
       <ScopeTabs base="/expectativa-fiscal" scope={scope} noAll />
       <Suspense key={scope} fallback={<Skeleton />}>
         <Content scope={scope} />

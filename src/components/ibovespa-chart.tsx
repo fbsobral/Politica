@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IbovData, Move } from "@/lib/ibovespa";
+import { Segmented } from "@/components/controls";
 
 type Range = "1m" | "6m" | "1a" | "2a" | "5a";
 const RANGES: { id: Range; label: string; days: number }[] = [
@@ -137,15 +138,12 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
     setSel(d);
     requestAnimationFrame(() => detail.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
   };
-  const seg = (on: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
 
   return (
     <div className="space-y-8">
       <section aria-label="Gráfico">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Período">
-            {RANGES.map((r) => <button key={r.id} type="button" onClick={() => setRange(r.id)} className={`${seg(range === r.id)} whitespace-nowrap`}>{r.label}</button>)}
-          </div>
+          <Segmented label="Período" value={range} onChange={setRange} options={RANGES.map((r) => ({ v: r.id, l: r.label }))} />
           <p className="text-sm text-muted">No período: <Dir v={stats.total} /> · de {pts(view[0].close)} para {pts(last.close)} pontos</p>
         </div>
         <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-hidden>
@@ -253,11 +251,7 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
             <p className="eyebrow">Altas e quedas fortes</p>
             <h2 className="display text-2xl font-semibold">Os dias que mais mexeram</h2>
           </div>
-          <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Direção">
-            <button type="button" onClick={() => setDir("all")} className={seg(dir === "all")}>Todos</button>
-            <button type="button" onClick={() => setDir("up")} className={seg(dir === "up")}>▲ Altas</button>
-            <button type="button" onClick={() => setDir("down")} className={seg(dir === "down")}>▼ Quedas</button>
-          </div>
+          <Segmented label="Direção" value={dir} onChange={setDir} options={[{ v: "all", l: "Todos" }, { v: "up", l: "▲ Altas" }, { v: "down", l: "▼ Quedas" }]} />
         </div>
 
         {current && <MoveDetail ref={detail} mv={current} themes={themes} onClose={() => setSel(null)} />}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PlanItem, Projection } from "@/lib/fiscal";
+import { ControlBar, Segmented } from "@/components/controls";
 
 type Scope = "MUNICIPAL" | "ESTADUAL" | "FEDERAL";
 type View = "expense" | "revenue" | "nature";
@@ -35,6 +36,7 @@ export type PlanChartProps = {
 };
 
 const TOL = 0.05;
+const SORT_LABEL: Record<Sort, string> = { size: "Maior previsto", high: "Mais executado", low: "Menos executado", dev: "Maior desvio da LOA" };
 
 /** Previsto x realizado do ano corrente por categoria, com detalhamento por subcategoria. */
 export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanChartProps) {
@@ -84,7 +86,6 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
   const baseLabel = !isExp ? (base === "initial" ? "Previsão inicial" : "Previsão atualizada") : base === "initial" ? "Dotação inicial" : "Dotação atualizada";
   const catLabel = view === "expense" ? (parent ? "subfunção" : "função") : view === "revenue" ? (parent ? "desdobramento" : "origem") : "tipo de gasto";
 
-  const seg = (on: boolean) => `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
   const pick = (v: View) => {
     setView(v);
     setOpenCode(null);
@@ -94,38 +95,39 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
 
   return (
     <div>
-      {/* filtros em uma linha */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="O que mostrar">
-          {views.includes("expense") && <button type="button" onClick={() => pick("expense")} className={seg(view === "expense")}>Para onde vai</button>}
-          {views.includes("revenue") && <button type="button" onClick={() => pick("revenue")} className={seg(view === "revenue")}>De onde vem</button>}
-          {views.includes("nature") && <button type="button" onClick={() => pick("nature")} className={seg(view === "nature")}>Em que se gasta</button>}
-        </div>
+      {/* principal sempre à vista; o resto em "Ajustes" no celular */}
+      <ControlBar
+        summary={[isExp ? doneLabel : null, base === "initial" ? "Previsto na LOA" : "Previsto atualizado", show === "pct" ? "% executado" : "R$", SORT_LABEL[sort]].filter(Boolean).join(" · ")}
+        primary={
+          <Segmented label="O que mostrar" value={view} onChange={pick} options={[
+            ...(views.includes("expense") ? [{ v: "expense" as View, l: "Para onde vai" }] : []),
+            ...(views.includes("revenue") ? [{ v: "revenue" as View, l: "De onde vem" }] : []),
+            ...(views.includes("nature") ? [{ v: "nature" as View, l: "Em que se gasta" }] : []),
+          ]} />
+        }
+      >
         {isExp && (hasLiq || hasPaid) && (
-          <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Estágio da despesa">
-            <button type="button" onClick={() => setStage("done")} className={seg(st === "done")} title="Valor reservado para o gasto (contratado)">Empenhado</button>
-            {hasLiq && <button type="button" onClick={() => setStage("liquidated")} className={seg(st === "liquidated")} title="Serviço ou bem já entregue e conferido">Liquidado</button>}
-            {hasPaid && <button type="button" onClick={() => setStage("paid")} className={seg(st === "paid")} title="Dinheiro que já saiu do caixa">Pago</button>}
-          </div>
+          <Segmented label="Estágio da despesa" value={st} onChange={setStage} options={[
+            { v: "done", l: "Empenhado", title: "Valor reservado para o gasto (contratado)" },
+            ...(hasLiq ? [{ v: "liquidated" as Stage, l: "Liquidado", title: "Serviço ou bem já entregue e conferido" }] : []),
+            ...(hasPaid ? [{ v: "paid" as Stage, l: "Pago", title: "Dinheiro que já saiu do caixa" }] : []),
+          ]} />
         )}
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Previsto">
-          <button type="button" onClick={() => setBase("updated")} className={seg(base === "updated")} title="Inclui os créditos e ajustes feitos durante o ano">Previsto atualizado</button>
-          <button type="button" onClick={() => setBase("initial")} className={seg(base === "initial")} title="Como aprovado na lei orçamentária (LOA)">Previsto na LOA</button>
-        </div>
-        <div className="flex gap-0.5 rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Unidade">
-          <button type="button" onClick={() => setShow("brl")} className={seg(show === "brl")}>R$</button>
-          <button type="button" onClick={() => setShow("pct")} className={seg(show === "pct")}>% executado</button>
-        </div>
+        <Segmented label="Previsto" value={base} onChange={setBase} options={[
+          { v: "updated", l: "Previsto atualizado", title: "Inclui os créditos e ajustes feitos durante o ano" },
+          { v: "initial", l: "Previsto na LOA", title: "Como aprovado na lei orçamentária (LOA)" },
+        ]} />
+        <Segmented label="Unidade" value={show} onChange={setShow} options={[{ v: "brl", l: "R$" }, { v: "pct", l: "% executado" }]} />
         <label className="flex items-center gap-2 text-sm text-muted">
           Ordenar
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="input !w-52 !py-1.5">
-            <option value="size">Maior previsto</option>
-            <option value="high">Mais executado</option>
-            <option value="low">Menos executado</option>
-            {projection && <option value="dev">Maior desvio da LOA</option>}
+            <option value="size">{SORT_LABEL.size}</option>
+            <option value="high">{SORT_LABEL.high}</option>
+            <option value="low">{SORT_LABEL.low}</option>
+            {projection && <option value="dev">{SORT_LABEL.dev}</option>}
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       {/* trilha de navegação */}
       <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">

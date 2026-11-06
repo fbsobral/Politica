@@ -110,7 +110,7 @@ export default async function IndicadoresPage({ searchParams }: { searchParams: 
 
   return (
     <div>
-      <PageHeader eyebrow={`Números do país, do estado e da cidade · últimos ${years} anos`} title={`Indicadores · ${place}`} />
+      <PageHeader eyebrow={`Números · ${place} · últimos ${years} anos`} title="Indicadores" />
       <ScopeTabs base="/indicadores" scope={all ? "ALL" : scope} params={{ anos: sp.anos }} />
       <RangeTabs base="/indicadores" years={years} params={{ esfera: sp.esfera }} />
       {all && <p className="-mt-2 mb-6 max-w-3xl text-sm text-muted">Quando um indicador existe em mais de uma esfera, as linhas aparecem juntas: <b style={{ color: SCOPE_COLOR.MUNICIPAL }}>cidade</b>, <b style={{ color: SCOPE_COLOR.ESTADUAL }}>estado</b> e <b style={{ color: SCOPE_COLOR.FEDERAL }}>Brasil</b>.</p>}

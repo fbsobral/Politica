@@ -71,6 +71,28 @@ export function PageHeader({ eyebrow, title, children }: { eyebrow?: string; tit
   );
 }
 
+/** Cartão de resumo dos módulos de números (o mesmo em Orçamento, Inflação, Ibovespa…). */
+export function StatTile({ label, value, hint, tone, children }: { label: string; value: string; hint?: string; tone?: "up" | "down" | null; children?: React.ReactNode }) {
+  return (
+    <div className="card-flat p-4">
+      <p className="eyebrow">{label}</p>
+      <p className={`display mt-1 text-2xl font-semibold leading-tight sm:text-3xl ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : ""}`}>{value}</p>
+      {children}
+      {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}
+    </div>
+  );
+}
+
+/** No lugar das abas de esfera, nos módulos que só têm dado do país. */
+export function NationalOnly({ children = "Dado nacional: vale para todo o país, sem recorte por estado ou cidade." }: { children?: React.ReactNode }) {
+  return (
+    <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-medium text-muted shadow-card">
+      <span className="h-2 w-2 rounded-full bg-federal" aria-hidden />
+      {children}
+    </p>
+  );
+}
+
 export function EmptyState({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="card-flat flex flex-col items-center px-6 py-14 text-center">

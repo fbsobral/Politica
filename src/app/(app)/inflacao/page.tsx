@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { AskButton } from "@/components/agent/ask-button";
 import { InflationPillars, InflationTrend, StatusChip } from "@/components/inflation-charts";
-import { EmptyState, Notice, PageHeader } from "@/components/ui";
+import { EmptyState, NationalOnly, Notice, PageHeader, StatTile } from "@/components/ui";
 import { requireUser } from "@/lib/user";
 import { cmnMeta, getInflation, INTL, statusOf, type Band, type InflationData, type Pillar } from "@/lib/inflation";
 
@@ -10,17 +10,6 @@ export const dynamic = "force-dynamic";
 
 const MES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const p2 = (v: number | null | undefined, d = 2) => (v == null ? "—" : `${v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%`);
-
-function Kpi({ label, value, hint, children }: { label: string; value: string; hint?: string; children?: React.ReactNode }) {
-  return (
-    <div className="card-flat p-4">
-      <p className="eyebrow">{label}</p>
-      <p className="display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">{value}</p>
-      {children}
-      {hint && <p className="mt-0.5 text-xs text-faint">{hint}</p>}
-    </div>
-  );
-}
 
 function pillarText(list: Pillar[], band: Band) {
   return list.map((p) => `- ${p.name}: ${p2(p.y12)} em 12 meses${p.weight != null ? `, peso ${p2(p.weight, 1)}` : ""} (${p.y12 != null ? statusOf(p.y12, band) : "?"} de ${band.label})`).join("\n");
@@ -44,16 +33,16 @@ function Detail({ d }: { d: InflationData }) {
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo">
-        <Kpi label="IPCA em 12 meses" value={p2(h.y12)} hint={ref ? `até ${MES[ref.month]} de ${ref.year}` : undefined}>
+        <StatTile label="IPCA em 12 meses" value={p2(h.y12)} hint={ref ? `até ${MES[ref.month]} de ${ref.year}` : undefined}>
           <p className="mt-1"><StatusChip v={h.y12} band={meta} /></p>
-        </Kpi>
-        <Kpi label="Meta do governo" value={`${meta.center.toLocaleString("pt-BR")}%`} hint={`intervalo de ${p2(meta.center - meta.tol, 1)} a ${p2(meta.center + meta.tol, 1)} (CMN)`} />
-        <Kpi label={`Expectativa ${year}`} value={p2(f0?.median)} hint={f0 ? `mediana do Focus${f0.median4w != null ? ` · há 4 semanas: ${p2(f0.median4w)}` : ""}` : "Focus indisponível"}>
+        </StatTile>
+        <StatTile label="Meta do governo" value={`${meta.center.toLocaleString("pt-BR")}%`} hint={`intervalo de ${p2(meta.center - meta.tol, 1)} a ${p2(meta.center + meta.tol, 1)} (CMN)`} />
+        <StatTile label={`Expectativa ${year}`} value={p2(f0?.median)} hint={f0 ? `mediana do Focus${f0.median4w != null ? ` · há 4 semanas: ${p2(f0.median4w)}` : ""}` : "Focus indisponível"}>
           {f0 && <p className="mt-1"><StatusChip v={f0.median} band={meta} /></p>}
-        </Kpi>
-        <Kpi label={`Expectativa ${year + 1}`} value={p2(f1?.median)} hint={d.focus.next12 != null ? `próximos 12 meses: ${p2(d.focus.next12)}` : "mediana do Focus"}>
+        </StatTile>
+        <StatTile label={`Expectativa ${year + 1}`} value={p2(f1?.median)} hint={d.focus.next12 != null ? `próximos 12 meses: ${p2(d.focus.next12)}` : "mediana do Focus"}>
           {f1 && <p className="mt-1"><StatusChip v={f1.median} band={cmnMeta(year + 1)} /></p>}
-        </Kpi>
+        </StatTile>
       </section>
 
       {st && (
@@ -142,7 +131,8 @@ export default async function InflacaoPage() {
   await requireUser();
   return (
     <div>
-      <PageHeader eyebrow="Inflação · IBGE e Banco Central" title="Inflação no Brasil" />
+      <PageHeader eyebrow="Números · Brasil · IBGE e Banco Central" title="Inflação" />
+      <NationalOnly>Dado nacional: o IPCA é medido nas principais regiões metropolitanas e vale para todo o país.</NationalOnly>
       <Suspense fallback={<Skeleton />}>
         <Content />
       </Suspense>

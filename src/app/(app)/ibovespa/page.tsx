@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { AskButton } from "@/components/agent/ask-button";
 import { IbovespaPanel } from "@/components/ibovespa-chart";
-import { EmptyState, Notice, PageHeader } from "@/components/ui";
+import { EmptyState, NationalOnly, Notice, PageHeader, StatTile } from "@/components/ui";
 import { getIbovespa, MOVE_MIN, THEMES, type IbovData } from "@/lib/ibovespa";
 import { requireUser } from "@/lib/user";
 
@@ -36,13 +36,7 @@ function Detail({ d }: { d: IbovData }) {
           ["No dia", pc(day), "último pregão", tone(day)],
           ["No ano", pc(ytd, 1), `desde 1º de janeiro de ${yy}`, tone(ytd)],
           ["Em 12 meses", pc(y12, 1), "últimos 365 dias", tone(y12)],
-        ].map(([l, v, h, c]) => (
-          <div key={l} className="card-flat p-4">
-            <p className="eyebrow">{l}</p>
-            <p className={`display mt-1 text-2xl font-semibold leading-tight sm:text-3xl ${c}`}>{v}</p>
-            <p className="mt-0.5 text-xs text-faint">{h}</p>
-          </div>
-        ))}
+        ].map(([l, v, h, c]) => <StatTile key={l} label={l} value={v} hint={h} tone={c === "text-ok" ? "up" : c === "text-danger" ? "down" : null} />)}
       </section>
       <div className="flex items-start justify-between gap-3">
         <p className="max-w-3xl text-sm text-muted">O Ibovespa é o principal índice da bolsa brasileira (B3): reúne as ações mais negociadas, como Petrobras, Vale e os grandes bancos. Os marcadores no gráfico mostram os dias de alta ou queda de {MOVE_MIN.toLocaleString("pt-BR")}% ou mais, ligados às matérias publicadas naquele dia.</p>
@@ -82,7 +76,8 @@ export default async function IbovespaPage() {
   await requireUser();
   return (
     <div>
-      <PageHeader eyebrow="Números · bolsa de valores · até 5 anos" title="Ibovespa" />
+      <PageHeader eyebrow="Números · Brasil · B3 · até 5 anos" title="Ibovespa" />
+      <NationalOnly>Índice da bolsa brasileira: vale para todo o país.</NationalOnly>
       <Suspense fallback={<Skeleton />}>
         <Content />
       </Suspense>
