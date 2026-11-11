@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
+import { PrimaryChart } from "@/components/primary-chart";
+import { getPrimaryHistory } from "@/lib/primary";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs, StatTile } from "@/components/ui";
@@ -102,6 +104,17 @@ function Detail({ b }: { b: BudgetData }) {
         </Suspense>
       </section>
 
+      <section aria-label="Resultado primário">
+        <p className="eyebrow">Superávit ou déficit</p>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="display text-2xl font-semibold">Resultado primário ano a ano</h2>
+        </div>
+        <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Quanto sobrou (superávit) ou faltou (déficit) entre o que o governo arrecadou e o que gastou no ano, sem contar os juros da dívida. Toque num ano para ver quais receitas e despesas explicam o resultado.</p>
+        <Suspense fallback={<div className="skeleton h-[22rem]" aria-busy="true" />}>
+          <Primary scope={b.scope} />
+        </Suspense>
+      </section>
+
       {a && (a.expense.length > 0 || a.revenue.length > 0) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* mesmo destaque para os dois lados: de onde vem e para onde vai */}
@@ -174,6 +187,23 @@ function Detail({ b }: { b: BudgetData }) {
 
       {!a && !c && <EmptyState title="Sem dados para esta esfera">O Tesouro Nacional ainda não tem os demonstrativos deste ente, ou a fonte não respondeu agora. Tente de novo mais tarde.</EmptyState>}
     </div>
+  );
+}
+
+async function Primary({ scope }: { scope: BudgetScope }) {
+  const user = await requireUser();
+  const p = await getPrimaryHistory(scope, user);
+  if (!p) return <EmptyState title="Resultado primário indisponível">Não encontrei os balanços anuais deste ente no Tesouro Nacional, ou a fonte não respondeu agora.</EmptyState>;
+  const last = p.years.at(-1);
+  const lines = p.years.map((y) => `${y.year}: ${y.result >= 0 ? "superávit" : "déficit"} de ${brlShort(Math.abs(y.result))} (receita primária ${brlShort(y.revenueTotal)}, despesa primária ${brlShort(y.expenseTotal)}, juros ${brlShort(y.interest)})`).join("\n");
+  const parts = last ? `\nEm ${last.year}, receitas: ${last.revenue.map((r) => `${r.name} ${brlShort(r.value)}`).join("; ")}. Despesas: ${last.expenseNature.map((r) => `${r.name} ${brlShort(r.value)}`).join("; ")}.` : "";
+  return (
+    <>
+      <div className="-mt-12 mb-4 flex justify-end">
+        <AskButton focus={{ title: `Resultado primário · ${p.entity}`, text: `Resultado primário (receita primária menos despesa primária, sem juros da dívida) de ${p.entity}, calculado pelo Política com os balanços anuais do Tesouro (Siconfi):\n${lines}${parts}`, suggestions: ["O que é resultado primário?", "O que explica a piora ou a melhora?", "Ter déficit é sempre ruim?"] }} />
+      </div>
+      <PrimaryChart data={p} />
+    </>
   );
 }
 

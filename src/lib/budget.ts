@@ -77,11 +77,11 @@ function slices(rows: Raw[], total: number, take = 12): Slice[] {
   return out.map((o) => (o.children?.length ? o : { ...o, children: undefined }));
 }
 
-type Raw = { code: string; name: string; value: number; parent?: string };
-type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[]; nature?: Raw[] };
+type Raw = { code: string; name: string; value: number; parent?: string; /** receita líquida das deduções (FUNDEB, repasses constitucionais…), quando o anexo traz */ net?: number };
+export type DcaYear = { year: number; empty?: boolean; name: string | null; pop: number | null; expenseTotal: number; expense: Raw[]; revenueTotal: number; revenue: Raw[]; nature?: Raw[] };
 
 /** Interpreta os anexos I-E (despesa por função) e I-C (receita) do DCA, nos formatos antigo (até 2017) e novo. */
-function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
+export function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
   if (!exp.length) return { year, empty: true, name: null, pop: null, expenseTotal: 0, expense: [], revenueTotal: 0, revenue: [] };
   const empenhada = exp.filter((i) => i.coluna === "Despesas Empenhadas");
   const fn: Raw[] = empenhada.filter((i) => /^\d{2} - /.test(i.conta)).map((i) => ({ code: i.conta.slice(0, 2), name: clean(i.conta), value: i.valor }));
@@ -94,6 +94,9 @@ function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
   const expense = [...fn, ...[...subs, ...demais].filter((r) => fnCodes.has(r.parent!))];
 
   const realizada = rev.filter((i) => i.coluna === "Receitas Brutas Realizadas");
+  // deduções da receita (FUNDEB, transferências constitucionais, outras): colunas "Deduções - …" do mesmo anexo
+  const deduction = new Map<string, number>();
+  for (const i of rev) if (/^Dedu/i.test(i.coluna)) deduction.set(i.cod_conta, (deduction.get(i.cod_conta) ?? 0) + (Number(i.valor) || 0));
   const cat = (c: string) => realizada.find((i) => /^RO\d\.0(\.0+)+$/.test(i.cod_conta) && i.cod_conta.startsWith(c))?.valor ?? 0;
   const revenueTotal =
     realizada.find((i) => i.cod_conta === "ReceitasExcetoIntraOrcamentarias")?.valor ??
@@ -101,14 +104,14 @@ function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
     cat("RO1") + cat("RO2");
 
   // árvore da receita: origem (RO1.1) → grupos → tributo (IPTU, ISS...). Níveis fundos têm código instável entre anos: usamos o caminho de nomes.
-  type N = { id: string; segs: number[]; depth: number; name: string; value: number };
+  type N = { id: string; segs: number[]; depth: number; name: string; value: number; net: number };
   const nodes: N[] = realizada
     .filter((i) => /^RO\d(\.\d+)+$/.test(i.cod_conta) && i.valor !== 0)
     .map((i) => {
       const segs = i.cod_conta.slice(2).split(".").map(Number);
       let d = segs.length;
       while (d > 0 && segs[d - 1] === 0) d--;
-      return { id: segs.slice(0, d).join("."), segs, depth: d, name: clean(i.conta), value: i.valor };
+      return { id: segs.slice(0, d).join("."), segs, depth: d, name: clean(i.conta), value: i.valor, net: i.valor - Math.abs(deduction.get(i.cod_conta) ?? 0) };
     })
     .filter((n) => n.depth >= 2);
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -125,7 +128,7 @@ function parseDca(exp: Item[], rev: Item[], year: number): DcaYear {
   const revenue: Raw[] = nodes.map((n) => {
     let parent: N | undefined;
     for (let d = n.depth - 1; d >= 2 && !parent; d--) parent = byId.get(n.segs.slice(0, d).join("."));
-    return { code: key(n), name: n.name, value: n.value, parent: parent ? key(parent) : undefined };
+    return { code: key(n), name: n.name, value: n.value, net: n.net, parent: parent ? key(parent) : undefined };
   });
 
   return { year, name: exp[0].instituicao ?? null, pop: exp[0].populacao ?? null, expenseTotal, expense, revenueTotal, revenue };
@@ -437,8 +440,8 @@ export async function ipcaByYear(): Promise<Record<number, number>> {
   }
 }
 
-async function dcaCached(id: number, year: number, ttlDays: number, force: boolean): Promise<DcaYear> {
-  const key = `budget:dca:v5:${id}:${year}`;
+export async function dcaCached(id: number, year: number, ttlDays: number, force: boolean): Promise<DcaYear> {
+  const key = `budget:dca:v6:${id}:${year}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as DcaYear | undefined;
   const ttl = (d?.empty ? 7 : ttlDays) * DAY;
