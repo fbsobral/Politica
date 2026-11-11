@@ -5,10 +5,11 @@ import { cached, getJson, sgs } from "@/lib/indicators/core";
 export type Band = { center: number; tol: number; label: string; source: string };
 
 /** Meta do Conselho Monetário Nacional para o IPCA. Desde 2025 a meta é contínua (3% ± 1,5 p.p., medida no acumulado em 12 meses). */
-const CMN: Record<number, number> = { 2015: 4.5, 2016: 4.5, 2017: 4.5, 2018: 4.5, 2019: 4.25, 2020: 4, 2021: 3.75, 2022: 3.5, 2023: 3.25, 2024: 3 };
+const CMN: Record<number, number> = { 2004: 5.5, 2005: 4.5, 2006: 4.5, 2007: 4.5, 2008: 4.5, 2009: 4.5, 2010: 4.5, 2011: 4.5, 2012: 4.5, 2013: 4.5, 2014: 4.5, 2015: 4.5, 2016: 4.5, 2017: 4.5, 2018: 4.5, 2019: 4.25, 2020: 4, 2021: 3.75, 2022: 3.5, 2023: 3.25, 2024: 3 };
 export function cmnMeta(year: number): Band {
   const center = CMN[year] ?? 3;
-  const tol = year <= 2016 ? 2 : 1.5;
+  // tolerância: 2,5 p.p. até 2005, 2 p.p. de 2006 a 2016 e 1,5 p.p. desde 2017
+  const tol = year <= 2005 ? 2.5 : year <= 2016 ? 2 : 1.5;
   return { center, tol, label: `Meta do Brasil (${center.toLocaleString("pt-BR")}% ± ${tol.toLocaleString("pt-BR")} p.p.)`, source: "Conselho Monetário Nacional" };
 }
 
@@ -247,7 +248,7 @@ export async function buildInflation(): Promise<InflationData> {
     });
   const [groupsRes, headlinePts, focus, bc, cores] = await Promise.all([
     soft("IBGE", fetchGroups(), null),
-    soft("Banco Central (IPCA)", sgs(433, y - 7, y), [] as { year: number; month: number; value: number }[]),
+    soft("Banco Central (IPCA)", sgs(433, y - 21, y), [] as { year: number; month: number; value: number }[]),
     soft("Focus", fetchFocus(), { date: null, ipca: [], next12: null, pillars: {} } as InflationData["focus"]),
     Promise.all(BC_SERIES.map((d) => sgsPillar(d).catch(() => null))),
     Promise.all(CORE_SERIES.map((d) => sgsPillar(d).catch(() => null))),
@@ -271,7 +272,7 @@ export async function buildInflation(): Promise<InflationData> {
       y12: groupsRes?.headline.y12 ?? lastS?.v ?? null,
       m: groupsRes?.headline.m ?? lastPt?.value ?? null,
       ytd: groupsRes?.headline.ytd ?? (ytdPts.length ? (ytdPts.reduce((a, p) => a * (1 + p.value / 100), 1) - 1) * 100 : null),
-      series: series.slice(-72),
+      series: series.slice(-(20 * 12 + 1)),
     },
     focus,
     groups: groupsRes?.groups ?? [],
@@ -284,5 +285,5 @@ export async function buildInflation(): Promise<InflationData> {
 
 /** Painel da inflação, com cache de 12 horas (o IPCA sai uma vez por mês; o Focus, toda segunda-feira). */
 export async function getInflation(opts: { force?: boolean } = {}): Promise<InflationData | null> {
-  return cached("inflation:v1", 0.5, buildInflation, opts.force);
+  return cached("inflation:v2", 0.5, buildInflation, opts.force);
 }

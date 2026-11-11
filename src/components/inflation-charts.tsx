@@ -52,6 +52,10 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
   const x = (i: number) => m.l + (i / Math.max(1, endIdx)) * (W - m.l - m.r);
   const y = (v: number) => m.t + ((top - v) / (top - bot)) * (H - m.t - m.b);
   const step = top - bot > 10 ? 2 : 1;
+  // largura de um ano no gráfico: com pouco espaço, os rótulos das expectativas ficam só na tabela
+  const yearPx = (12 / Math.max(1, endIdx)) * (W - m.l - m.r);
+  // rótulos de ano: no máximo ~11 no computador e ~5 no celular
+  const yearEvery = Math.max(1, Math.ceil(allYears.length / (W < 560 ? 5 : 11)));
   const ticks: number[] = [];
   for (let t = bot; t <= top; t += step) ticks.push(t);
   const h = hover !== null ? pts[hover] : null;
@@ -64,7 +68,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded-sm bg-ok/15" style={{ boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--ok) 40%, transparent)" }} />Intervalo da meta</span>
           {fut.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-brand bg-surface" />Expectativa do mercado (Focus) para dezembro</span>}
         </div>
-        <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }]} />
+        <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }, { v: "10", l: "10 anos" }, { v: "20", l: "20 anos" }]} />
       </div>
       <div className="card relative p-3 sm:p-5">
         <div ref={box} className="w-full" />
@@ -86,7 +90,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
               <g key={yr}>
                 <rect x={x0} width={x1 - x0} y={y(b.center + b.tol)} height={y(b.center - b.tol) - y(b.center + b.tol)} fill="var(--ok)" fillOpacity="0.1" />
                 <line x1={x0} x2={x1} y1={y(b.center)} y2={y(b.center)} stroke="var(--ok)" strokeOpacity="0.5" strokeDasharray="4 4" />
-                {(W >= 560 || yr % 2 === 0) && <text x={Math.max(x0, m.l) + (x1 - Math.max(x0, m.l)) / 2} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--faint)">{yr}</text>}
+                {(yr - allYears[0]) % yearEvery === 0 && <text x={Math.max(x0, m.l) + (x1 - Math.max(x0, m.l)) / 2} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--faint)">{yr}</text>}
               </g>
             );
           })}
@@ -100,7 +104,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
               <g key={f.year}>
                 {f.min !== null && f.max !== null && <line x1={cx} x2={cx} y1={y(f.max)} y2={y(f.min)} stroke="var(--brand)" strokeOpacity="0.45" strokeWidth="2" />}
                 <circle cx={cx} cy={y(f.median)} r="5" fill="var(--surface)" stroke="var(--brand)" strokeWidth="2.2" />
-                <text x={cx} y={y(f.min ?? f.median) + 15} textAnchor={cx > W - 40 ? "end" : "middle"} fontSize="11" fontWeight="600" fill="var(--muted)">{p2(f.median, 1)}</text>
+                {yearPx >= 36 && <text x={cx} y={y(f.min ?? f.median) + 15} textAnchor={cx > W - 40 ? "end" : "middle"} fontSize="11" fontWeight="600" fill="var(--muted)">{p2(f.median, 1)}</text>}
               </g>
             );
           })}

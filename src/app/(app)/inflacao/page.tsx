@@ -23,7 +23,7 @@ function Detail({ d }: { d: InflationData }) {
   const f0 = d.focus.ipca.find((f) => f.year === year);
   const f1 = d.focus.ipca.find((f) => f.year === year + 1);
   const bands: Record<number, Band> = {};
-  for (let y = year - 7; y <= year + 3; y++) bands[y] = cmnMeta(y);
+  for (let y = year - 21; y <= year + 3; y++) bands[y] = cmnMeta(y);
   // meta contínua (desde 2025): descumprimento = 6 meses seguidos fora do intervalo
   const s = h.series;
   let outside = 0;
