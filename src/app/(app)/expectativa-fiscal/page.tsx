@@ -4,7 +4,7 @@ import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, PERIOD_LABEL, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
-import { getFiscal, LOA_TOLERANCE, loaStatus, type FiscalData, type PlanItem } from "@/lib/fiscal";
+import { getFiscal, getPrimaryPct, type PrimaryPct, LOA_TOLERANCE, loaStatus, type FiscalData, type PlanItem } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -39,15 +39,24 @@ function Verdict({ title, done, projected, loa, updated, kind, seasonal, period 
       <p className="eyebrow">{title}</p>
       <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(done)}</p>
       <p className="min-h-[2.5rem] text-xs text-faint">realizado até {MONTH[period]}{loa > 0 ? ` · ${pct(done / loa, 0)} do previsto na LOA` : ""}</p>
-      <div className="mt-3 min-h-[8rem] rounded-xl bg-ink/[0.04] p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Projeção para o fechamento</p>
-        <p className="mt-0.5 text-lg font-semibold tabular-nums">{brlShort(projected)}</p>
-        <p className={`text-xs font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
-          {st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}{st && st !== "segue" ? ` (${signed(d)})` : ""}
-        </p>
-        <p className="mt-0.5 text-[11px] text-faint">{period < 6 ? (seasonal ? "pela sazonalidade do ano passado" : "proporcional a 12 meses") : "ano fechado"}</p>
-      </div>
-      <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+      {loa > 0 && (() => {
+        const elapsed = period / 6;
+        const ritmo = done / loa / elapsed;
+        const above = ritmo >= 1;
+        const good = kind === "revenue" ? above : null;
+        return (
+          <p className="mt-1 text-xs" title="Ritmo = percentual do previsto já realizado dividido pelo percentual do ano que já passou">
+            <span className="text-muted">Ritmo:</span>{" "}
+            <b className={`tabular-nums ${good === null ? "text-gold" : good ? "text-ok" : "text-danger"}`}>{pct(ritmo, 0)}</b>{" "}
+            <span className="text-muted">{above ? "acima do esperado" : "abaixo do esperado"} para {MONTH[period]} ({pct(elapsed, 0)} do ano)</span>
+          </p>
+        );
+      })()}
+      <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-xs">
+        <dt className="text-muted">Projeção para o fechamento<span className="block text-[11px] text-faint">{period < 6 ? (seasonal ? "pela sazonalidade do ano passado" : "proporcional a 12 meses") : "ano fechado"}</span></dt>
+        <dd className="text-right font-semibold tabular-nums">{brlShort(projected)}</dd>
+        <dt className="text-muted">Frente à LOA</dt>
+        <dd className={`text-right font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>{st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}{st && st !== "segue" ? ` (${signed(d)})` : ""}</dd>
         <dt className="text-muted">Previsto na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loa)}</dd>
         <dt className="text-muted">Previsto atualizado</dt><dd className="text-right tabular-nums">{brlShort(updated)}{loa > 0 && updated !== loa ? <span className="text-faint"> ({signed(updated / loa - 1)})</span> : null}</dd>
       </dl>
@@ -94,7 +103,7 @@ function deviations(f: FiscalData, kind: "revenue" | "expense") {
     .slice(0, 4);
 }
 
-function Detail({ f }: { f: FiscalData }) {
+function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
   const t = f.totals;
   const pace = f.period / 6;
   const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
@@ -122,13 +131,11 @@ function Detail({ f }: { f: FiscalData }) {
           <p className="eyebrow">Saldo do orçamento</p>
           <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
           <p className="min-h-[2.5rem] text-xs text-faint">realizado até {MONTH[f.period]}: receita realizada menos despesa empenhada</p>
-          <div className="mt-3 min-h-[8rem] rounded-xl bg-ink/[0.04] p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Projeção para o fechamento</p>
-            <p className="mt-0.5 text-lg font-semibold tabular-nums">{brlShort(projBalance)}</p>
-            <p className={`text-xs font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</p>
-            <p className="mt-0.5 text-[11px] text-faint">receita projetada menos despesa projetada</p>
-          </div>
-          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-xs">
+            <dt className="text-muted">Projeção para o fechamento<span className="block text-[11px] text-faint">receita menos despesa projetadas</span></dt>
+            <dd className="text-right font-semibold tabular-nums">{brlShort(projBalance)}</dd>
+            <dt className="text-muted">Situação projetada</dt>
+            <dd className={`text-right font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</dd>
             <dt className="text-muted">Saldo na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loaBalance)}</dd>
             <dt className="text-muted">Saldo previsto atualizado</dt><dd className="text-right tabular-nums">{brlShort(t.revenue.updated - t.expense.updated)}</dd>
           </dl>
@@ -140,19 +147,18 @@ function Detail({ f }: { f: FiscalData }) {
             <>
               <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
               <p className="min-h-[2.5rem] text-xs text-faint">realizado até {MONTH[f.period]} de {f.year}: receitas primárias menos despesas primárias (sem juros)</p>
-              <div className="mt-3 min-h-[8rem] rounded-xl bg-ink/[0.04] p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Frente à meta da LDO</p>
-                <p className="mt-0.5 text-lg font-semibold tabular-nums">{prim.meta != null ? brlShort(prim.meta) : "meta não declarada"}</p>
-                <p className={`text-xs font-bold ${prim.meta != null ? (prim.realized >= prim.meta ? "text-ok" : "text-danger") : prim.realized >= 0 ? "text-ok" : "text-danger"}`}>
+              <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-xs">
+                <dt className="text-muted">Meta da LDO<span className="block text-[11px] text-faint">vale para o ano inteiro</span></dt>
+                <dd className="text-right font-semibold tabular-nums">{prim.meta != null ? brlShort(prim.meta) : "não declarada"}</dd>
+                <dt className="text-muted">Situação</dt>
+                <dd className={`text-right font-bold ${prim.meta != null ? (prim.realized >= prim.meta ? "text-ok" : "text-danger") : prim.realized >= 0 ? "text-ok" : "text-danger"}`}>
                   {prim.meta != null ? (prim.realized >= prim.meta ? "▲ Acima da meta" : "▼ Abaixo da meta") : prim.realized >= 0 ? "▲ Superávit primário" : "▼ Déficit primário"}
-                </p>
-                <p className="mt-0.5 text-[11px] text-faint">a meta vale para o ano inteiro</p>
-              </div>
-              <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
-                <dt className="text-muted">Resultado no período</dt><dd className="text-right font-semibold tabular-nums">{prim.realized >= 0 ? "superávit" : "déficit"}</dd>
+                </dd>
+                <dt className="text-muted">Em % do PIB (12 meses){pibPct ? <span className="block text-[11px] text-faint">até {pibPct.month}</span> : null}</dt>
+                <dd className="text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit de " : pibPct.pct < 0 ? "superávit de " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "indisponível"}</dd>
                 <dt className="text-muted">Diferença para a meta</dt><dd className="text-right tabular-nums">{prim.meta != null ? brlShort(prim.realized - prim.meta) : "—"}</dd>
               </dl>
-              <p className="mt-auto pt-3 text-xs leading-relaxed text-muted">Superávit é o que sobra antes de pagar os juros da dívida; déficit é o que falta. Fonte: RREO, Anexo 06 (Tesouro Nacional/Siconfi).</p>
+              <p className="mt-auto pt-3 text-xs leading-relaxed text-muted">Superávit é o que sobra antes de pagar os juros da dívida; déficit é o que falta. Valor: RREO, Anexo 06 (Tesouro Nacional/Siconfi). {pibPct ? `% do PIB: Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses${f.scope === "FEDERAL" ? "" : "; o BC não publica o percentual por estado ou município"}.` : ""}</p>
             </>
           ) : (
             <p className="mt-2 text-sm text-muted">O resultado primário ainda não foi publicado no RREO deste período para {f.scope === "FEDERAL" ? "a União" : f.scope === "ESTADUAL" ? "o estado" : "o município"}.</p>
@@ -228,10 +234,10 @@ function Skeleton() {
 
 async function Content({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
-  const f = await getFiscal(scope, user);
+  const [f, pibPct] = await Promise.all([getFiscal(scope, user), getPrimaryPct(scope)]);
   return (
     <>
-      {f ? <Detail f={f} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
+      {f ? <Detail f={f} pibPct={pibPct} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
       <div className="mt-8 max-w-3xl">
         <Notice kind="info">
           Fonte: Relatório Resumido da Execução Orçamentária (RREO), que prefeituras, estados e a União enviam a cada dois meses ao Tesouro Nacional (Siconfi): Anexo 1 (receitas e despesas), Anexo 2 (despesa por função) e Anexo 6 (metas fiscais da LDO).

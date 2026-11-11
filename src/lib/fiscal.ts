@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
+import { sgs } from "@/lib/indicators/core";
 import { siconfi, UF_CODE, type BudgetScope, type Item } from "@/lib/budget";
 
 const DAY = 24 * 3600 * 1000;
@@ -274,4 +275,30 @@ export function loaStatus(projected: number, loa: number): "segue" | "acima" | "
   if (!(loa > 0)) return null;
   const d = projected / loa - 1;
   return Math.abs(d) <= LOA_TOLERANCE ? "segue" : d > 0 ? "acima" : "abaixo";
+}
+
+/**
+ * Resultado primário em % do PIB, acumulado em 12 meses, como o Banco Central publica (convenção do BC: positivo = déficit).
+ * União: SGS 5783 (Governo Federal e Banco Central). Estados e municípios: o BC só publica o conjunto de todos eles (SGS 5786).
+ */
+export type PrimaryPct = { pct: number; month: string; code: number; perimeter: string };
+
+export async function getPrimaryPct(scope: BudgetScope): Promise<PrimaryPct | null> {
+  const code = scope === "FEDERAL" ? 5783 : 5786;
+  const perimeter = scope === "FEDERAL" ? "Governo Federal e Banco Central" : "todos os estados e municípios juntos";
+  const key = `fiscal:pibpct:v1:${code}`;
+  const hit = await db.budgetCache.findUnique({ where: { key } });
+  if (hit && Date.now() - hit.fetchedAt.getTime() < DAY) return { ...(hit.data as unknown as { pct: number; month: string }), code, perimeter };
+  try {
+    const y = new Date().getFullYear();
+    const rows = await sgs(code, y - 1, y);
+    const last = rows.sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month)).pop();
+    if (!last) return hit ? { ...(hit.data as unknown as { pct: number; month: string }), code, perimeter } : null;
+    const data = { pct: last.value, month: `${String(last.month).padStart(2, "0")}/${last.year}` };
+    await db.budgetCache.upsert({ where: { key }, create: { key, data: data as never }, update: { data: data as never, fetchedAt: new Date() } });
+    return { ...data, code, perimeter };
+  } catch (err) {
+    console.warn("[fiscal:pibpct]", (err as Error).message);
+    return hit ? { ...(hit.data as unknown as { pct: number; month: string }), code, perimeter } : null;
+  }
 }
