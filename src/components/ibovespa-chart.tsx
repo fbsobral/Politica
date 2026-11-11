@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IbovData, Move } from "@/lib/ibovespa";
 import { Segmented } from "@/components/controls";
+import { presidentAt, presidentSpans } from "@/lib/presidents";
 
 type Range = "1m" | "6m" | "1a" | "2a" | "5a";
 const RANGES: { id: Range; label: string; days: number }[] = [
@@ -108,7 +109,8 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
 
   /* ── gráfico ── */
   const H = W < 560 ? 240 : 300;
-  const m = { l: W < 560 ? 44 : 58, r: 12, t: 14, b: 26 };
+  const m = { l: W < 560 ? 44 : 58, r: 12, t: 34, b: 26 };
+  const presSpans = presidentSpans(view.map((p) => p.d));
   const lo = Math.min(...view.map((p) => p.close)), hi = Math.max(...view.map((p) => p.close));
   const pad = (hi - lo) * 0.08 || 1000;
   const yMin = lo - pad, yMax = hi + pad;
@@ -119,7 +121,7 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
   const ticks = (() => {
     const raw = (yMax - yMin) / 4;
     const p10 = Math.pow(10, Math.floor(Math.log10(raw)));
-    const step = [1, 2, 2.5, 5, 10].map((k) => k * p10).find((v) => v >= raw) ?? raw;
+    const step = [1, 2, 2.5, 5, 10].map((k) => k * p10).find((v) => v >= raw * 0.7) ?? raw;
     const out: number[] = [];
     for (let t = Math.ceil(yMin / step) * step; t <= yMax; t += step) out.push(t);
     return out;
@@ -166,6 +168,18 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
               </g>
             ))}
             {xTicks.map((i) => <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === view.length - 1 ? "end" : "middle"} fontSize="10.5" fill="var(--faint)">{fmtD(view[i].d)}</text>)}
+            {/* quem era o presidente: faixa no topo e fundo suave */}
+            {presSpans.map(({ term, i0, i1 }, k) => {
+              const xa = Math.max(m.l, x(i0 - 0.5)), xb = Math.min(W - m.r, x(i1 + 0.5));
+              if (xb - xa < 1) return null;
+              return (
+                <g key={`${term.id}-${i0}`}>
+                  <rect x={xa} width={xb - xa} y={m.t} height={H - m.t - m.b} fill={term.color} fillOpacity="0.05" />
+                  <rect x={xa + (k ? 1 : 0)} width={Math.max(0, xb - xa - (k ? 1 : 0))} y={m.t - 9} height="4" rx="2" fill={term.color} fillOpacity="0.8" />
+                  {xb - xa > term.name.length * 6.2 + 6 && <text x={(xa + xb) / 2} y={m.t - 14} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={term.color}>{term.name}</text>}
+                </g>
+              );
+            })}
             {selic.map((s) => {
               const i = view.findIndex((p) => p.d >= s.d);
               if (i < 0) return null;
@@ -197,6 +211,7 @@ export function IbovespaPanel({ data, themes }: { data: IbovData; themes: Record
           {h && (
             <div className="pointer-events-none absolute left-4 top-3 rounded-xl border border-line bg-surface/95 p-2.5 text-xs shadow-pop backdrop-blur sm:left-20">
               <p className="font-bold">{fmtD(h.d, true)}</p>
+              {presidentAt(h.d) && <p className="text-muted">Presidente: {presidentAt(h.d)!.name}</p>}
               <p>{pts(h.close)} pontos {hRet !== null && <>· <Dir v={hRet} /></>}</p>
               {data.moves.some((mv) => mv.d === h.d) && <p className="text-faint">Toque no marcador para ver o motivo</p>}
             </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Band, FocusYear, Pillar } from "@/lib/inflation";
 import { ControlBar, Segmented } from "@/components/controls";
+import { presidentAt, presidentSpans } from "@/lib/presidents";
 
 const MES = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const p2 = (v: number, d = 2) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%`;
@@ -48,7 +49,12 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
   const bot = Math.min(0, Math.floor(Math.min(...vals)));
 
   const H = W < 560 ? 260 : 320;
-  const m = { l: 44, r: 16, t: 14, b: 30 };
+  const m = { l: 44, r: 16, t: 34, b: 30 };
+  // meses do eixo (inclui os futuros das expectativas), para as faixas de presidente
+  const presSpans = presidentSpans(Array.from({ length: endIdx + 1 }, (_, i) => {
+    const t = pts[0].year * 12 + pts[0].month - 1 + i;
+    return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
+  }));
   const x = (i: number) => m.l + (i / Math.max(1, endIdx)) * (W - m.l - m.r);
   const y = (v: number) => m.t + ((top - v) / (top - bot)) * (H - m.t - m.b);
   const step = top - bot > 10 ? 2 : 1;
@@ -79,6 +85,18 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
               <text x={m.l - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--faint)">{t}%</text>
             </g>
           ))}
+          {/* quem era o presidente: faixa no topo e fundo suave */}
+          {presSpans.map(({ term, i0, i1 }, k) => {
+            const xa = Math.max(m.l, x(i0 - 0.5)), xb = Math.min(W - m.r, x(i1 + 0.5));
+            if (xb - xa < 1) return null;
+            return (
+              <g key={`${term.id}-${i0}`}>
+                <rect x={xa} width={xb - xa} y={m.t} height={H - m.t - m.b} fill={term.color} fillOpacity="0.05" />
+                <rect x={xa + (k ? 1 : 0)} width={Math.max(0, xb - xa - (k ? 1 : 0))} y={m.t - 9} height="4" rx="2" fill={term.color} fillOpacity="0.8" />
+                {xb - xa > term.name.length * 6.2 + 6 && <text x={(xa + xb) / 2} y={m.t - 14} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={term.color}>{term.name}</text>}
+              </g>
+            );
+          })}
           {/* banda da meta, ano a ano */}
           {allYears.map((yr) => {
             const b = bands[yr];
@@ -117,6 +135,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
         {h && (
           <div className="pointer-events-none absolute left-16 top-4 rounded-xl border border-line bg-surface/95 p-3 text-xs shadow-pop backdrop-blur">
             <p className="font-bold">{MES[h.month]}/{h.year}</p>
+            {presidentAt(`${h.year}-${String(h.month).padStart(2, "0")}`) && <p className="text-muted">Presidente: {presidentAt(`${h.year}-${String(h.month).padStart(2, "0")}`)!.name}</p>}
             <p className="mt-1">IPCA em 12 meses: <b>{p2(h.v)}</b></p>
             {bands[h.year] && <p className="text-muted">Meta: {p2(bands[h.year].center - bands[h.year].tol, 1)} a {p2(bands[h.year].center + bands[h.year].tol, 1)}</p>}
             {bands[h.year] && <p className="mt-0.5"><StatusChip v={h.v} band={bands[h.year]} /></p>}
