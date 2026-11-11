@@ -3,6 +3,7 @@ import { AskButton } from "@/components/agent/ask-button";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, PERIOD_LABEL, type BudgetScope } from "@/lib/budget";
+import { brDateTime } from "@/lib/stamp";
 import { getFiscal, LOA_TOLERANCE, loaStatus, type FiscalData, type PlanItem } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -16,7 +17,7 @@ const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro
 const signed = (d: number) => `${d >= 0 ? "+" : "−"}${pct(Math.abs(d), 1)}`;
 
 /** Cartão de veredito: projeção do fechamento frente ao previsto na LOA. */
-function Verdict({ title, projected, loa, updated, kind, seasonal, period }: { title: string; projected: number; loa: number; updated: number; kind: "revenue" | "expense"; seasonal: boolean; period: number }) {
+function Verdict({ title, done, projected, loa, updated, kind, seasonal, period }: { title: string; done: number; projected: number; loa: number; updated: number; kind: "revenue" | "expense"; seasonal: boolean; period: number }) {
   const st = loaStatus(projected, loa);
   const d = loa > 0 ? projected / loa - 1 : 0;
   const bad = st !== null && st !== "segue" && (kind === "revenue" ? st === "abaixo" : st === "acima");
@@ -36,12 +37,18 @@ function Verdict({ title, projected, loa, updated, kind, seasonal, period }: { t
   return (
     <section className="card p-5">
       <p className="eyebrow">{title}</p>
-      <p className={`mt-1 text-sm font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
-        {st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}
-        {st && st !== "segue" ? ` (${signed(d)})` : ""}
-      </p>
-      <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(projected)}</p>
-      <p className="text-xs text-faint">projeção para o fechamento{period < 6 ? (seasonal ? ", pela sazonalidade do ano passado" : ", proporcional a 12 meses") : " (ano fechado)"}</p>
+      <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(done)}</p>
+      <p className="text-xs text-faint">realizado até {MONTH[period]}{loa > 0 ? ` · ${pct(done / loa, 0)} do previsto na LOA` : ""}</p>
+      <div className="mt-3 rounded-xl bg-ink/[0.04] p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Projeção para o fechamento</p>
+        <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+          <span className="text-lg font-semibold tabular-nums">{brlShort(projected)}</span>
+          <span className={`text-xs font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
+            {st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}{st && st !== "segue" ? ` (${signed(d)})` : ""}
+          </span>
+        </p>
+        <p className="text-[11px] text-faint">{period < 6 ? (seasonal ? "pela sazonalidade do ano passado" : "proporcional a 12 meses") : "ano fechado"}</p>
+      </div>
       <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
         <dt className="text-muted">Previsto na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loa)}</dd>
         <dt className="text-muted">Previsto atualizado</dt><dd className="text-right tabular-nums">{brlShort(updated)}{loa > 0 && updated !== loa ? <span className="text-faint"> ({signed(updated / loa - 1)})</span> : null}</dd>
@@ -96,34 +103,58 @@ function Detail({ f }: { f: FiscalData }) {
   const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
   const loaBalance = t.revenue.initial - t.expense.initial;
   const projBalance = pr.value - pe.value;
+  const doneBalance = t.revenue.done - t.expense.done;
   const revDev = deviations(f, "revenue");
   const expDev = deviations(f, "expense");
   const prim = f.primary;
   return (
     <div className="space-y-8">
+      <p className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm" role="status">
+        <b>Último dado de {f.year}:</b> até {MONTH[f.period]} (RREO do {f.period}º bimestre{f.period === 6 ? ", ano fechado" : ""}).{" "}
+        <span className="text-muted">Dados coletados do Tesouro Nacional em <b className="text-ink">{brDateTime(f.fetchedAt)}</b> e renovados a cada 24 horas.</span>
+      </p>
       <p className="max-w-3xl text-sm text-muted">
         A lei orçamentária (LOA) fixa quanto se espera arrecadar e quanto se pode gastar no ano. Aqui comparamos o que já foi realizado até {MONTH[f.period]} de {f.year} com essas metas e projetamos onde o ano deve fechar.
       </p>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Verdict title="Receita" projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
-        <Verdict title="Despesa (empenhada)" projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Verdict title="Receita" done={t.revenue.done} projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
+        <Verdict title="Despesa (empenhada)" done={t.expense.done} projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
         <section className="card p-5">
           <p className="eyebrow">Saldo do orçamento</p>
-          <p className={`mt-1 text-sm font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</p>
-          <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(projBalance)}</p>
-          <p className="text-xs text-faint">receita projetada menos despesa projetada</p>
+          <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
+          <p className="text-xs text-faint">realizado até {MONTH[f.period]}: receita realizada menos despesa empenhada</p>
+          <div className="mt-3 rounded-xl bg-ink/[0.04] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Projeção para o fechamento</p>
+            <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+              <span className="text-lg font-semibold tabular-nums">{brlShort(projBalance)}</span>
+              <span className={`text-xs font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</span>
+            </p>
+            <p className="text-[11px] text-faint">receita projetada menos despesa projetada</p>
+          </div>
           <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
             <dt className="text-muted">Saldo na LOA</dt><dd className="text-right font-semibold tabular-nums">{brlShort(loaBalance)}</dd>
-            {prim?.meta != null && (<><dt className="text-muted">Meta de resultado primário (LDO)</dt><dd className="text-right font-semibold tabular-nums">{brlShort(prim.meta)}</dd></>)}
-            {prim?.realized != null && (<><dt className="text-muted">Resultado primário até {MONTH[f.period]}</dt><dd className="text-right tabular-nums">{brlShort(prim.realized)}</dd></>)}
           </dl>
-          {prim?.meta != null && prim.realized != null && (
-            <p className="mt-3 text-xs leading-relaxed text-muted">
-              {prim.realized >= prim.meta ? "Até agora o resultado primário está acima da meta da LDO." : "Até agora o resultado primário está abaixo da meta da LDO."} A meta vale para o ano inteiro; o resultado costuma oscilar entre os bimestres.
-            </p>
-          )}
           {f.scope === "FEDERAL" && <p className="mt-3 text-xs leading-relaxed text-faint">Na União a receita inclui a emissão de títulos para rolar a dívida, por isso o saldo do orçamento é diferente do resultado primário.</p>}
+        </section>
+        <section className="card p-5" aria-label="Resultado primário">
+          <p className="eyebrow">Resultado primário</p>
+          {prim?.realized != null ? (
+            <>
+              <p className={`mt-1 text-sm font-bold ${prim.meta != null ? (prim.realized >= prim.meta ? "text-ok" : "text-danger") : prim.realized >= 0 ? "text-ok" : "text-danger"}`}>
+                {prim.meta != null ? (prim.realized >= prim.meta ? "▲ Acima da meta da LDO" : "▼ Abaixo da meta da LDO") : prim.realized >= 0 ? "▲ Superávit primário" : "▼ Déficit primário"}
+              </p>
+              <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
+              <p className="text-xs text-faint">realizado até {MONTH[f.period]} de {f.year}: receitas primárias menos despesas primárias (sem juros)</p>
+              <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+                <dt className="text-muted">Meta da LDO para o ano</dt><dd className="text-right font-semibold tabular-nums">{prim.meta != null ? brlShort(prim.meta) : "não declarada"}</dd>
+                {prim.meta != null && (<><dt className="text-muted">Diferença para a meta</dt><dd className="text-right tabular-nums">{brlShort(prim.realized - prim.meta)}</dd></>)}
+              </dl>
+              <p className="mt-3 text-xs leading-relaxed text-muted">Positivo (superávit) é dinheiro que sobra antes de pagar juros da dívida; negativo (déficit) é o que falta. A meta vale para o ano inteiro, então comparar com o parcial é só uma referência. Fonte: RREO, Anexo 06 (Tesouro Nacional/Siconfi).</p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-muted">O resultado primário ainda não foi publicado no RREO deste período para {f.scope === "FEDERAL" ? "a União" : f.scope === "ESTADUAL" ? "o estado" : "o município"}.</p>
+          )}
         </section>
       </div>
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
+import { brDateTime } from "@/lib/stamp";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
 import { EmptyState, Notice, PageHeader, ScopeTabs, StatTile } from "@/components/ui";
@@ -89,6 +90,10 @@ function Detail({ b }: { b: BudgetData }) {
         <StatTile label="Gasto por habitante" value={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} hint={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"} />
         <StatTile label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]}) · detalhes em Expectativa fiscal` : "sem dados do ano corrente"} />
       </section>
+      <p className="-mt-4 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm" role="status">
+        <b>Último dado:</b> ano fechado de {a?.year ?? "—"}{c ? <>; {c.year} até {PERIOD_LABEL[c.period]}</> : ""}.{" "}
+        <span className="text-muted">Coletado do Tesouro Nacional em <b className="text-ink">{brDateTime(b.fetchedAt)}</b>.</span>
+      </p>
 
       <section aria-label="Evolução em 10 anos">
         <p className="eyebrow">Série histórica</p>
