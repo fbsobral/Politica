@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useState } from "react";
 import type { PlanItem, Projection } from "@/lib/fiscal";
 import { ControlBar, Segmented } from "@/components/controls";
 
@@ -8,11 +8,8 @@ type Scope = "MUNICIPAL" | "ESTADUAL" | "FEDERAL";
 type View = "expense" | "revenue" | "nature";
 type Stage = "done" | "liquidated" | "paid";
 type Base = "updated" | "initial";
-type Show = "brl" | "pct";
 type Sort = "size" | "high" | "low" | "dev";
 
-const FILL: Record<Scope, string> = { MUNICIPAL: "var(--municipal)", ESTADUAL: "var(--estadual)", FEDERAL: "var(--federal)" };
-const SOFT: Record<Scope, string> = { MUNICIPAL: "var(--municipal-soft)", ESTADUAL: "var(--estadual-soft)", FEDERAL: "var(--federal-soft)" };
 const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro"];
 
 const brl = (v: number) => {
@@ -38,21 +35,15 @@ export type PlanChartProps = {
 const TOL = 0.05;
 const SORT_LABEL: Record<Sort, string> = { size: "Maior previsto", high: "Mais executado", low: "Menos executado", dev: "Maior desvio da LOA" };
 
-/** Previsto x realizado do ano corrente por categoria, com detalhamento por subcategoria. */
-export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanChartProps) {
-  const views = (["expense", "revenue", "nature"] as View[]).filter((v) => plan[v]?.length);
-  const [view, setView] = useState<View>(views[0] ?? "expense");
-  const [stage, setStage] = useState<Stage>("done");
-  const [base, setBase] = useState<Base>(projection ? "initial" : "updated");
-  const [show, setShow] = useState<Show>("brl");
-  const [sort, setSort] = useState<Sort>(projection ? "dev" : "size");
-  const [openCode, setOpenCode] = useState<string | null>(null);
-  const [hover, setHover] = useState<string | null>(null);
+type Shared = { base: Base; sort: Sort; stage: Stage };
 
+const signedPc = (d: number) => `${d >= 0 ? "+" : "−"}${pc(Math.abs(d))}`;
+
+/** Uma coluna: tabela de categorias de receita ou de despesa, com subcategorias que abrem na própria tabela. */
+function Panel({ period, plan, projection, view, base, sort, stage }: PlanChartProps & Shared & { view: View }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const isExp = view !== "revenue";
   const all = plan[view] ?? [];
-  const parent = openCode ? all.find((i) => i.code === openCode) ?? null : null;
-  const items = parent?.children ?? all;
   const hasLiq = isExp && all.some((i) => i.liquidated !== undefined);
   const hasPaid = isExp && all.some((i) => i.paid !== undefined);
   const st: Stage = !isExp ? "done" : stage === "liquidated" && !hasLiq ? "done" : stage === "paid" && !hasPaid ? "done" : stage;
@@ -67,57 +58,127 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
     const p = projOf(i);
     return p && i.initial > 0 ? p.value / i.initial - 1 : null;
   };
-
-  const rows = useMemo(() => {
-    const list = items.filter((i) => baseOf(i) > 0 || doneOf(i) > 0);
+  const order = (list: PlanItem[]) => {
+    const l = list.filter((i) => baseOf(i) > 0 || doneOf(i) > 0);
     const r = (i: PlanItem) => rate(i) ?? -1;
-    if (sort === "high") return [...list].sort((a, b) => r(b) - r(a));
-    if (sort === "low") return [...list].sort((a, b) => r(a) - r(b));
-    if (sort === "dev") return [...list].sort((a, b) => Math.abs(devOf(b) ?? 0) - Math.abs(devOf(a) ?? 0) || baseOf(b) - baseOf(a));
-    return [...list].sort((a, b) => baseOf(b) - baseOf(a) || doneOf(b) - doneOf(a));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, sort, base, st]);
-
-  const max = Math.max(1, ...rows.map((i) => Math.max(baseOf(i), doneOf(i), projOf(i)?.value ?? 0)));
-  const maxPct = Math.max(1, ...rows.map((i) => Math.max(rate(i) ?? 0, baseOf(i) > 0 && projOf(i) ? projOf(i)!.value / baseOf(i) : 0)));
+    if (sort === "high") return [...l].sort((a, b) => r(b) - r(a));
+    if (sort === "low") return [...l].sort((a, b) => r(a) - r(b));
+    if (sort === "dev") return [...l].sort((a, b) => Math.abs(devOf(b) ?? 0) - Math.abs(devOf(a) ?? 0) || baseOf(b) - baseOf(a));
+    return [...l].sort((a, b) => baseOf(b) - baseOf(a) || doneOf(b) - doneOf(a));
+  };
+  const rows = order(all);
   const tot = rows.reduce((a, i) => ({ b: a.b + baseOf(i), d: a.d + doneOf(i) }), { b: 0, d: 0 });
+  const catLabel = view === "expense" ? "Função" : view === "revenue" ? "Origem" : "Tipo de gasto";
+  const toggle = (code: string) => setOpen((o) => { const n = new Set(o); if (n.has(code)) n.delete(code); else n.add(code); return n; });
 
-  const doneLabel = !isExp ? "Arrecadado" : st === "liquidated" ? "Liquidado" : st === "paid" ? "Pago" : "Empenhado";
-  const baseLabel = !isExp ? (base === "initial" ? "Previsão inicial" : "Previsão atualizada") : base === "initial" ? "Dotação inicial" : "Dotação atualizada";
-  const catLabel = view === "expense" ? (parent ? "subfunção" : "função") : view === "revenue" ? (parent ? "desdobramento" : "origem") : "tipo de gasto";
+  if (!all.length) return <p className="text-sm text-muted">O relatório bimestral não trouxe o detalhamento por categoria.</p>;
 
-  const pick = (v: View) => {
-    setView(v);
-    setOpenCode(null);
+  const line = (i: PlanItem, child: boolean) => {
+    const b = baseOf(i), d = doneOf(i), r = rate(i);
+    const kids = !child && i.children?.length ? order(i.children) : [];
+    const p = projOf(i), dev = devOf(i);
+    const status = dev === null ? null : Math.abs(dev) <= TOL ? "segue" : dev > 0 ? "acima" : "abaixo";
+    // receita abaixo da LOA e despesa acima dela são os desvios que pedem atenção
+    const bad = status !== null && status !== "segue" && (isExp ? status === "acima" : status === "abaixo");
+    const ritmo = r === null ? null : r / pace;
+    const isOpen = open.has(i.code);
+    return (
+      <Fragment key={`${child ? "c" : "p"}:${i.code}`}>
+        <tr className={`border-t border-line ${child ? "bg-ink/[0.02]" : ""}`}>
+          <td className={`px-2.5 py-2 ${child ? "pl-7 text-muted" : "font-medium"}`}>
+            {kids.length > 0 ? (
+              <button type="button" aria-expanded={isOpen} onClick={() => toggle(i.code)} className="flex items-center gap-1.5 text-left hover:underline">
+                <span className={`inline-block text-brand transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                {i.name}
+                <span className="text-[11px] font-semibold text-brand">{kids.length} sub</span>
+              </button>
+            ) : (
+              i.name
+            )}
+          </td>
+          <td className="px-2.5 py-2 text-right tabular-nums">{brl(b)}</td>
+          <td className="px-2.5 py-2 text-right font-semibold tabular-nums">{brl(d)}</td>
+          <td className="px-2.5 py-2 text-right tabular-nums">{r === null ? "—" : pc(r)}</td>
+          <td className={`px-2.5 py-2 text-right tabular-nums ${ritmo === null ? "" : ritmo >= 1 ? (isExp ? "text-gold" : "text-ok") : isExp ? "" : "text-danger"}`} title="Percentual do previsto já realizado dividido pelo percentual do ano que já passou: acima de 100% = acima do esperado">{ritmo === null ? "—" : pc(ritmo)}</td>
+          <td className="px-2.5 py-2 text-right tabular-nums">{p ? brl(p.value) : "—"}</td>
+          <td className={`px-2.5 py-2 text-right text-xs font-semibold tabular-nums ${status === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
+            {status === null ? "—" : status === "segue" ? "✓ segue" : `${status === "acima" ? "▲" : "▼"} ${signedPc(dev!)}`}
+          </td>
+        </tr>
+        {isOpen && kids.map((k) => line(k, true))}
+      </Fragment>
+    );
   };
 
-  if (!views.length) return <p className="text-sm text-muted">O relatório bimestral deste ente não trouxe o detalhamento por categoria.</p>;
+  return (
+    <div className="min-w-0 overflow-x-auto rounded-2xl border border-line bg-surface">
+      <table className="w-full min-w-[620px] border-collapse text-sm">
+        <thead>
+          <tr className="text-xs text-muted">
+            <th className="px-2.5 py-2 text-left font-medium">{catLabel}</th>
+            <th className="px-2.5 py-2 text-right font-medium">{isExp ? "Dotação" : "Previsão"}</th>
+            <th className="px-2.5 py-2 text-right font-medium">{isExp ? (st === "liquidated" ? "Liquidado" : st === "paid" ? "Pago" : "Empenhado") : "Arrecadado"}</th>
+            <th className="px-2.5 py-2 text-right font-medium">% exec.</th>
+            <th className="px-2.5 py-2 text-right font-medium" title="Realizado ÷ esperado para o mês">Ritmo</th>
+            <th className="px-2.5 py-2 text-right font-medium">Projeção</th>
+            <th className="px-2.5 py-2 text-right font-medium">vs LOA</th>
+          </tr>
+        </thead>
+        <tbody>{rows.map((i) => line(i, false))}</tbody>
+        <tfoot>
+          <tr className="border-t-2 border-line font-semibold">
+            <td className="px-2.5 py-2">Total das categorias</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.b)}</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.d)}</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? pc(tot.d / tot.b) : "—"}</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? pc(tot.d / tot.b / pace) : "—"}</td>
+            <td className="px-2.5 py-2" />
+            <td className="px-2.5 py-2" />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+/** Previsto x realizado do ano corrente: receitas à esquerda e despesas à direita, cada uma com detalhamento por subcategoria. */
+export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanChartProps) {
+  const hasRevenue = plan.revenue?.length > 0;
+  const expViews = (["expense", "nature"] as View[]).filter((v) => plan[v]?.length);
+  const [expView, setExpView] = useState<View>(expViews[0] ?? "expense");
+  const [stage, setStage] = useState<Stage>("done");
+  const [base, setBase] = useState<Base>(projection ? "initial" : "updated");
+  const [sort, setSort] = useState<Sort>(projection ? "dev" : "size");
+
+  const exp = plan[expView] ?? [];
+  const hasLiq = exp.some((i) => i.liquidated !== undefined);
+  const hasPaid = exp.some((i) => i.paid !== undefined);
+  const st: Stage = stage === "liquidated" && !hasLiq ? "done" : stage === "paid" && !hasPaid ? "done" : stage;
+  const pace = period / 6;
+  const shared: Shared = { base, sort, stage: st };
+  const props = { scope, year, period, plan, projection };
+
+  if (!hasRevenue && !expViews.length) return <p className="text-sm text-muted">O relatório bimestral deste ente não trouxe o detalhamento por categoria.</p>;
 
   return (
     <div>
       {/* principal sempre à vista; o resto em "Ajustes" no celular */}
       <ControlBar
-        summary={[isExp ? doneLabel : null, base === "initial" ? "Previsto na LOA" : "Previsto atualizado", show === "pct" ? "% executado" : "R$", SORT_LABEL[sort]].filter(Boolean).join(" · ")}
+        summary={[st === "done" ? "Empenhado" : st === "liquidated" ? "Liquidado" : "Pago", base === "initial" ? "Previsto na LOA" : "Previsto atualizado", SORT_LABEL[sort]].join(" · ")}
         primary={
-          <Segmented label="O que mostrar" value={view} onChange={pick} options={[
-            ...(views.includes("expense") ? [{ v: "expense" as View, l: "Para onde vai" }] : []),
-            ...(views.includes("revenue") ? [{ v: "revenue" as View, l: "De onde vem" }] : []),
-            ...(views.includes("nature") ? [{ v: "nature" as View, l: "Em que se gasta" }] : []),
+          <Segmented label="Previsto" value={base} onChange={setBase} options={[
+            { v: "updated", l: "Previsto atualizado", title: "Inclui os créditos e ajustes feitos durante o ano" },
+            { v: "initial", l: "Previsto na LOA", title: "Como aprovado na lei orçamentária (LOA)" },
           ]} />
         }
       >
-        {isExp && (hasLiq || hasPaid) && (
+        {(hasLiq || hasPaid) && (
           <Segmented label="Estágio da despesa" value={st} onChange={setStage} options={[
             { v: "done", l: "Empenhado", title: "Valor reservado para o gasto (contratado)" },
             ...(hasLiq ? [{ v: "liquidated" as Stage, l: "Liquidado", title: "Serviço ou bem já entregue e conferido" }] : []),
             ...(hasPaid ? [{ v: "paid" as Stage, l: "Pago", title: "Dinheiro que já saiu do caixa" }] : []),
           ]} />
         )}
-        <Segmented label="Previsto" value={base} onChange={setBase} options={[
-          { v: "updated", l: "Previsto atualizado", title: "Inclui os créditos e ajustes feitos durante o ano" },
-          { v: "initial", l: "Previsto na LOA", title: "Como aprovado na lei orçamentária (LOA)" },
-        ]} />
-        <Segmented label="Unidade" value={show} onChange={setShow} options={[{ v: "brl", l: "R$" }, { v: "pct", l: "% executado" }]} />
         <label className="flex items-center gap-2 text-sm text-muted">
           Ordenar
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="input !w-52 !py-1.5">
@@ -129,143 +190,35 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
         </label>
       </ControlBar>
 
-      {/* trilha de navegação */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        {parent ? (
-          <>
-            <button type="button" onClick={() => setOpenCode(null)} className="font-semibold text-brand underline-offset-4 hover:underline">← Todas as categorias</button>
-            <span className="text-faint">›</span>
-            <b>{parent.name}</b>
-            <span className="text-xs text-muted">· {brl(doneOf(parent))} de {brl(baseOf(parent))}{baseOf(parent) > 0 ? ` (${pc(doneOf(parent) / baseOf(parent))})` : ""}</span>
-          </>
-        ) : (
-          <span className="text-xs text-muted">Toque numa categoria com ▸ para ver as subcategorias.</span>
+      <p className="mb-4 text-xs leading-relaxed text-muted">
+        <b className="text-ink">% exec.</b> = realizado ÷ previsto. <b className="text-ink">Ritmo</b> = % exec. ÷ {pc(pace)} (parte do ano que já passou): acima de 100% está acima do esperado para {MONTH[period]}, abaixo de 100%, abaixo do esperado.
+        {projection && st === "done" && period < 6 ? <> <b className="text-ink">Projeção</b> = onde o ano deve fechar; <b className="text-ink">vs LOA</b> compara a projeção com o previsto na lei.</> : null}
+      </p>
+
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+        {hasRevenue && (
+          <section aria-label="Receitas" className="min-w-0">
+            <p className="eyebrow !text-municipal">Entradas</p>
+            <h3 className="display mb-3 text-xl font-semibold">Receitas · de onde vem</h3>
+            <Panel {...props} {...shared} view="revenue" />
+          </section>
+        )}
+        {expViews.length > 0 && (
+          <section aria-label="Despesas" className="min-w-0">
+            <p className="eyebrow !text-municipal">Saídas</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="display text-xl font-semibold">Despesas · para onde vai</h3>
+              {expViews.length > 1 && (
+                <Segmented label="Agrupar despesas" value={expView} onChange={setExpView} options={[{ v: "expense" as View, l: "Por função" }, { v: "nature" as View, l: "Por tipo de gasto" }]} />
+              )}
+            </div>
+            <Panel key={expView} {...props} {...shared} view={expView} />
+          </section>
         )}
       </div>
 
-      {/* legenda */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted" aria-hidden="true">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: SOFT[scope], boxShadow: "inset 0 0 0 1px var(--line-strong)" }} />{baseLabel}</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-5 rounded-sm" style={{ background: FILL[scope] }} />{doneLabel} até {MONTH[period]}</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-0.5 bg-ink" />Ritmo esperado ({pc(pace)} do ano)</span>
-        {projection && st === "done" && period < 6 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 bg-surface" style={{ borderColor: FILL[scope] }} />Projeção do fechamento</span>}
-      </div>
-
-      <div className="card p-4 sm:p-5">
-        <ul className="space-y-3.5" role="list">
-          {rows.map((i) => {
-            const b = baseOf(i);
-            const d = doneOf(i);
-            const r = rate(i);
-            const kids = !parent && i.children?.length ? i.children.length : 0;
-            const scale = show === "pct" ? maxPct : max;
-            const trackW = show === "pct" ? (b > 0 ? 1 / scale : 0) : b / scale;
-            const fillW = show === "pct" ? (r ?? 0) / scale : d / scale;
-            const paceX = show === "pct" ? pace / scale : (b * pace) / scale;
-            const behind = r !== null && r < pace * 0.75;
-            const over = r !== null && r > 1;
-            const on = hover === i.code;
-            const p = projOf(i);
-            const dev = devOf(i);
-            const projX = p ? (show === "pct" ? (b > 0 ? p.value / b / scale : null) : p.value / scale) : null;
-            const status = dev === null ? null : Math.abs(dev) <= TOL ? "segue" : dev > 0 ? "acima" : "abaixo";
-            // receita abaixo da LOA e despesa acima dela são os desvios que pedem atenção
-            const bad = status !== null && status !== "segue" && (isExp ? status === "acima" : status === "abaixo");
-            const Row = kids ? "button" : "div";
-            return (
-              <li key={i.code} className="relative" onMouseEnter={() => setHover(i.code)} onMouseLeave={() => setHover((h) => (h === i.code ? null : h))}>
-                <Row
-                  {...(kids ? { type: "button" as const, onClick: () => setOpenCode(i.code), "aria-label": `${i.name}: ver ${kids} subcategorias` } : {})}
-                  className={`block w-full rounded-lg px-1.5 py-1 text-left ${kids ? "cursor-pointer hover:bg-ink/5" : ""} ${on ? "bg-ink/[0.03]" : ""}`}
-                >
-                  <div className="mb-1 flex flex-col gap-x-3 text-sm sm:flex-row sm:items-baseline sm:justify-between">
-                    <span className="min-w-0 truncate font-medium">
-                      {kids > 0 && <span className="mr-1 text-brand">▸</span>}
-                      {i.name}
-                      {kids > 0 && <span className="ml-1.5 text-[11px] font-semibold text-brand">{kids} sub</span>}
-                    </span>
-                    <span className="flex-none text-xs text-muted">
-                      <b className="text-ink">{brl(d)}</b> de {brl(b)} · <b className={over ? "text-ink" : behind ? "text-danger" : "text-ink"}>{r === null ? "—" : pc(r)}</b>
-                    </span>
-                  </div>
-                  <div className="relative h-3.5">
-                    <div className="absolute inset-y-0 left-0 rounded-[4px]" style={{ width: `${Math.min(100, trackW * 100)}%`, background: SOFT[scope], boxShadow: "inset 0 0 0 1px var(--line-strong)" }} />
-                    <div className="absolute left-0 top-[3px] h-2 rounded-[4px]" style={{ width: `${Math.max(d > 0 ? 0.6 : 0, Math.min(100, fillW * 100))}%`, background: FILL[scope] }} />
-                    {b > 0 && <div className="absolute -top-0.5 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, paceX * 100)}% - 1px)` }} />}
-                    {projX !== null && period < 6 && <div className="absolute top-[1px] h-3 w-3 rounded-full border-2 bg-surface" style={{ left: `calc(${Math.min(100, projX * 100)}% - 6px)`, borderColor: FILL[scope] }} />}
-                  </div>
-                  {status && (
-                    <p className={`mt-1 text-[11px] font-semibold ${status === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
-                      {status === "segue" ? "✓ Segue a LOA" : `${status === "acima" ? "▲" : "▼"} ${pc(Math.abs(dev!))} ${status} da LOA`}
-                      <span className="font-normal text-faint"> · projeção {brl(p!.value)} de {brl(i.initial)} previstos{p!.seasonal ? "" : " (estimativa linear)"}</span>
-                    </p>
-                  )}
-                </Row>
-                {on && (
-                  <div className="pointer-events-none absolute right-2 top-full z-10 mt-1 w-64 rounded-xl border border-line bg-surface/95 p-3 text-xs shadow-pop backdrop-blur">
-                    <p className="mb-1.5 font-bold">{i.name}</p>
-                    <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-                      <dt className="text-muted">{isExp ? "Dotação inicial" : "Previsão inicial"}</dt><dd className="text-right tabular-nums">{brl(i.initial)}</dd>
-                      <dt className="text-muted">{isExp ? "Dotação atualizada" : "Previsão atualizada"}</dt><dd className="text-right tabular-nums">{brl(i.updated)}</dd>
-                      <dt className="text-muted">{isExp ? "Empenhado" : "Arrecadado"}</dt><dd className="text-right tabular-nums">{brl(i.done)}</dd>
-                      {i.liquidated !== undefined && (<><dt className="text-muted">Liquidado</dt><dd className="text-right tabular-nums">{brl(i.liquidated)}</dd></>)}
-                      {i.paid !== undefined && (<><dt className="text-muted">Pago</dt><dd className="text-right tabular-nums">{brl(i.paid)}</dd></>)}
-                      <dt className="text-muted">{over ? "Acima do previsto" : "Falta realizar"}</dt><dd className="text-right tabular-nums">{brl(Math.abs(b - d))}</dd>
-                      {p && (<><dt className="text-muted">Projeção do ano</dt><dd className="text-right tabular-nums">{brl(p.value)}</dd></>)}
-                    </dl>
-                    {r !== null && <p className="mt-1.5 text-faint">{over ? "Já passou do previsto para o ano." : behind ? `Abaixo do ritmo: esperado ~${pc(pace)} até ${MONTH[period]}.` : r >= pace ? "No ritmo ou à frente do esperado." : "Um pouco abaixo do ritmo esperado."}</p>}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-line pt-3 text-sm">
-          <span className="text-muted">Total {parent ? `de ${parent.name}` : "das categorias"}</span>
-          <span className="text-xs text-muted"><b className="text-ink">{brl(tot.d)}</b> de {brl(tot.b)} · <b className="text-ink">{tot.b > 0 ? pc(tot.d / tot.b) : "—"}</b></span>
-        </div>
-      </div>
-
-      {/* tabela acessível com os mesmos números */}
-      <details className="mt-3">
-        <summary className="cursor-pointer text-xs font-semibold text-brand">Ver em tabela</summary>
-        <div className="mt-2 overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase text-faint">
-              <tr>
-                <th className="p-3 capitalize">{catLabel}</th>
-                <th className="p-3 text-right">{isExp ? "Dot. inicial" : "Prev. inicial"}</th>
-                <th className="p-3 text-right">{isExp ? "Dot. atualizada" : "Prev. atualizada"}</th>
-                <th className="p-3 text-right">{isExp ? "Empenhado" : "Arrecadado"}</th>
-                {hasLiq && <th className="p-3 text-right">Liquidado</th>}
-                {hasPaid && <th className="p-3 text-right">Pago</th>}
-                <th className="p-3 text-right">% exec.</th>
-                {projection && <th className="p-3 text-right">Projeção</th>}
-                {projection && <th className="p-3 text-right">vs LOA</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((i) => (
-                <tr key={i.code} className="border-b border-line last:border-0">
-                  <td className="p-3">{i.name}</td>
-                  <td className="p-3 text-right tabular-nums">{brl(i.initial)}</td>
-                  <td className="p-3 text-right tabular-nums">{brl(i.updated)}</td>
-                  <td className="p-3 text-right tabular-nums">{brl(i.done)}</td>
-                  {hasLiq && <td className="p-3 text-right tabular-nums">{i.liquidated !== undefined ? brl(i.liquidated) : "—"}</td>}
-                  {hasPaid && <td className="p-3 text-right tabular-nums">{i.paid !== undefined ? brl(i.paid) : "—"}</td>}
-                  <td className="p-3 text-right font-semibold tabular-nums">{rate(i) === null ? "—" : pc(rate(i)!)}</td>
-                  {projection && <td className="p-3 text-right tabular-nums">{projection[`${view}:${i.code}`] ? brl(projection[`${view}:${i.code}`].value) : "—"}</td>}
-                  {projection && <td className="p-3 text-right tabular-nums">{(() => { const q = projection[`${view}:${i.code}`]; return q && i.initial > 0 ? `${q.value >= i.initial ? "+" : "−"}${pc(Math.abs(q.value / i.initial - 1))}` : "—"; })()}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-
-      <p className="mt-3 text-xs leading-relaxed text-faint">
-        Acumulado de {year} até {MONTH[period]} ({period}º bimestre), do relatório bimestral (RREO) do Tesouro. O traço vertical marca quanto seria executado se o ritmo fosse uniforme no ano; receitas e despesas sazonais (como IPTU e 13º salário) fogem dessa linha.
-        {isExp ? " Empenhado é o valor já reservado; liquidado, o que foi entregue; pago, o que saiu do caixa." : ""}
+      <p className="mt-4 text-xs leading-relaxed text-faint">
+        Acumulado de {year} até {MONTH[period]} ({period}º bimestre), do relatório bimestral (RREO) do Tesouro. O traço vertical marca quanto seria executado se o ritmo fosse uniforme no ano; receitas e despesas sazonais podem ficar à frente ou atrás sem ser um problema. Empenhado é o valor já reservado; liquidado, o que foi entregue; pago, o que saiu do caixa.
         {projection ? ` A projeção divide o acumulado pela fração que estava acumulada no mesmo bimestre do ano anterior; “segue a LOA” é ficar a até ${pc(TOL)} do previsto na lei orçamentária.` : ""}
       </p>
     </div>

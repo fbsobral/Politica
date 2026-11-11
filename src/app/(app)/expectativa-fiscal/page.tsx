@@ -1,23 +1,21 @@
 import { Suspense } from "react";
-import { AskButton } from "@/components/agent/ask-button";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
-import { brlShort, pct, PERIOD_LABEL, type BudgetScope } from "@/lib/budget";
+import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
-import { getFiscal, getPrimaryPct, type PrimaryPct, LOA_TOLERANCE, loaStatus, type FiscalData, type PlanItem } from "@/lib/fiscal";
+import { getFiscal, getPrimaryPct, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
 export const metadata = { title: "Expectativa fiscal" };
 export const dynamic = "force-dynamic";
 
-const BAR: Record<BudgetScope, string> = { MUNICIPAL: "bg-municipal", ESTADUAL: "bg-estadual", FEDERAL: "bg-federal" };
 const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro"];
 
 const signed = (d: number) => `${d >= 0 ? "+" : "−"}${pct(Math.abs(d), 1)}`;
 
 /** Cartão de veredito: projeção do fechamento frente ao previsto na LOA. */
-function Verdict({ title, done, projected, loa, updated, kind, seasonal, period }: { title: string; done: number; projected: number; loa: number; updated: number; kind: "revenue" | "expense"; seasonal: boolean; period: number }) {
+function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, period }: { title: string; scope: BudgetScope; done: number; projected: number; loa: number; updated: number; kind: "revenue" | "expense"; seasonal: boolean; period: number }) {
   const st = loaStatus(projected, loa);
   const d = loa > 0 ? projected / loa - 1 : 0;
   const bad = st !== null && st !== "segue" && (kind === "revenue" ? st === "abaixo" : st === "acima");
@@ -45,11 +43,18 @@ function Verdict({ title, done, projected, loa, updated, kind, seasonal, period 
         const above = ritmo >= 1;
         const good = kind === "revenue" ? above : null;
         return (
+          <>
           <p className="mt-1 text-xs" title="Ritmo = percentual do previsto já realizado dividido pelo percentual do ano que já passou">
             <span className="text-muted">Ritmo:</span>{" "}
             <b className={`tabular-nums ${good === null ? "text-gold" : good ? "text-ok" : "text-danger"}`}>{pct(ritmo, 0)}</b>{" "}
             <span className="text-muted">{above ? "acima do esperado" : "abaixo do esperado"} para {MONTH[period]} ({pct(elapsed, 0)} do ano)</span>
           </p>
+          <div className="relative mt-2 h-3.5" role="img" aria-label={`Realizado: ${pct(done / loa, 0)} do previsto; esperado até ${MONTH[period]}: ${pct(elapsed, 0)}`}>
+            <div className="absolute inset-0 rounded-full bg-ink/10" />
+            <div className="absolute left-0 top-[3px] h-2 rounded-full" style={{ width: `${Math.min(100, (done / loa) * 100)}%`, background: `var(--${scope.toLowerCase()})` }} />
+            <div className="absolute -top-0.5 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, elapsed * 100)}% - 1px)` }} />
+          </div>
+          </>
         );
       })()}
       <dl className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
@@ -65,54 +70,14 @@ function Verdict({ title, done, projected, loa, updated, kind, seasonal, period 
   );
 }
 
-function Progress({ label, done, of, pace, scope, sub }: { label: string; done: number; of: number; pace: number; scope: BudgetScope; sub: string }) {
-  const p = of > 0 ? done / of : 0;
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-medium">{label}</span>
-        <span className="text-xs text-muted"><b className="text-ink">{brlShort(done)}</b> de {brlShort(of)} · {pct(p, 0)}</span>
-      </div>
-      <div className="relative h-2.5 rounded-full bg-line">
-        <div className={`h-full rounded-full ${BAR[scope]}`} style={{ width: `${Math.max(1, Math.min(1, p) * 100)}%` }} />
-        <div className="absolute -top-1 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${pace * 100}% - 1px)` }} title="Ritmo esperado" />
-      </div>
-      <p className="mt-1 text-[11px] text-faint">{sub}</p>
-    </div>
-  );
-}
-
-function planText(items: PlanItem[], f: FiscalData, kind: string, depth = 0): string {
-  return items
-    .slice(0, depth === 0 ? 12 : 5)
-    .map((i) => {
-      const p = f.projection[`${kind}:${i.code}`];
-      return `${"  ".repeat(depth)}- ${i.name}: realizado ${brlShort(i.done)}; LOA ${brlShort(i.initial)}; projeção ${p ? brlShort(p.value) : "?"}${p && i.initial > 0 ? ` (${signed(p.value / i.initial - 1)} vs LOA)` : ""}${i.children?.length && depth < 1 ? `\n${planText(i.children, f, kind, depth + 1)}` : ""}`;
-    })
-    .join("\n");
-}
-
 /** Categorias que mais se afastam da LOA na projeção (para o resumo). */
-function deviations(f: FiscalData, kind: "revenue" | "expense") {
-  return f.plan[kind]
-    .map((i) => ({ i, p: f.projection[`${kind}:${i.code}`]?.value }))
-    .filter((x) => x.p !== undefined && x.i.initial > 0 && x.i.initial >= 0.01 * (kind === "revenue" ? f.totals.revenue.initial : f.totals.expense.initial))
-    .map((x) => ({ name: x.i.name, d: x.p! / x.i.initial - 1, gap: x.p! - x.i.initial }))
-    .filter((x) => Math.abs(x.d) > LOA_TOLERANCE)
-    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
-    .slice(0, 4);
-}
-
 function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
   const t = f.totals;
-  const pace = f.period / 6;
   const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
   const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
   const loaBalance = t.revenue.initial - t.expense.initial;
   const projBalance = pr.value - pe.value;
   const doneBalance = t.revenue.done - t.expense.done;
-  const revDev = deviations(f, "revenue");
-  const expDev = deviations(f, "expense");
   const prim = f.primary;
   return (
     <div className="space-y-8">
@@ -125,8 +90,8 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Verdict title="Receita" done={t.revenue.done} projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
-        <Verdict title="Despesa (empenhada)" done={t.expense.done} projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
+        <Verdict title="Receita" scope={f.scope} done={t.revenue.done} projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
+        <Verdict title="Despesa (empenhada)" scope={f.scope} done={t.expense.done} projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
         <section className="card flex h-full flex-col p-5">
           <p className="eyebrow">Saldo do orçamento</p>
           <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
@@ -166,52 +131,11 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
         </section>
       </div>
 
-      {(revDev.length > 0 || expDev.length > 0) && (
-        <section className="card p-5 sm:p-6" aria-label="Maiores desvios">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="display text-xl font-semibold">Onde a LOA não deve ser cumprida</h2>
-            <AskButton focus={{ title: `Expectativa fiscal ${f.year} · ${f.entity}`, text: `Comparação do realizado até o ${f.period}º bimestre de ${f.year} com a LOA e projeção do fechamento (${f.entity}). Receita: LOA ${brlShort(t.revenue.initial)}, projeção ${brlShort(pr.value)}. Despesa: LOA ${brlShort(t.expense.initial)}, projeção ${brlShort(pe.value)}.\nReceita por origem:\n${planText(f.plan.revenue, f, "revenue")}\nDespesa por função:\n${planText(f.plan.expense, f, "expense")}`, suggestions: ["A LOA deste ano está sendo cumprida?", "Quais áreas devem gastar mais do que o previsto?", "Por que a receita pode ficar abaixo do previsto?"] }} />
-          </div>
-          <p className="mb-4 mt-1 text-xs text-muted">Categorias com projeção a mais de {pct(LOA_TOLERANCE, 0)} do previsto na LOA, pelo tamanho da diferença.</p>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {[{ t: "Receita", list: revDev, rev: true }, { t: "Despesa", list: expDev, rev: false }].map((g) => (
-              <div key={g.t}>
-                <p className="mb-2 text-sm font-semibold">{g.t}</p>
-                {g.list.length ? (
-                  <ul className="space-y-1.5 text-sm">
-                    {g.list.map((x) => {
-                      const bad = g.rev ? x.d < 0 : x.d > 0;
-                      return (
-                        <li key={x.name} className="flex items-baseline justify-between gap-3">
-                          <span className="min-w-0 truncate">{x.name}</span>
-                          <span className={`flex-none text-xs font-semibold tabular-nums ${bad ? "text-danger" : "text-muted"}`}>{x.d > 0 ? "▲" : "▼"} {signed(x.d)} · {x.gap >= 0 ? "+" : "−"}{brlShort(Math.abs(x.gap))}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-ok">✓ Todas as categorias seguem a LOA.</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="card p-5 sm:p-6" aria-label="Ritmo do ano">
-        <h2 className="display text-xl font-semibold">{f.year}: previsto x realizado</h2>
-        <p className="mb-5 text-xs text-muted">Acumulado até o {f.period}º bimestre ({PERIOD_LABEL[f.period]}), sobre o previsto atualizado. O traço marca o ritmo uniforme ({pct(pace, 0)} do ano).</p>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <Progress label="Receita arrecadada" done={t.revenue.done} of={t.revenue.updated} pace={pace} scope={f.scope} sub={`Previsão na LOA: ${brlShort(t.revenue.initial)} · atualizada: ${brlShort(t.revenue.updated)}`} />
-          <Progress label="Despesa empenhada" done={t.expense.done} of={t.expense.updated} pace={pace} scope={f.scope} sub={`Dotação na LOA: ${brlShort(t.expense.initial)} · atualizada: ${brlShort(t.expense.updated)}${t.expense.paid ? ` · paga: ${brlShort(t.expense.paid)}` : ""}`} />
-        </div>
-      </section>
-
       {(f.plan.expense.length > 0 || f.plan.revenue.length > 0 || f.plan.nature.length > 0) && (
         <section aria-label="Por categoria">
           <p className="eyebrow">Por categoria e subcategoria</p>
           <h2 className="display text-2xl font-semibold">Cada área frente à LOA</h2>
-          <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Barra clara: previsto. Barra cheia: realizado até agora. Círculo: onde o ano deve fechar. Toque numa área para ver as subáreas.</p>
+          <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">Receitas à esquerda e despesas à direita. Barra clara: previsto. Barra cheia: realizado até agora. Círculo: onde o ano deve fechar. Toque numa área para ver as subáreas.</p>
           <BudgetPlanChart scope={f.scope} year={f.year} period={f.period} plan={f.plan} projection={f.projection} />
         </section>
       )}
