@@ -99,7 +99,7 @@ function Panel({ period, plan, projection, view, base, sort, stage }: PlanChartP
           <td className="px-2.5 py-2 text-right tabular-nums">{brl(b)}</td>
           <td className="px-2.5 py-2 text-right font-semibold tabular-nums">{brl(d)}</td>
           <td className="px-2.5 py-2 text-right tabular-nums">{r === null ? "—" : pc(r)}</td>
-          <td className={`px-2.5 py-2 text-right tabular-nums ${ritmo === null ? "" : ritmo >= 1 ? (isExp ? "text-gold" : "text-ok") : isExp ? "" : "text-danger"}`} title="Percentual do previsto já realizado dividido pelo percentual do ano que já passou: acima de 100% = acima do esperado">{ritmo === null ? "—" : pc(ritmo)}</td>
+          <td className={`px-2.5 py-2 text-right tabular-nums ${ritmo === null ? "" : ritmo >= 1 ? (isExp ? "text-gold" : "text-ok") : isExp ? "text-muted" : "text-danger"}`} title="Percentual do previsto já realizado dividido pelo percentual do ano que já passou: acima de 100% = acima do esperado">{ritmo === null ? "—" : `${ritmo >= 1 ? "▲" : "▼"} ${pc(ritmo)}`}</td>
           <td className="px-2.5 py-2 text-right tabular-nums">{p ? brl(p.value) : "—"}</td>
           <td className={`px-2.5 py-2 text-right text-xs font-semibold tabular-nums ${status === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
             {status === null ? "—" : status === "segue" ? "✓ segue" : `${status === "acima" ? "▲" : "▼"} ${signedPc(dev!)}`}
@@ -119,7 +119,7 @@ function Panel({ period, plan, projection, view, base, sort, stage }: PlanChartP
             <th className="px-2.5 py-2 text-right font-medium">{isExp ? "Dotação" : "Previsão"}</th>
             <th className="px-2.5 py-2 text-right font-medium">{isExp ? (st === "liquidated" ? "Liquidado" : st === "paid" ? "Pago" : "Empenhado") : "Arrecadado"}</th>
             <th className="px-2.5 py-2 text-right font-medium">% exec.</th>
-            <th className="px-2.5 py-2 text-right font-medium" title="Realizado ÷ esperado para o mês">Ritmo</th>
+            <th className="px-2.5 py-2 text-right font-medium" title="Pace = % executado ÷ parte do ano que já passou. Acima de 100% = acima do esperado; abaixo de 100% = abaixo do esperado">Pace</th>
             <th className="px-2.5 py-2 text-right font-medium">Projeção</th>
             <th className="px-2.5 py-2 text-right font-medium">vs LOA</th>
           </tr>
@@ -131,7 +131,7 @@ function Panel({ period, plan, projection, view, base, sort, stage }: PlanChartP
             <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.b)}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.d)}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? pc(tot.d / tot.b) : "—"}</td>
-            <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? pc(tot.d / tot.b / pace) : "—"}</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? `${tot.d / tot.b / pace >= 1 ? "▲" : "▼"} ${pc(tot.d / tot.b / pace)}` : "—"}</td>
             <td className="px-2.5 py-2" />
             <td className="px-2.5 py-2" />
           </tr>
@@ -191,7 +191,7 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
       </ControlBar>
 
       <p className="mb-4 text-xs leading-relaxed text-muted">
-        <b className="text-ink">% exec.</b> = realizado ÷ previsto. <b className="text-ink">Ritmo</b> = % exec. ÷ {pc(pace)} (parte do ano que já passou): acima de 100% está acima do esperado para {MONTH[period]}, abaixo de 100%, abaixo do esperado.
+        <b className="text-ink">% exec.</b> = realizado ÷ previsto. <b className="text-ink">Pace</b> (ritmo) = % exec. ÷ {pc(pace)} (parte do ano que já passou): acima de 100% está acima do esperado para {MONTH[period]}, abaixo de 100%, abaixo do esperado.
         {projection && st === "done" && period < 6 ? <> <b className="text-ink">Projeção</b> = onde o ano deve fechar; <b className="text-ink">vs LOA</b> compara a projeção com o previsto na lei.</> : null}
       </p>
 
