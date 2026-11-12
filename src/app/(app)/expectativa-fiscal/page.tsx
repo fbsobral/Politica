@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { AskButton } from "@/components/agent/ask-button";
+import { FiscalLineChart } from "@/components/fiscal-line-chart";
 import { InfoTip } from "@/components/info-tip";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
-import { getFiscal, getPrimaryPct, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
+import { getFiscal, getFiscalSeries, getPrimaryPct, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -176,6 +177,10 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
         </section>
       </div>
 
+      <Suspense fallback={<div className="skeleton h-[28rem]" aria-busy="true" />}>
+        <SeriesSection scope={f.scope} />
+      </Suspense>
+
       {(f.plan.expense.length > 0 || f.plan.revenue.length > 0 || f.plan.nature.length > 0) && (
         <section aria-label="Por categoria">
           <p className="eyebrow">Por categoria e subcategoria</p>
@@ -187,6 +192,20 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
 
       {!f.hasHistory && f.period < 6 && <Notice kind="info">Não encontrei os relatórios do ano anterior para medir a sazonalidade; a projeção usa a média proporcional a 12 meses e é menos precisa.</Notice>}
     </div>
+  );
+}
+
+async function SeriesSection({ scope }: { scope: BudgetScope }) {
+  const user = await requireUser();
+  const sr = await getFiscalSeries(scope, user);
+  if (!sr || !sr.annual.length) return null;
+  return (
+    <section aria-label="Evolução ao longo dos anos" className="card p-4 sm:p-5">
+      <p className="eyebrow">Evolução</p>
+      <h2 className="display text-2xl font-semibold">Receita, despesa, saldo e resultado primário</h2>
+      <p className="mb-4 mt-1 text-sm text-muted">As mesmas quatro caixas de cima ao longo do tempo. Escolha o período e ligue ou desligue cada linha.</p>
+      <FiscalLineChart annual={sr.annual} bimesters={sr.bimesters} currentYear={sr.currentYear} currentPeriod={sr.currentPeriod} firstYear={sr.firstYear} entity={sr.entity} />
+    </section>
   );
 }
 

@@ -302,3 +302,85 @@ export async function getPrimaryPct(scope: BudgetScope): Promise<PrimaryPct | nu
     return hit ? { ...(hit.data as unknown as { pct: number; month: string }), code, perimeter } : null;
   }
 }
+
+/* ───────── Série histórica das 4 caixas da Expectativa fiscal ───────── */
+
+export type SeriesPoint = {
+  year: number;
+  /** bimestre do RREO (acumulado no ano até ele); 6 = ano fechado */
+  period: number;
+  revenue: number;
+  expense: number;
+  /** receita realizada menos despesa empenhada */
+  balance: number;
+  /** resultado primário do RREO (Anexo 6); nulo quando o ente não o publicou */
+  primary: number | null;
+};
+
+export type FiscalSeries = {
+  scope: BudgetScope;
+  entity: string;
+  /** um ponto por ano: ano fechado (6º bimestre) e, no último, o ano corrente até o último bimestre publicado */
+  annual: SeriesPoint[];
+  /** bimestre a bimestre (acumulado no ano) dos dois últimos anos */
+  bimesters: SeriesPoint[];
+  firstYear: number | null;
+  currentYear: number;
+  currentPeriod: number;
+  fetchedAt: string;
+};
+
+const toPoint = (s: Snapshot): SeriesPoint => ({
+  year: s.year,
+  period: s.period,
+  revenue: s.totals.revenue.done,
+  expense: s.totals.expense.done,
+  balance: s.totals.revenue.done - s.totals.expense.done,
+  primary: s.primary?.realized ?? null,
+});
+
+/** Executa as tarefas com no máximo `n` ao mesmo tempo. */
+async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  }));
+  return out;
+}
+
+export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; municipalityKey: string }): Promise<FiscalSeries | null> {
+  const id = await entityId(scope, user);
+  if (!id) return null;
+  const now = new Date().getFullYear();
+
+  // último bimestre publicado (ano corrente, ou o anterior se o ano ainda não começou a publicar)
+  let cur: Snapshot | null = null;
+  for (const y of [now, now - 1]) {
+    for (let p = 6; p >= 1 && !cur; p--) cur = await snapshot(id, y, p, { primary: true });
+    if (cur) break;
+  }
+  if (!cur) return null;
+
+  // anos fechados: do mais recente para trás; para ao achar 2 anos seguidos sem dados depois de já ter achado algum
+  const closed: SeriesPoint[] = [];
+  const years = Array.from({ length: 30 }, (_, i) => cur!.year - 1 - i);
+  const snaps = await pool(years, 3, (y) => snapshot(id, y, 6, { primary: true }));
+  let misses = 0;
+  for (let i = 0; i < years.length; i++) {
+    const s = snaps[i];
+    if (s) { closed.push(toPoint(s)); misses = 0; } else if (closed.length && ++misses >= 2) break;
+  }
+  closed.sort((a, b) => a.year - b.year);
+  const annual = [...closed, toPoint(cur)];
+
+  // bimestre a bimestre dos dois últimos anos
+  const want: [number, number][] = [];
+  for (const y of [cur.year - 1, cur.year]) for (let p = 1; p <= (y === cur.year ? cur.period : 6); p++) want.push([y, p]);
+  const bim = (await pool(want, 3, ([y, p]) => (y === cur!.year && p === cur!.period ? Promise.resolve(cur) : snapshot(id, y, p, { primary: true })))).filter((s): s is Snapshot => !!s).map(toPoint);
+
+  return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, fetchedAt: new Date().toISOString() };
+}
