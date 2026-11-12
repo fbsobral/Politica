@@ -317,6 +317,8 @@ export type SeriesPoint = {
   primary: number | null;
   /** resultado primário em % do PIB acumulado em 12 meses, até o fim do bimestre (Banco Central; convenção deste app: positivo = superávit) */
   pibPct: number | null;
+  /** igual, mas acumulado só no ano (de janeiro ao fim do bimestre ÷ PIB dos mesmos meses); só para a União */
+  pibPctYtd: number | null;
 };
 
 export type FiscalSeries = {
@@ -343,6 +345,7 @@ const toPoint = (s: Snapshot, pib: Map<string, number>): SeriesPoint => ({
   primary: s.primary?.realized ?? null,
   // o bimestre fecha nos meses 2, 4, 6, 8, 10 e 12; o BC publica o acumulado em 12 meses de cada mês (+ = déficit, então inverte)
   pibPct: pib.has(`${s.year}-${s.period * 2}`) ? -pib.get(`${s.year}-${s.period * 2}`)! : null,
+  pibPctYtd: null,
 });
 
 /** Executa as tarefas com no máximo `n` ao mesmo tempo. */
@@ -399,6 +402,29 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
   const want: [number, number][] = [];
   for (const y of [cur.year - 1, cur.year]) for (let p = 1; p <= (y === cur.year ? cur.period : 6); p++) want.push([y, p]);
   const bim = (await pool(want, 3, ([y, p]) => (y === cur!.year && p === cur!.period ? Promise.resolve(cur) : snapshot(id, y, p, { primary: true })))).filter((s): s is Snapshot => !!s).map((s) => toPoint(s, pib));
+
+  // % do PIB acumulado no ano (União): soma do resultado mensal do Governo Federal e BC (SGS 4639, + = déficit) ÷ soma do PIB mensal (SGS 4380)
+  if (scope === "FEDERAL") {
+    try {
+      const [fl, pm] = await Promise.all([sgs(4639, cur.year - 1, cur.year), sgs(4380, cur.year - 1, cur.year)]);
+      const flow = new Map(fl.map((r) => [`${r.year}-${r.month}`, r.value]));
+      const gdp = new Map(pm.map((r) => [`${r.year}-${r.month}`, r.value]));
+      const ytdPct = (year: number, month: number): number | null => {
+        let a = 0, b = 0;
+        for (let m = 1; m <= month; m++) {
+          const f = flow.get(`${year}-${m}`), g = gdp.get(`${year}-${m}`);
+          if (f === undefined || g === undefined) return null;
+          a += f; b += g;
+        }
+        return b ? (-a / b) * 100 : null;
+      };
+      for (const p of bim) p.pibPctYtd = ytdPct(p.year, p.period * 2);
+      const lastAnnual = annual[annual.length - 1];
+      if (lastAnnual) lastAnnual.pibPctYtd = ytdPct(lastAnnual.year, lastAnnual.period * 2);
+    } catch (err) {
+      console.warn("[fiscal:series:ytd]", (err as Error).message);
+    }
+  }
 
   return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, pibSource: { code: pibCode, perimeter: scope === "FEDERAL" ? "Governo Federal e Banco Central" : "todos os estados e municípios juntos" }, fetchedAt: new Date().toISOString() };
 }
