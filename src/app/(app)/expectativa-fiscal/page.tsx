@@ -151,7 +151,7 @@ function Detail({ f, pibPct, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; 
               <InfoTip label="Sobre o resultado primário">
                 <span className="block">Receitas menos despesas, sem contar os juros da dívida. Superávit é o que sobra antes de pagar os juros; déficit é o que falta.</span>
                 <span className="mt-1.5 block text-muted">{f.scope === "FEDERAL" ? "Valor em R$ (União): Banco Central, SGS 4639, de janeiro até o último mês publicado." : "Valor em R$: RREO, Anexo 06 (Tesouro Nacional/Siconfi), de janeiro até o último bimestre publicado."} A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
-                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">Como ler os percentuais do PIB.</b> Todos vêm do Banco Central (BC), que reporta assim o resultado do Governo Federal e Banco Central. {PIB_RULES.ytd} {PIB_RULES.m12} O valor em R$ em destaque também é do BC (soma dos resultados mensais, SGS 4639). O RREO (Tesouro Nacional) aparece só como linha de apoio: ele mede pelo Orçamento e o BC pela variação da dívida, por isso diferem um pouco.</span>}
+                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">Como ler os percentuais do PIB.</b> Todos vêm do Banco Central (BC), que reporta assim o resultado do Governo Federal e Banco Central. {PIB_RULES.ytd} {PIB_RULES.m12} O valor em R$ em destaque também é do BC (soma dos resultados mensais, SGS 4639).</span>}
                 {pibPct && <span className="mt-1.5 block text-muted">% do PIB: Banco Central, SGS {pibPct.code} ({pibPct.perimeter}), acumulado em 12 meses até {pibPct.month}.{f.scope === "FEDERAL" ? "" : " O Banco Central não publica o percentual por estado ou município."}</span>}
               </InfoTip>
               <AskButton compact focus={{
@@ -171,7 +171,6 @@ function Detail({ f, pibPct, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; 
                   <>
                     <dt className="whitespace-nowrap text-muted">Situação</dt>
                     <dd className={`whitespace-nowrap text-right font-bold ${mainVal >= 0 ? "text-ok" : "text-danger"}`}>{mainVal >= 0 ? "▲ superávit" : "▼ déficit"}</dd>
-                    {bcMain != null && prim.realized != null && <><dt className="whitespace-nowrap text-muted" title="Resultado pelo Orçamento (RREO, Anexo 06, Tesouro Nacional); difere do Banco Central, que mede pela variação da dívida">R$ jan–{MONTH[f.period]} <span className="text-faint">RREO</span></dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(prim.realized)}</dd></>}
                     {[ytd].map((v, i) => v && (
                       <Fragment key={`ytd${i}`}>
                         <dt className="whitespace-nowrap text-muted" title={`Banco Central: soma do resultado mensal de janeiro a ${MONTH_NAME[v.month]} (SGS ${v.code}, ${v.perimeter}) ÷ PIB dos mesmos meses`}>{pibYtdLabel(v.month)} <span className="text-faint">BC</span></dt>
