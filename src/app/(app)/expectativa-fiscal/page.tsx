@@ -5,6 +5,7 @@ import { FiscalLineChart } from "@/components/fiscal-line-chart";
 import { InfoTip } from "@/components/info-tip";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
+import { pib12Label, pibYtdLabel, PIB_RULES } from "@/lib/pib-pct";
 import { brDateTime } from "@/lib/stamp";
 import { getFiscal, getFiscalSeries, getPibYtd, getPrimaryPct, getPrimaryYtd, type PrimaryYtd, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
@@ -147,7 +148,7 @@ function Detail({ f, pibPct, pibYtd, ytd }: { f: FiscalData; pibPct: PrimaryPct 
               <InfoTip label="Sobre o resultado primário">
                 <span className="block">Receitas menos despesas, sem contar os juros da dívida. Superávit é o que sobra antes de pagar os juros; déficit é o que falta.</span>
                 <span className="mt-1.5 block text-muted">Valor em R$: RREO, Anexo 06 (Tesouro Nacional/Siconfi), de janeiro até o último bimestre publicado. A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
-                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">% do PIB no ano</b> divide o resultado acumulado de janeiro até o mês pelo PIB <i>dos mesmos meses</i> (soma do PIB mensal, Banco Central), e não pelo PIB de 12 meses. A linha do RREO é um cálculo do Política (valor em R$ do RREO ÷ PIB do período). A linha &ldquo;BC&rdquo; soma o resultado mensal oficial do Governo Federal e Banco Central (SGS 4639) e vai até o mês mais novo que o BC já publicou; é como o BC reporta o acumulado no ano. O Tesouro Nacional mede o mesmo resultado de outra forma (pelo Orçamento), por isso os números diferem um pouco.</span>}
+                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">Como ler os percentuais do PIB.</b> {PIB_RULES.ytd} {PIB_RULES.m12} A linha do mês do RREO é um cálculo do Política (resultado do RREO ÷ PIB do período); as demais vêm do Banco Central, que usa o mesmo método. O Tesouro Nacional mede o mesmo resultado de outra forma (pelo Orçamento), por isso os números diferem um pouco.</span>}
                 {pibPct && <span className="mt-1.5 block text-muted">% do PIB: Banco Central, SGS {pibPct.code} ({pibPct.perimeter}), acumulado em 12 meses até {pibPct.month}.{f.scope === "FEDERAL" ? "" : " O Banco Central não publica o percentual por estado ou município."}</span>}
               </InfoTip>
               <AskButton compact focus={{
@@ -167,11 +168,11 @@ function Detail({ f, pibPct, pibYtd, ytd }: { f: FiscalData; pibPct: PrimaryPct 
                   <>
                     <dt className="whitespace-nowrap text-muted">Situação</dt>
                     <dd className={`whitespace-nowrap text-right font-bold ${prim.realized >= 0 ? "text-ok" : "text-danger"}`}>{prim.realized >= 0 ? "▲ superávit" : "▼ déficit"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={pibYtd ? `Cálculo do Política: resultado de janeiro a ${MONTH[f.period]} (RREO) ÷ PIB dos mesmos meses (soma do PIB mensal, Banco Central SGS 4380)` : undefined}>% PIB jan–{MONTH[f.period].slice(0, 3)} (RREO)</dt>
+                    <dt className="whitespace-nowrap text-muted" title={pibYtd ? `Resultado do RREO (R$ ${(Math.abs(prim.realized) / 1e9).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} bi, jan–${MONTH[f.period]}) ÷ PIB dos mesmos meses. Cálculo do Política.` : undefined}>{pibYtdLabel(f.period * 2)}</dt>
                     <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibYtd ? `${prim.realized >= 0 ? "superávit " : "déficit "}${Math.abs((prim.realized / pibYtd) * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={ytd ? `Banco Central, SGS ${ytd.code} (${ytd.perimeter}): soma do fluxo mensal de janeiro a ${MONTH_NAME[ytd.month]} ÷ PIB dos mesmos meses` : undefined}>{ytd ? `% PIB jan–${MONTH_NAME[ytd.month].slice(0, 3)} (BC)` : "% PIB no ano (BC)"}</dt>
+                    <dt className="whitespace-nowrap text-muted" title={ytd ? `Banco Central: soma do resultado mensal de janeiro a ${MONTH_NAME[ytd.month]} (SGS ${ytd.code}, ${ytd.perimeter}) ÷ PIB dos mesmos meses. Mês mais novo já publicado.` : undefined}>{ytd ? pibYtdLabel(ytd.month) : "% PIB no ano"}</dt>
                     <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{ytd ? `${ytd.pct > 0 ? "déficit " : "superávit "}${Math.abs(ytd.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>% PIB 12 meses{pibPct ? ` (${pibPct.month})` : ""}</dt>
+                    <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{pibPct ? pib12Label(Number(pibPct.month.slice(0, 2))) : "% PIB 12 meses"}</dt>
                     <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit " : pibPct.pct < 0 ? "superávit " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
                   </>
                 ) : (
