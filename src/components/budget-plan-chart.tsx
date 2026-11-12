@@ -39,7 +39,7 @@ const TOL = 0.05;
 const SORT_LABEL: Record<Sort, string> = { size: "Maior previsto", high: "Mais executado", low: "Menos executado", dev: "Maior desvio da LOA" };
 
 type Shared = { base: Base; sort: Sort; stage: Stage };
-type Col = "name" | "base" | "done" | "rate" | "pace" | "pacev" | "proj" | "dev";
+type Col = "name" | "base" | "done" | "share" | "rate" | "pace" | "pacev" | "proj" | "dev";
 
 const signedPc = (d: number) => `${d >= 0 ? "+" : "−"}${pc(Math.abs(d))}`;
 
@@ -71,6 +71,7 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
       case "name": return i.name;
       case "base": return baseOf(i);
       case "done": return doneOf(i);
+      case "share": return doneOf(i); // dentro do mesmo grupo, a ordem pela parte do total é a ordem pelo realizado
       case "rate": return r;
       case "pace": return r === null ? null : r / (period / 6);
       case "pacev": return baseOf(i) > 0 ? doneOf(i) - baseOf(i) * (period / 6) : null;
@@ -110,7 +111,7 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
     suggestions: ["O que é isto, em linguagem simples?", "Por que está acima ou abaixo do ritmo esperado?", "Isso é normal para esta época do ano?"],
   });
 
-  const line = (i: PlanItem, child: boolean, parent?: string) => {
+  const line = (i: PlanItem, child: boolean, parent?: PlanItem) => {
     const b = baseOf(i), d = doneOf(i), r = rate(i);
     const kids = !child && i.children?.length ? order(i.children) : [];
     const p = projOf(i), dev = devOf(i);
@@ -118,6 +119,8 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
     // receita abaixo da LOA e despesa acima dela são os desvios que pedem atenção
     const bad = status !== null && status !== "segue" && (isExp ? status === "acima" : status === "abaixo");
     const ritmo = r === null ? null : r / pace;
+    const den = child && parent ? doneOf(parent) : tot.d;
+    const share = den > 0 ? d / den : null;
     const esp = b > 0 ? b * pace : null; // valor esperado até agora, se o ano fosse uniforme
     const isOpen = open.has(i.code);
     return (
@@ -136,13 +139,14 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
             )}
             <InfoTip label={`O que é ${i.name}?`}>
               <span className="block font-semibold">{i.name}</span>
-              <span className="mt-1 block text-muted">{explainItem(i.name, view, scopeTxt, parent)}</span>
+              <span className="mt-1 block text-muted">{explainItem(i.name, view, scopeTxt, parent?.name)}</span>
               <span className="mt-2 block"><AskButton label="Pergunte" focus={askFocus(i, child, { b, d, r, ritmo, p: p?.value ?? null, dev })} /></span>
             </InfoTip>
             </div>
           </td>
           <td className="px-2.5 py-2 text-right tabular-nums">{brl(b)}</td>
           <td className="px-2.5 py-2 text-right font-semibold tabular-nums">{brl(d)}</td>
+          <td className="px-2.5 py-2 text-right tabular-nums" title={child ? "Parte da categoria-mãe" : "Parte do total realizado das categorias"}>{share === null ? "—" : pc(share)}</td>
           <td className="px-2.5 py-2 text-right tabular-nums">{r === null ? "—" : pc(r)}</td>
           <td className={`px-2.5 py-2 text-right tabular-nums ${ritmo === null ? "" : ritmo >= 1 ? (isExp ? "text-gold" : "text-ok") : isExp ? "text-muted" : "text-danger"}`} title="Percentual do previsto já realizado dividido pelo percentual do ano que já passou: acima de 100% = acima do esperado">{ritmo === null ? "—" : `${ritmo >= 1 ? "▲" : "▼"} ${pc(ritmo)}`}</td>
           <td className={`px-2.5 py-2 text-right tabular-nums ${esp === null ? "" : d - esp >= 0 ? (isExp ? "text-gold" : "text-ok") : isExp ? "text-muted" : "text-danger"}`} title={esp === null ? undefined : `Esperado até ${MONTH[period]}: ${brl(esp)} · realizado: ${brl(d)}`}>{esp === null ? "—" : `${d - esp >= 0 ? "+" : "−"}${brl(Math.abs(d - esp))}`}</td>
@@ -151,20 +155,21 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
             {status === null ? "—" : status === "segue" ? "✓ segue" : `${status === "acima" ? "▲" : "▼"} ${signedPc(dev!)}`}
           </td>
         </tr>
-        {isOpen && kids.map((k) => line(k, true, i.name))}
+        {isOpen && kids.map((k) => line(k, true, i))}
       </Fragment>
     );
   };
 
   return (
     <div className="min-w-0 overflow-x-auto rounded-2xl border border-line bg-surface">
-      <table className="w-full min-w-[760px] border-collapse text-sm">
+      <table className="w-full min-w-[840px] border-collapse text-sm">
         <thead>
           <tr className="text-xs text-muted">
             {([
               ["name", catLabel, "left", undefined],
               ["base", isExp ? "Dotação" : "Previsão", "right", undefined],
               ["done", isExp ? (st === "liquidated" ? "Liquidado" : st === "paid" ? "Pago" : "Empenhado") : "Arrecadado", "right", undefined],
+              ["share", "% do total", "right", "Parte do total realizado das categorias (nas subcategorias, parte da categoria-mãe)"],
               ["rate", "% exec.", "right", undefined],
               ["pace", "Pace", "right", "Pace = % executado ÷ parte do ano que já passou. Acima de 100% = acima do esperado; abaixo de 100% = abaixo do esperado"],
               ["pacev", "Pace em R$", "right", "Diferença entre o realizado e o valor esperado até agora (previsto × parte do ano que já passou). Positivo = acima do esperado; negativo = abaixo"],
@@ -189,6 +194,7 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
             <td className="px-2.5 py-2">Total das categorias</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.b)}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{brl(tot.d)}</td>
+            <td className="px-2.5 py-2 text-right tabular-nums">{tot.d > 0 ? "100%" : "—"}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? pc(tot.d / tot.b) : "—"}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? `${tot.d / tot.b / pace >= 1 ? "▲" : "▼"} ${pc(tot.d / tot.b / pace)}` : "—"}</td>
             <td className="px-2.5 py-2 text-right tabular-nums">{tot.b > 0 ? `${tot.d - tot.b * pace >= 0 ? "+" : "−"}${brl(Math.abs(tot.d - tot.b * pace))}` : "—"}</td>
@@ -251,7 +257,7 @@ export function BudgetPlanChart({ scope, year, period, plan, projection }: PlanC
       </ControlBar>
 
       <p className="mb-4 text-xs leading-relaxed text-muted">
-        <b className="text-ink">% exec.</b> = realizado ÷ previsto. <b className="text-ink">Pace</b> (ritmo) = % exec. ÷ {pc(pace)} (parte do ano que já passou): acima de 100% está acima do esperado para {MONTH[period]}, abaixo de 100%, abaixo do esperado. <b className="text-ink">Pace em R$</b> = realizado menos o valor esperado até agora (previsto × {pc(pace)}).
+        <b className="text-ink">% do total</b> = parte do total realizado (nas subcategorias, parte da categoria-mãe). <b className="text-ink">% exec.</b> = realizado ÷ previsto. <b className="text-ink">Pace</b> (ritmo) = % exec. ÷ {pc(pace)} (parte do ano que já passou): acima de 100% está acima do esperado para {MONTH[period]}, abaixo de 100%, abaixo do esperado. <b className="text-ink">Pace em R$</b> = realizado menos o valor esperado até agora (previsto × {pc(pace)}).
         {projection && st === "done" && period < 6 ? <> <b className="text-ink">Projeção</b> = onde o ano deve fechar; <b className="text-ink">vs LOA</b> compara a projeção com o previsto na lei.</> : null}
       </p>
 
