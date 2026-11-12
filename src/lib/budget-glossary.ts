@@ -99,7 +99,7 @@ export function explainItem(name: string, view: GlossaryView, scope: string, par
   if (hit) return hit[1];
   if (parentName) {
     const p = rules.find(([re]) => re.test(norm(parentName)));
-    return `Parte de "${parentName}": agrupa um tipo específico de ${view === "revenue" ? "receita" : "gasto"} dessa área.${p ? ` ${p[1]}` : ""}`;
+    return p ? `Subdivisão de "${parentName}". ${p[1]}` : `Subdivisão de "${parentName}": detalha um tipo específico de ${view === "revenue" ? "receita" : "gasto"} dessa área.`;
   }
   const kind = view === "revenue" ? "Origem de receita" : view === "nature" ? "Tipo de gasto" : "Área do orçamento";
   return `${kind} "${name}" no orçamento do ${scope}. Os valores são os declarados ao Tesouro Nacional no relatório bimestral (RREO).`;

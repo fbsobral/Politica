@@ -137,9 +137,27 @@ function Panel({ scope, year, period, plan, projection, view, base, sort, stage 
             ) : (
               <span className="truncate">{i.name}</span>
             )}
-            <InfoTip label={`O que é ${i.name}?`}>
-              <span className="block font-semibold">{i.name}</span>
-              <span className="mt-1 block text-muted">{explainItem(i.name, view, scopeTxt, parent?.name)}</span>
+            <InfoTip label={`Explicação: ${i.name}`}>
+              <span className="block text-[10px] font-bold uppercase tracking-wide text-faint">O que é</span>
+              <span className="mt-0.5 block">{explainItem(i.name, view, scopeTxt, parent?.name)}</span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-faint">Como está em {year}</span>
+              <span className="mt-0.5 block space-y-1 text-muted">
+                <span className="block">
+                  Até {MONTH[period]}, {isExp ? "foram empenhados" : "foram arrecadados"} <b className="text-ink">{brl(d)}</b>
+                  {b > 0 ? <> de <b className="text-ink">{brl(b)}</b> {isExp ? "de dotação" : "previstos"} ({r !== null ? pc(r) : "—"}).</> : "."}
+                </span>
+                {esp !== null && ritmo !== null && (
+                  <span className="block">
+                    Pelo calendário ({pc(pace)} do ano) seriam esperados {brl(esp)}: {Math.abs(ritmo - 1) < 0.03 ? "no ritmo esperado" : ritmo > 1 ? `${pc(ritmo - 1)} acima do esperado` : `${pc(1 - ritmo)} abaixo do esperado`}.
+                  </span>
+                )}
+                {share !== null && <span className="block">Representa {pc(share)} {child && parent ? `do que foi realizado em "${parent.name}"` : "do total realizado nesta tabela"}.</span>}
+                {p && (
+                  <span className="block">
+                    Projeção: fechar o ano em {brl(p.value)}{dev !== null ? (status === "segue" ? ", em linha com a LOA" : `, ${pc(Math.abs(dev))} ${dev > 0 ? "acima" : "abaixo"} da LOA`) : ""}.
+                  </span>
+                )}
+              </span>
               <span className="mt-2 block"><AskButton label="Pergunte" focus={askFocus(i, child, { b, d, r, ritmo, p: p?.value ?? null, dev })} /></span>
             </InfoTip>
             </div>
