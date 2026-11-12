@@ -74,7 +74,7 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded-sm bg-ok/15" style={{ boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--ok) 40%, transparent)" }} />Intervalo da meta</span>
           {fut.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-brand bg-surface" />Expectativa do mercado (Focus) para dezembro</span>}
         </div>
-        <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }, { v: "10", l: "10 anos" }, { v: "20", l: "20 anos" }]} />
+        <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "1", l: "1 ano" }, { v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }, { v: "10", l: "10 anos" }, { v: "20", l: "20 anos" }, { v: "30", l: "30 anos" }]} />
       </div>
       <div className="card relative p-3 sm:p-5">
         <div ref={box} className="w-full" />

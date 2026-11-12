@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
+import { BudgetShareTable, ExpenseShareTables } from "@/components/budget-share-table";
+import { InfoTip } from "@/components/info-tip";
 import { brDateTime } from "@/lib/stamp";
 import { PrimaryChart } from "@/components/primary-chart";
 import { getPrimaryHistory } from "@/lib/primary";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
 import { Explain } from "@/components/explain";
-import { EmptyState, Notice, PageHeader, ScopeTabs, StatTile } from "@/components/ui";
+import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { BRAZIL_POPULATION, brlShort, getBudget, getBudgetHistory, pct, PERIOD_LABEL, type BudgetData, type BudgetScope, type Slice } from "@/lib/budget";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -80,17 +82,90 @@ function askBudget(b: BudgetData, what: string, body: string, suggestions: strin
   return { title: `${what} · ${b.entity}`, text: `${what} (${b.entity}, ano ${b.annual?.year}). Valores do ano fechado, como declarados ao Tesouro Nacional (Siconfi):\n${body}`, suggestions };
 }
 
+type MiniRow = [string, string];
+function MiniCard({ title, big, caption, note, ask, rows, bar, link }: { title: string; big: string; caption: string; note: string; ask: AskFocus; rows: MiniRow[]; bar?: { fill: number; tick: number; scope: BudgetScope }; link?: { href: string; label: string } }) {
+  return (
+    <section className="card flex h-full flex-col p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="eyebrow">{title}</p>
+        <span className="flex items-center gap-1.5">
+          <InfoTip label={`Sobre ${title}`}><span className="block">{note}</span></InfoTip>
+          <AskButton compact focus={ask} />
+        </span>
+      </div>
+      <p className="display mt-1.5 text-2xl font-semibold leading-tight">{big}</p>
+      <p className="min-h-[2rem] text-[11px] leading-snug text-faint">{caption}</p>
+      <div className="min-h-[2.75rem]">
+        {bar && (
+          <div className="relative mt-3 h-3" role="img" aria-label={`Executado: ${pct(bar.fill, 0)}; esperado até agora: ${pct(bar.tick, 0)}`}>
+            <div className="absolute inset-0 rounded-full bg-ink/10" />
+            <div className="absolute left-0 top-[2px] h-2 rounded-full" style={{ width: `${Math.min(100, bar.fill * 100)}%`, background: `var(--${bar.scope.toLowerCase()})` }} />
+            <div className="absolute -top-0.5 h-4 w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, bar.tick * 100)}% - 1px)` }} />
+          </div>
+        )}
+      </div>
+      <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
+        {rows.map(([k, v]) => (
+          <Fragment key={k}>
+            <dt className="whitespace-nowrap text-muted">{k}</dt>
+            <dd className="truncate text-right font-semibold tabular-nums" title={v}>{v}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      {link && <Link href={link.href} className="mt-2 text-xs font-semibold text-brand hover:underline">{link.label}</Link>}
+    </section>
+  );
+}
+
 function Detail({ b }: { b: BudgetData }) {
   const a = b.annual;
   const c = b.current;
   const pc = a ? perCapita(b, a.expenseTotal) : null;
   return (
     <div className="space-y-8">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo">
-        <StatTile label={`Despesa ${a?.year ?? ""}`} value={a ? brlShort(a.expenseTotal) : "—"} hint="empenhada no ano fechado" />
-        <StatTile label={`Receita ${a?.year ?? ""}`} value={a && a.revenueTotal ? brlShort(a.revenueTotal) : "—"} hint="realizada (bruta)" />
-        <StatTile label="Gasto por habitante" value={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} hint={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"} />
-        <StatTile label={c ? `Execução ${c.year}` : "Execução do ano"} value={c && c.expense.updated ? pct(c.expense.committed / c.expense.updated, 0) : "—"} hint={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]}) · detalhes em Expectativa fiscal` : "sem dados do ano corrente"} />
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Resumo">
+        {(() => {
+          const top = a?.expense.find((x) => x.code !== "outros");
+          const top3 = a ? a.expense.filter((x) => x.code !== "outros").slice(0, 3).reduce((acc, x) => acc + x.share, 0) : 0;
+          const tax = a?.revenue.find((r) => r.code === "RO1.1");
+          const transfer = a?.revenue.find((r) => r.code === "RO1.7");
+          const pop = b.scope === "FEDERAL" ? BRAZIL_POPULATION : b.population;
+          const rc = a && a.revenueTotal ? perCapita(b, a.revenueTotal) : null;
+          const perWho = b.scope === "FEDERAL" ? "brasileiro" : "morador";
+          const elapsed = c ? c.period / 6 : null;
+          const exec = c && c.expense.updated ? c.expense.committed / c.expense.updated : null;
+          const pace = exec !== null && elapsed ? exec / elapsed : null;
+          return (
+            <>
+              <MiniCard
+                title={`Despesa ${a?.year ?? ""}`} big={a ? brlShort(a.expenseTotal) : "—"} caption="empenhada no ano fechado"
+                note="Tudo o que o governo comprometeu gastar no ano, como declarado ao Tesouro Nacional (despesa empenhada). Inclui salários, serviços, obras e também o pagamento de juros e do principal da dívida."
+                ask={{ title: `Despesa ${a?.year ?? ""} · ${b.entity}`, text: `Despesa empenhada de ${b.entity} em ${a?.year}: ${a ? brlShort(a.expenseTotal) : "?"}${pc ? `, R$ ${Math.round(pc).toLocaleString("pt-BR")} por ${perWho}` : ""}. Maior área: ${top ? `${top.name} (${pct(top.share, 0)})` : "?"}; as 3 maiores somam ${pct(top3, 0)}.`, suggestions: ["Para onde vai a maior parte da despesa?", "Esse gasto por habitante é alto?", "O que está incluso nessa despesa?"] }}
+                rows={[["Por " + perWho, pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"], ["Maior área", top ? top.name : "—"], ["3 maiores juntas", a ? pct(top3, 0) : "—"]]}
+              />
+              <MiniCard
+                title={`Receita ${a?.year ?? ""}`} big={a && a.revenueTotal ? brlShort(a.revenueTotal) : "—"} caption="realizada (bruta), no ano fechado"
+                note={b.scope === "FEDERAL" ? "Tudo o que o governo arrecadou no ano (receita realizada, bruta). Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida; por isso o total pode ser maior que a despesa." : b.scope === "MUNICIPAL" ? "Tudo o que o governo arrecadou no ano (receita realizada, bruta). Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios." : "Tudo o que o governo arrecadou no ano (receita realizada, bruta)."}
+                ask={{ title: `Receita ${a?.year ?? ""} · ${b.entity}`, text: `Receita realizada de ${b.entity} em ${a?.year}: ${a ? brlShort(a.revenueTotal) : "?"}. Tributos próprios: ${tax ? pct(tax.share, 0) : "?"}; transferências: ${transfer ? pct(transfer.share, 0) : "?"}.`, suggestions: ["De onde vem a maior parte da receita?", "O que são transferências?", "Essa cidade depende de repasses?"] }}
+                rows={[["Tributos próprios", tax ? pct(tax.share, 0) : "—"], ["Transferências", transfer ? pct(transfer.share, 0) : "—"], ["Por " + perWho, rc ? `R$ ${Math.round(rc).toLocaleString("pt-BR")}` : "—"]]}
+              />
+              <MiniCard
+                title="Gasto por habitante" big={pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "—"} caption={b.scope === "FEDERAL" ? "por brasileiro, no ano" : "por morador, no ano"}
+                note="Despesa empenhada dividida pela população. Serve para comparar entes de tamanhos diferentes; população do último dado disponível."
+                ask={{ title: `Gasto por habitante · ${b.entity}`, text: `Despesa empenhada por ${perWho} em ${b.entity} no ano ${a?.year}: ${pc ? `R$ ${Math.round(pc).toLocaleString("pt-BR")}` : "?"} (população ${pop ? pop.toLocaleString("pt-BR") : "?"}).`, suggestions: ["Esse valor é alto ou baixo?", "Como comparar com outras cidades?", "O que entra nesse cálculo?"] }}
+                rows={[["Despesa total", a ? brlShort(a.expenseTotal) : "—"], ["Receita por " + perWho, rc ? `R$ ${Math.round(rc).toLocaleString("pt-BR")}` : "—"], ["População", pop ? pop.toLocaleString("pt-BR") : "—"]]}
+              />
+              <MiniCard
+                title={c ? `Execução ${c.year}` : "Execução do ano"} big={exec !== null ? pct(exec, 0) : "—"} caption={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]})` : "sem dados do ano corrente"}
+                note="Quanto da dotação atualizada do ano corrente já foi empenhada até o último bimestre. O pace compara isso com a parte do ano que já passou: acima de 100% está acima do esperado."
+                ask={{ title: `Execução ${c?.year ?? ""} · ${b.entity}`, text: `Execução do orçamento de ${b.entity} em ${c?.year} (${c ? PERIOD_LABEL[c.period] : "?"}): ${exec !== null ? pct(exec, 0) : "?"} da dotação atualizada empenhada${pace !== null ? `; pace ${pct(pace, 0)} (${pace >= 1 ? "acima" : "abaixo"} do esperado para ${elapsed !== null ? pct(elapsed, 0) : "?"} do ano` + ")" : ""}.`, suggestions: ["O gasto está no ritmo esperado?", "O que significa execução do orçamento?", "Onde ver o previsto x realizado?"] }}
+                bar={exec !== null && elapsed !== null ? { fill: exec, tick: elapsed, scope: b.scope } : undefined}
+                rows={[["Empenhado", c ? brlShort(c.expense.committed) : "—"], ["Dotação atualizada", c ? brlShort(c.expense.updated) : "—"], ["Pace", pace !== null ? `${pace >= 1 ? "▲" : "▼"} ${pct(pace, 0)}` : "—"]]}
+                link={c ? { href: `/expectativa-fiscal?esfera=${b.scope.toLowerCase()}`, label: "Expectativa fiscal →" } : undefined}
+              />
+            </>
+          );
+        })()}
       </section>
       <p className="-mt-4 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm" role="status">
         <b>Último dado:</b> ano fechado de {a?.year ?? "—"}{c ? <>; {c.year} até {PERIOD_LABEL[c.period]}</> : ""}.{" "}
@@ -121,63 +196,40 @@ function Detail({ b }: { b: BudgetData }) {
       </section>
 
       {a && (a.expense.length > 0 || a.revenue.length > 0) && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
           {/* mesmo destaque para os dois lados: de onde vem e para onde vai */}
-          <section aria-label="De onde vem o dinheiro" className="card p-5 sm:p-6">
+          <section aria-label="De onde vem o dinheiro" className="min-w-0">
             <p className="eyebrow !text-municipal">Entradas</p>
-            <div className="flex items-start justify-between gap-3">
+            <div className="mb-1 flex items-start justify-between gap-3">
               <h2 className="display text-2xl font-semibold">De onde vem o dinheiro</h2>
-              <AskButton focus={askBudget(b, "De onde vem o dinheiro", `Receita total ${brlShort(a.revenueTotal)}. Por origem:\n${sliceText(a.revenue)}`, ["Explique de onde vem o dinheiro desta cidade", "O que são transferências e por que pesam tanto?", "Quais impostos são cobrados aqui?"])} />
+              <span className="flex items-center gap-1.5">
+                {b.scope !== "ESTADUAL" && (
+                  <InfoTip label="Sobre as receitas">
+                    <span className="block">{b.scope === "FEDERAL" ? "Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida. Por isso o total pode ser maior do que o que o governo arrecada de fato em tributos." : "Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios."}</span>
+                  </InfoTip>
+                )}
+                <AskButton focus={askBudget(b, "De onde vem o dinheiro", `Receita total ${brlShort(a.revenueTotal)}. Por origem:\n${sliceText(a.revenue)}`, ["Explique de onde vem o dinheiro desta cidade", "O que são transferências?", "Quanto vem de impostos próprios?"])} />
+              </span>
             </div>
-            <p className="mb-4 text-xs text-muted">Receita realizada em {a.year}: <b className="text-ink">{brlShort(a.revenueTotal)}</b>, por origem.</p>
-            {(() => {
-              const tax = a.revenue.find((r) => r.code === "RO1.1");
-              const transfer = a.revenue.find((r) => r.code === "RO1.7");
-              return tax || transfer ? (
-                <div className="mb-5 grid grid-cols-2 gap-2.5">
-                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Tributos próprios</p><p className="display text-xl font-semibold">{tax ? pct(tax.share, 0) : "—"}</p><p className="text-[11px] text-faint">impostos, taxas e contribuições</p></div>
-                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Transferências</p><p className="display text-xl font-semibold">{transfer ? pct(transfer.share, 0) : "—"}</p><p className="text-[11px] text-faint">repasses de outros governos</p></div>
-                </div>
-              ) : null;
-            })()}
-            {a.revenue.length > 0 ? <Bars items={a.revenue} scope={b.scope} explain="revenue" /> : <p className="text-sm text-muted">Sem detalhamento da receita para este ano.</p>}
-            {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Na União, as receitas de capital incluem a emissão de títulos (operações de crédito), usada para rolar a dívida. Por isso o total é muito maior do que a arrecadação de impostos e contribuições.</p>}
-            {b.scope === "MUNICIPAL" && <p className="mt-4 text-xs leading-relaxed text-faint">Em muitas cidades, as transferências do estado e da União pesam mais do que os tributos próprios.</p>}
+            <p className="mb-3 text-xs text-muted">Receita realizada em {a.year}: <b className="text-ink">{brlShort(a.revenueTotal)}</b>, por origem. Toque num cabeçalho para ordenar e em ▸ para abrir as subcategorias.</p>
+            {a.revenue.length > 0 ? <BudgetShareTable items={a.revenue} scope={b.scope} view="revenue" year={a.year} population={b.scope === "FEDERAL" ? BRAZIL_POPULATION : b.population} entity={b.entity} /> : <p className="text-sm text-muted">Sem detalhamento da receita para este ano.</p>}
           </section>
 
-          <section aria-label="Para onde vai o dinheiro" className="card p-5 sm:p-6">
+          <section aria-label="Para onde vai o dinheiro" className="min-w-0">
             <p className="eyebrow !text-estadual">Saídas</p>
-            <div className="flex items-start justify-between gap-3">
+            <div className="mb-1 flex items-start justify-between gap-3">
               <h2 className="display text-2xl font-semibold">Para onde vai o dinheiro</h2>
-              <AskButton focus={askBudget(b, "Para onde vai o dinheiro", `Despesa total ${brlShort(a.expenseTotal)}. Por função de governo (com subfunções):\n${sliceText(a.expense)}`, ["Para onde vai o dinheiro, em linguagem simples?", "Quanto vai para saúde e educação?", "Isso é diferente da média das cidades?"])} />
+              <span className="flex items-center gap-1.5">
+                <InfoTip label="Sobre as despesas">
+                  <span className="block">{b.scope === "FEDERAL" ? "“Encargos Especiais” inclui o pagamento de juros e do principal da dívida pública e transferências obrigatórias a estados e municípios; por isso costuma ser a maior linha da despesa da União. " : ""}“Pessoal” inclui salários, encargos e também aposentadorias e pensões pagas pelo regime próprio. Investimentos são obras e equipamentos; o restante é custeio do dia a dia.</span>
+                </InfoTip>
+                <AskButton focus={askBudget(b, "Para onde vai o dinheiro", `Despesa total ${brlShort(a.expenseTotal)}. Por função de governo (com subfunções):\n${sliceText(a.expense)}${a.nature?.length ? `\nPor tipo de gasto:\n${sliceText(a.nature)}` : ""}`, ["Para onde vai o dinheiro, em linguagem simples?", "Quanto vai para saúde e educação?", "Quanto vai para investimento?"])} />
+              </span>
             </div>
-            <p className="mb-4 text-xs text-muted">Despesa empenhada em {a.year}: <b className="text-ink">{brlShort(a.expenseTotal)}</b>, por função de governo.</p>
-            {(() => {
-              const top = a.expense.find((x) => x.code !== "outros");
-              const top3 = a.expense.filter((x) => x.code !== "outros").slice(0, 3).reduce((acc, x) => acc + x.share, 0);
-              return top ? (
-                <div className="mb-5 grid grid-cols-2 gap-2.5">
-                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Maior gasto</p><p className="display truncate text-xl font-semibold">{top.name}</p><p className="text-[11px] text-faint">{pct(top.share, 0)} do total</p></div>
-                  <div className="rounded-xl bg-brand-soft/70 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted">3 maiores juntas</p><p className="display text-xl font-semibold">{pct(top3, 0)}</p><p className="text-[11px] text-faint">da despesa total</p></div>
-                </div>
-              ) : null;
-            })()}
-            {a.expense.length > 0 ? <Bars items={a.expense} scope={b.scope} explain="expense" /> : <p className="text-sm text-muted">Sem detalhamento da despesa para este ano.</p>}
-            {b.scope === "FEDERAL" && <p className="mt-4 text-xs leading-relaxed text-faint">“Encargos Especiais” inclui o pagamento de juros e do principal da dívida pública e transferências obrigatórias a estados e municípios.</p>}
+            <p className="mb-3 text-xs text-muted">Despesa empenhada em {a.year}: <b className="text-ink">{brlShort(a.expenseTotal)}</b>, pela área do governo ou pelo tipo de gasto.</p>
+            {a.expense.length > 0 ? <ExpenseShareTables expense={a.expense} nature={a.nature ?? []} scope={b.scope} year={a.year} population={b.scope === "FEDERAL" ? BRAZIL_POPULATION : b.population} entity={b.entity} /> : <p className="text-sm text-muted">Sem detalhamento da despesa para este ano.</p>}
           </section>
         </div>
-      )}
-
-      {a && a.nature?.length > 0 && (
-        <section aria-label="Em que se gasta" className="card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="display text-xl font-semibold">Em que se gasta</h2>
-            <AskButton focus={askBudget(b, "Em que se gasta (tipo de gasto)", `A mesma despesa vista por tipo de gasto:\n${sliceText(a.nature)}`, ["O que é pessoal, juros e investimentos?", "Quanto vai para investimento?"])} />
-          </div>
-          <p className="mb-4 text-xs text-muted">A mesma despesa de {a.year} vista pelo tipo de gasto, e não pela área.</p>
-          <Bars items={a.nature} scope={b.scope} explain="nature" />
-          <p className="mt-4 text-xs leading-relaxed text-faint">“Pessoal” inclui salários, encargos e também aposentadorias e pensões pagas pelo regime próprio. Investimentos são obras e equipamentos; o restante é custeio da máquina e dívida.</p>
-        </section>
       )}
 
       {c && (

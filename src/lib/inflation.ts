@@ -248,7 +248,7 @@ export async function buildInflation(): Promise<InflationData> {
     });
   const [groupsRes, headlinePts, focus, bc, cores] = await Promise.all([
     soft("IBGE", fetchGroups(), null),
-    soft("Banco Central (IPCA)", sgs(433, y - 21, y), [] as { year: number; month: number; value: number }[]),
+    soft("Banco Central (IPCA)", sgs(433, y - 31, y), [] as { year: number; month: number; value: number }[]),
     soft("Focus", fetchFocus(), { date: null, ipca: [], next12: null, pillars: {} } as InflationData["focus"]),
     Promise.all(BC_SERIES.map((d) => sgsPillar(d).catch(() => null))),
     Promise.all(CORE_SERIES.map((d) => sgsPillar(d).catch(() => null))),
@@ -272,7 +272,7 @@ export async function buildInflation(): Promise<InflationData> {
       y12: groupsRes?.headline.y12 ?? lastS?.v ?? null,
       m: groupsRes?.headline.m ?? lastPt?.value ?? null,
       ytd: groupsRes?.headline.ytd ?? (ytdPts.length ? (ytdPts.reduce((a, p) => a * (1 + p.value / 100), 1) - 1) * 100 : null),
-      series: series.slice(-(20 * 12 + 1)),
+      series: series.slice(-(30 * 12 + 1)),
     },
     focus,
     groups: groupsRes?.groups ?? [],
@@ -285,5 +285,5 @@ export async function buildInflation(): Promise<InflationData> {
 
 /** Painel da inflação, com cache de 12 horas (o IPCA sai uma vez por mês; o Focus, toda segunda-feira). */
 export async function getInflation(opts: { force?: boolean } = {}): Promise<InflationData | null> {
-  return cached("inflation:v2", 0.5, buildInflation, opts.force);
+  return cached("inflation:v3", 0.5, buildInflation, opts.force);
 }
