@@ -25,7 +25,7 @@ const MENU: Entry[] = [
     children: [
       { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
       { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
-      { href: "/inflacao", label: "Inflação", hint: "IPCA, expectativas e pilares frente à meta", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
+      { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic, juro real e expectativas do mercado", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
       { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa em 5 anos e o motivo das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
       { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, de 5 a 30 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
       { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano, 50% economia e 50% social", icon: <IconChart />, match: (p) => p.startsWith("/score") },

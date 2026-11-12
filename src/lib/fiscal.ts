@@ -400,3 +400,20 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
 
   return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, pibSource: { code: pibCode, perimeter: scope === "FEDERAL" ? "Governo Federal e Banco Central" : "todos os estados e municípios juntos" }, fetchedAt: new Date().toISOString() };
 }
+
+/** PIB acumulado em 12 meses a preços correntes (R$), no fim do mês, segundo o Banco Central (SGS 4382). */
+export async function getPib12m(year: number, month: number): Promise<number | null> {
+  const key = `fiscal:pib12m:v1:${year}-${month}`;
+  const hit = await db.budgetCache.findUnique({ where: { key } });
+  if (hit && Date.now() - hit.fetchedAt.getTime() < 7 * DAY) return (hit.data as unknown as { v: number }).v;
+  try {
+    const row = (await sgs(4382, year - 1, year)).find((r) => r.year === year && r.month === month);
+    if (!row) return hit ? (hit.data as unknown as { v: number }).v : null;
+    const v = row.value * 1e6; // a série vem em R$ milhões
+    await db.budgetCache.upsert({ where: { key }, create: { key, data: { v } as never }, update: { data: { v } as never, fetchedAt: new Date() } });
+    return v;
+  } catch (err) {
+    console.warn("[fiscal:pib12m]", (err as Error).message);
+    return hit ? (hit.data as unknown as { v: number }).v : null;
+  }
+}

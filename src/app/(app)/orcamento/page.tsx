@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Fragment, Suspense } from "react";
+import { Suspense } from "react";
 import { BudgetChart } from "@/components/budget-chart";
 import { BudgetShareTable, ExpenseShareTables } from "@/components/budget-share-table";
 import { InfoTip } from "@/components/info-tip";
+import { MiniCard } from "@/components/mini-card";
 import { brDateTime } from "@/lib/stamp";
 import { PrimaryChart } from "@/components/primary-chart";
 import { getPrimaryHistory } from "@/lib/primary";
@@ -82,41 +83,6 @@ function askBudget(b: BudgetData, what: string, body: string, suggestions: strin
   return { title: `${what} · ${b.entity}`, text: `${what} (${b.entity}, ano ${b.annual?.year}). Valores do ano fechado, como declarados ao Tesouro Nacional (Siconfi):\n${body}`, suggestions };
 }
 
-type MiniRow = [string, string];
-function MiniCard({ title, big, caption, note, ask, rows, bar, link }: { title: string; big: string; caption: string; note: string; ask: AskFocus; rows: MiniRow[]; bar?: { fill: number; tick: number; scope: BudgetScope }; link?: { href: string; label: string } }) {
-  return (
-    <section className="card flex h-full flex-col p-4">
-      <div className="flex items-start justify-between gap-2">
-        <p className="eyebrow">{title}</p>
-        <span className="flex items-center gap-1.5">
-          <InfoTip label={`Sobre ${title}`}><span className="block">{note}</span></InfoTip>
-          <AskButton compact focus={ask} />
-        </span>
-      </div>
-      <p className="display mt-1.5 text-2xl font-semibold leading-tight">{big}</p>
-      <p className="min-h-[2rem] text-[11px] leading-snug text-faint">{caption}</p>
-      <div className="min-h-[2.75rem]">
-        {bar && (
-          <div className="relative mt-3 h-3" role="img" aria-label={`Executado: ${pct(bar.fill, 0)}; esperado até agora: ${pct(bar.tick, 0)}`}>
-            <div className="absolute inset-0 rounded-full bg-ink/10" />
-            <div className="absolute left-0 top-[2px] h-2 rounded-full" style={{ width: `${Math.min(100, bar.fill * 100)}%`, background: `var(--${bar.scope.toLowerCase()})` }} />
-            <div className="absolute -top-0.5 h-4 w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, bar.tick * 100)}% - 1px)` }} />
-          </div>
-        )}
-      </div>
-      <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
-        {rows.map(([k, v]) => (
-          <Fragment key={k}>
-            <dt className="whitespace-nowrap text-muted">{k}</dt>
-            <dd className="truncate text-right font-semibold tabular-nums" title={v}>{v}</dd>
-          </Fragment>
-        ))}
-      </dl>
-      {link && <Link href={link.href} className="mt-2 text-xs font-semibold text-brand hover:underline">{link.label}</Link>}
-    </section>
-  );
-}
-
 function Detail({ b }: { b: BudgetData }) {
   const a = b.annual;
   const c = b.current;
@@ -159,7 +125,7 @@ function Detail({ b }: { b: BudgetData }) {
                 title={c ? `Execução ${c.year}` : "Execução do ano"} big={exec !== null ? pct(exec, 0) : "—"} caption={c ? `da dotação já empenhada (${PERIOD_LABEL[c.period]})` : "sem dados do ano corrente"}
                 note="Quanto da dotação atualizada do ano corrente já foi empenhada até o último bimestre. O pace compara isso com a parte do ano que já passou: acima de 100% está acima do esperado."
                 ask={{ title: `Execução ${c?.year ?? ""} · ${b.entity}`, text: `Execução do orçamento de ${b.entity} em ${c?.year} (${c ? PERIOD_LABEL[c.period] : "?"}): ${exec !== null ? pct(exec, 0) : "?"} da dotação atualizada empenhada${pace !== null ? `; pace ${pct(pace, 0)} (${pace >= 1 ? "acima" : "abaixo"} do esperado para ${elapsed !== null ? pct(elapsed, 0) : "?"} do ano` + ")" : ""}.`, suggestions: ["O gasto está no ritmo esperado?", "O que significa execução do orçamento?", "Onde ver o previsto x realizado?"] }}
-                bar={exec !== null && elapsed !== null ? { fill: exec, tick: elapsed, scope: b.scope } : undefined}
+                bar={exec !== null && elapsed !== null ? { kind: "pace" as const, fill: exec, tick: elapsed, color: `var(--${b.scope.toLowerCase()})`, label: `Executado: ${pct(exec, 0)}; esperado até agora: ${pct(elapsed, 0)}` } : undefined}
                 rows={[["Empenhado", c ? brlShort(c.expense.committed) : "—"], ["Dotação atualizada", c ? brlShort(c.expense.updated) : "—"], ["Pace", pace !== null ? `${pace >= 1 ? "▲" : "▼"} ${pct(pace, 0)}` : "—"]]}
                 link={c ? { href: `/expectativa-fiscal?esfera=${b.scope.toLowerCase()}`, label: "Expectativa fiscal →" } : undefined}
               />

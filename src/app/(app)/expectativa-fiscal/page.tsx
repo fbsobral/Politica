@@ -6,7 +6,7 @@ import { InfoTip } from "@/components/info-tip";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
-import { getFiscal, getFiscalSeries, getPrimaryPct, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
+import { getFiscal, getFiscalSeries, getPib12m, getPrimaryPct, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -14,6 +14,7 @@ export const metadata = { title: "Expectativa fiscal" };
 export const dynamic = "force-dynamic";
 
 const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro"];
+const MONTH_NAME = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 const signed = (d: number) => `${d >= 0 ? "+" : "−"}${pct(Math.abs(d), 1)}`;
 
@@ -90,7 +91,7 @@ function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, 
 }
 
 /** Categorias que mais se afastam da LOA na projeção (para o resumo). */
-function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
+function Detail({ f, pibPct, pib12 }: { f: FiscalData; pibPct: PrimaryPct | null; pib12: number | null }) {
   const t = f.totals;
   const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
   const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
@@ -102,6 +103,7 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
     <div className="space-y-8">
       <p className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm" role="status">
         <b>Último dado de {f.year}:</b> até {MONTH[f.period]} (RREO do {f.period}º bimestre{f.period === 6 ? ", ano fechado" : ""}).{" "}
+        {f.period < 6 && <span className="text-muted">Faltam {MONTH_NAME[f.period * 2 + 1]} e {MONTH_NAME[f.period * 2 + 2]}: o {f.period + 1}º bimestre ainda não foi publicado (o prazo legal é de até 30 dias depois que ele fecha). Nos indicadores do Banco Central já há dados mais recentes, como o % do PIB em 12 meses. </span>}
         <span className="text-muted">Dados coletados do Tesouro Nacional em <b className="text-ink">{brDateTime(f.fetchedAt)}</b> e renovados a cada 24 horas.</span>
       </p>
       <p className="max-w-3xl text-sm text-muted">
@@ -144,7 +146,8 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
             <span className="flex items-center gap-1.5">
               <InfoTip label="Sobre o resultado primário">
                 <span className="block">Receitas menos despesas, sem contar os juros da dívida. Superávit é o que sobra antes de pagar os juros; déficit é o que falta.</span>
-                <span className="mt-1.5 block text-muted">Valor: RREO, Anexo 06 (Tesouro Nacional/Siconfi). A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
+                <span className="mt-1.5 block text-muted">Valor em R$: RREO, Anexo 06 (Tesouro Nacional/Siconfi), de janeiro até o último bimestre publicado. A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
+                {pib12 && <span className="mt-1.5 block text-muted"><b className="text-ink">% PIB no ano</b> é um cálculo do Política: o valor em R$ de janeiro a {MONTH[f.period]} dividido pelo PIB acumulado em 12 meses (Banco Central, SGS 4382). Não é comparável com o acumulado em 12 meses, nem com um acumulado no ano que inclua meses que o RREO ainda não publicou.</span>}
                 {pibPct && <span className="mt-1.5 block text-muted">% do PIB: Banco Central, SGS {pibPct.code} ({pibPct.perimeter}), acumulado em 12 meses até {pibPct.month}.{f.scope === "FEDERAL" ? "" : " O Banco Central não publica o percentual por estado ou município."}</span>}
               </InfoTip>
               <AskButton compact focus={{
@@ -157,7 +160,7 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
           {prim?.realized != null ? (
             <>
               <p className="display mt-1.5 text-2xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
-              <p className="min-h-[2rem] text-[11px] leading-snug text-faint">receitas menos despesas primárias, até {MONTH[f.period]}</p>
+              <p className="min-h-[2rem] text-[11px] leading-snug text-faint">receitas menos despesas primárias, de janeiro a {MONTH[f.period]}{f.period < 6 ? " (RREO)" : ""}</p>
               <div className="hidden min-h-[2.75rem] xl:block" aria-hidden />
               <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
                 <dt className="whitespace-nowrap text-muted" title="A meta vale para o ano inteiro">Meta LDO</dt>
@@ -166,9 +169,10 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
                 <dd className={`whitespace-nowrap text-right font-bold ${prim.meta != null ? (prim.realized >= prim.meta ? "text-ok" : "text-danger") : prim.realized >= 0 ? "text-ok" : "text-danger"}`}>
                   {prim.meta != null ? (prim.realized >= prim.meta ? "▲ acima da meta" : "▼ abaixo da meta") : prim.realized >= 0 ? "▲ superávit" : "▼ déficit"}
                 </dd>
-                <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{f.scope === "FEDERAL" ? "% do PIB" : "% PIB (todos)"}</dt>
+                <dt className="whitespace-nowrap text-muted" title={pib12 && prim.realized !== null ? `Cálculo do Política: resultado primário de janeiro a ${MONTH[f.period]} (RREO) dividido pelo PIB acumulado em 12 meses até ${MONTH[f.period]} (Banco Central, SGS 4382)` : "Só calculado para a União"}>% PIB no ano</dt>
+                <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pib12 ? `${prim.realized >= 0 ? "superávit " : "déficit "}${Math.abs((prim.realized / pib12) * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
+                <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{f.scope === "FEDERAL" ? `% PIB 12 meses${pibPct ? ` (${pibPct.month})` : ""}` : "% PIB (todos)"}</dt>
                 <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit " : pibPct.pct < 0 ? "superávit " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
-                <dt className="whitespace-nowrap text-muted">Vs. meta</dt><dd className="whitespace-nowrap text-right tabular-nums">{prim.meta != null ? brlShort(prim.realized - prim.meta) : "—"}</dd>
               </dl>
             </>
           ) : (
@@ -223,9 +227,11 @@ function Skeleton() {
 async function Content({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
   const [f, pibPct] = await Promise.all([getFiscal(scope, user), getPrimaryPct(scope)]);
+  // % do PIB no ano (mesmo período do valor em R$): só faz sentido para a União, comparada com o PIB do país
+  const pib12 = f && scope === "FEDERAL" ? await getPib12m(f.year, f.period * 2) : null;
   return (
     <>
-      {f ? <Detail f={f} pibPct={pibPct} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
+      {f ? <Detail f={f} pibPct={pibPct} pib12={pib12} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
       <div className="mt-8 max-w-3xl">
         <Notice kind="info">
           Fonte: Relatório Resumido da Execução Orçamentária (RREO), que prefeituras, estados e a União enviam a cada dois meses ao Tesouro Nacional (Siconfi): Anexo 1 (receitas e despesas), Anexo 2 (despesa por função) e Anexo 6 (metas fiscais da LDO).

@@ -49,7 +49,7 @@ export type FocusYear = { year: number; median: number; min: number | null; max:
 export type InflationData = {
   ref: { year: number; month: number } | null;
   headline: { y12: number | null; m: number | null; ytd: number | null; series: { year: number; month: number; v: number }[] };
-  focus: { date: string | null; ipca: FocusYear[]; next12: number | null; pillars: Record<string, FocusYear[]> };
+  focus: { date: string | null; ipca: FocusYear[]; /** mediana do Focus para a Selic no fim de cada ano */ selic?: FocusYear[]; next12: number | null; pillars: Record<string, FocusYear[]> };
   /** Meta Selic (% ao ano) no fim de cada mês, definida pelo Copom (Banco Central, SGS 432) */
   selic: { year: number; month: number; v: number }[];
   groups: Pillar[];
@@ -202,7 +202,7 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 async function fetchFocus(): Promise<InflationData["focus"]> {
   const since = iso(new Date(Date.now() - 40 * 864e5));
   const [annual, m12] = await Promise.all([
-    getJson<{ value: FocusRow[] }>(odata("ExpectativasMercadoAnuais", { $filter: `startswith(Indicador,'IPCA') and baseCalculo eq 0 and Data ge '${since}'`, $orderby: "Data desc", $top: "5000", $format: "json", $select: "Indicador,Data,DataReferencia,Mediana,Minimo,Maximo,numeroRespondentes,baseCalculo" }), 40000),
+    getJson<{ value: FocusRow[] }>(odata("ExpectativasMercadoAnuais", { $filter: `(startswith(Indicador,'IPCA') or Indicador eq 'Selic') and baseCalculo eq 0 and Data ge '${since}'`, $orderby: "Data desc", $top: "5000", $format: "json", $select: "Indicador,Data,DataReferencia,Mediana,Minimo,Maximo,numeroRespondentes,baseCalculo" }), 40000),
     getJson<{ value: { Mediana: number; Data: string }[] }>(odata("ExpectativasMercadoInflacao12Meses", { $filter: "Indicador eq 'IPCA' and Suavizada eq 'S' and baseCalculo eq 0", $orderby: "Data desc", $top: "1", $format: "json", $select: "Indicador,Data,Mediana" }), 40000).catch(() => ({ value: [] })),
   ]);
   const rows = annual.value ?? [];
@@ -225,16 +225,18 @@ async function fetchFocus(): Promise<InflationData["focus"]> {
   };
   const pillars: Record<string, FocusYear[]> = {};
   let ipca: FocusYear[] = [];
+  let selic: FocusYear[] = [];
   for (const [ind, list] of byInd) {
     const k = ind.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     if (k === "ipca") ipca = build(list);
+    else if (k === "selic") selic = build(list);
     else if (k.includes("administrad")) pillars.monitorados = build(list);
     else if (k.includes("livre")) pillars.livres = build(list);
     else if (k.includes("servic")) pillars.servicos = build(list);
     else if (k.includes("alimenta")) pillars["alim-domicilio"] = build(list);
     else if (k.includes("industria")) pillars["bens-industriais"] = build(list);
   }
-  return { date, ipca, next12: m12.value?.[0]?.Mediana ?? null, pillars };
+  return { date, ipca, selic, next12: m12.value?.[0]?.Mediana ?? null, pillars };
 }
 
 /* ───────── Montagem ───────── */
@@ -252,7 +254,7 @@ export async function buildInflation(): Promise<InflationData> {
     soft("IBGE", fetchGroups(), null),
     soft("Banco Central (IPCA)", sgs(433, y - 31, y), [] as { year: number; month: number; value: number }[]),
     soft("Banco Central (Selic)", sgs(432, y - 31, y), [] as { year: number; month: number; value: number }[]),
-    soft("Focus", fetchFocus(), { date: null, ipca: [], next12: null, pillars: {} } as InflationData["focus"]),
+    soft("Focus", fetchFocus(), { date: null, ipca: [], selic: [], next12: null, pillars: {} } as InflationData["focus"]),
     Promise.all(BC_SERIES.map((d) => sgsPillar(d).catch(() => null))),
     Promise.all(CORE_SERIES.map((d) => sgsPillar(d).catch(() => null))),
   ]);
@@ -294,5 +296,5 @@ export async function buildInflation(): Promise<InflationData> {
 
 /** Painel da inflação, com cache de 12 horas (o IPCA sai uma vez por mês; o Focus, toda segunda-feira). */
 export async function getInflation(opts: { force?: boolean } = {}): Promise<InflationData | null> {
-  return cached("inflation:v4", 0.5, buildInflation, opts.force);
+  return cached("inflation:v5", 0.5, buildInflation, opts.force);
 }
