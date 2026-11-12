@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AskButton } from "@/components/agent/ask-button";
 import { pib12Label, pibYtdLabel } from "@/lib/pib-pct";
 
-export type FPoint = { year: number; period: number; revenue: number; expense: number; balance: number; primary: number | null; pibPct: number | null; pibPctYtd?: number | null };
+export type FPoint = { year: number; period: number; revenue: number; expense: number; balance: number; primary: number | null; pibPct: number | null; pibPctYtd?: number | null; month?: number };
 
 type Key = "revenue" | "expense" | "balance" | "primary" | "pibPct";
 const LINES: { key: Key; label: string; color: string }[] = [
@@ -15,6 +15,7 @@ const LINES: { key: Key; label: string; color: string }[] = [
   { key: "pibPct", label: "Resultado primário em % do PIB (eixo da direita)", color: "#c026d3" },
 ];
 const RANGES = [1, 2, 5, 10, 20, 30] as const;
+const MES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const MONTH = ["", "fevereiro", "abril", "junho", "agosto", "outubro", "dezembro"];
 const H = 320, PL = 64, PR = 58, PT = 16, PB = 34;
 
@@ -155,7 +156,7 @@ export function FiscalLineChart({ annual, bimesters, currentYear, currentPeriod,
             <p className="mb-1 font-semibold">{byBim ? `${hp.period}º bimestre de ${hp.year} (até ${MONTH[hp.period]})` : hp.period < 6 ? `${hp.year} até ${MONTH[hp.period]} (parcial)` : `${hp.year} (ano fechado)`}</p>
             {visible.map((l) => { const v = val(hp, l.key); return (
               <p key={l.key} className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.color }} /><span className="truncate">{l.key === "pibPct" ? `${hp.period === 6 || (ytdPoint(hp) && hp.pibPctYtd != null) ? pibYtdLabel(hp.period * 2) : pib12Label(hp.period * 2)} · BC` : l.label}</span></span>
+                <span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.color }} /><span className="truncate">{l.key === "pibPct" ? `${hp.period === 6 || (ytdPoint(hp) && hp.pibPctYtd != null) ? pibYtdLabel(hp.month ?? hp.period * 2) : pib12Label(hp.period * 2)} · BC` : l.key === "primary" && hp.month != null ? `Resultado primário · BC${hp.month !== hp.period * 2 && hp.period < 6 ? `, até ${MES[hp.month]}` : ""}` : l.label}</span></span>
                 <b className="shrink-0 tabular-nums">{v === null ? "—" : l.key === "pibPct" ? pctFmt(v) : brl(v)}</b>
               </p>
             ); })}
@@ -180,7 +181,7 @@ export function FiscalLineChart({ annual, bimesters, currentYear, currentPeriod,
           ? "Cada ponto é o acumulado do ano até o bimestre (por isso a linha recomeça em janeiro). "
           : `Um ponto por ano: anos fechados (6º bimestre) e, no último ponto, ${currentYear} até ${MONTH[currentPeriod]} (ponto vazado, com *). `}
         {short && firstYear ? `O RREO padronizado no Siconfi só existe desde ${firstYear}, então este período mostra tudo o que há (${annual.length} pontos). ` : ""}
-        Fonte: RREO (Tesouro Nacional/Siconfi). Receita é a realizada; despesa, a empenhada; saldo = receita menos despesa; resultado primário em R$ vem do Anexo 6. O percentual do PIB (linha tracejada, eixo da direita) é sempre o acumulado no ano, a mesma janela das linhas em R$: de janeiro até o bimestre nos gráficos de 1 e 2 anos e no ano corrente, e de janeiro a dezembro nos anos fechados (que é igual ao acumulado em 12 meses de dezembro, publicado pelo Banco Central, SGS {pibSource.code}: {pibSource.perimeter}). No ano corrente da União, o cálculo soma o resultado mensal do Governo Federal e Banco Central (SGS 4639) e divide pelo PIB dos mesmos meses (SGS 4380). Positivo = superávit, negativo = déficit. {pibSource.code === 5786 ? "O Banco Central não publica o percentual por estado ou município, então a linha mostra todos juntos." : ""}
+        Fontes: receita (realizada), despesa (empenhada) e saldo vêm do RREO (Tesouro Nacional/Siconfi). O resultado primário, em R$ e em % do PIB, vem do Banco Central na União (soma do resultado mensal do Governo Federal e Banco Central, SGS 4639); em estados e municípios, que o Banco Central não publica, vem do Anexo 6 do RREO. O percentual do PIB (linha tracejada, eixo da direita) é sempre o acumulado no ano, a mesma janela das linhas em R$: de janeiro até o bimestre nos gráficos de 1 e 2 anos e no ano corrente, e de janeiro a dezembro nos anos fechados (que é igual ao acumulado em 12 meses de dezembro, publicado pelo Banco Central, SGS {pibSource.code}: {pibSource.perimeter}). No ano corrente da União, o cálculo soma o resultado mensal do Governo Federal e Banco Central (SGS 4639) e divide pelo PIB dos mesmos meses (SGS 4380). Positivo = superávit, negativo = déficit. {pibSource.code === 5786 ? "O Banco Central não publica o percentual por estado ou município, então a linha mostra todos juntos." : ""}
       </p>
     </div>
   );

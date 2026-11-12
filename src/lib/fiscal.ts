@@ -309,6 +309,8 @@ export type SeriesPoint = {
   year: number;
   /** bimestre do RREO (acumulado no ano até ele); 6 = ano fechado */
   period: number;
+  /** União: mês mais recente do Banco Central usado em primary e pibPctYtd (pode ser mais novo que o bimestre) */
+  month?: number;
   revenue: number;
   expense: number;
   /** receita realizada menos despesa empenhada */
@@ -406,7 +408,7 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
   // % do PIB acumulado no ano (União): soma do resultado mensal do Governo Federal e BC (SGS 4639, + = déficit) ÷ soma do PIB mensal (SGS 4380)
   if (scope === "FEDERAL") {
     try {
-      const [fl, pm] = await Promise.all([sgs(4639, cur.year - 1, cur.year), sgs(4380, cur.year - 1, cur.year)]);
+      const [fl, pm] = await Promise.all([sgs(4639, annual[0]?.year ?? cur.year - 1, cur.year), sgs(4380, cur.year - 1, cur.year)]);
       const flow = new Map(fl.map((r) => [`${r.year}-${r.month}`, r.value]));
       const gdp = new Map(pm.map((r) => [`${r.year}-${r.month}`, r.value]));
       const ytdPct = (year: number, month: number): number | null => {
@@ -418,9 +420,23 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
         }
         return b ? (-a / b) * 100 : null;
       };
-      for (const p of bim) p.pibPctYtd = ytdPct(p.year, p.period * 2);
-      const lastAnnual = annual[annual.length - 1];
-      if (lastAnnual) lastAnnual.pibPctYtd = ytdPct(lastAnnual.year, lastAnnual.period * 2);
+      // resultado primário em R$ também do BC (soma do fluxo mensal, R$ milhões; + = déficit, então inverte), até o mês do ponto
+      const ytdFlow = (year: number, month: number): number | null => {
+        let a = 0;
+        for (let m = 1; m <= month; m++) { const f = flow.get(`${year}-${m}`); if (f === undefined) return null; a += f; }
+        return -a * 1e6;
+      };
+      const apply = (p: SeriesPoint, month: number) => {
+        const v = ytdFlow(p.year, month);
+        if (v === null) return;
+        p.primary = v; p.month = month; p.pibPctYtd = ytdPct(p.year, month);
+      };
+      let latest = 0;
+      while (flow.has(`${cur.year}-${latest + 1}`)) latest++;
+      for (const p of bim) apply(p, p.period * 2);
+      for (const p of annual) apply(p, p.period === 6 ? 12 : p.period * 2);
+      // o ponto mais novo vai até o mês mais recente já publicado pelo BC
+      if (latest > cur.period * 2) { apply(annual[annual.length - 1], latest); apply(bim[bim.length - 1], latest); }
     } catch (err) {
       console.warn("[fiscal:series:ytd]", (err as Error).message);
     }
