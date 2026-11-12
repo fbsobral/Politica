@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { AskButton } from "@/components/agent/ask-button";
+import { InfoTip } from "@/components/info-tip";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
@@ -33,47 +34,56 @@ function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, 
         : st === "abaixo"
           ? "Os gastos devem ficar abaixo do aprovado: parte do orçamento não deve ser executada."
           : "Os gastos caminham para o valor aprovado na lei orçamentária.";
+  const elapsed = period / 6;
+  const ritmo = loa > 0 ? done / loa / elapsed : null;
+  const above = ritmo !== null && ritmo >= 1;
+  const good = kind === "revenue" ? above : null;
   return (
-    <section className="card flex h-full flex-col p-5">
+    <section className="card flex h-full flex-col p-4">
       <div className="flex items-start justify-between gap-2">
         <p className="eyebrow">{title}</p>
-        <AskButton compact focus={{
-          title: `${title} · ${MONTH[period]}`,
-          text: `${title} (${kind === "revenue" ? "arrecadação" : "despesa empenhada"}), realizado até ${MONTH[period]}: ${brlShort(done)}${loa > 0 ? ` (${pct(done / loa, 0)} do previsto na LOA de ${brlShort(loa)}; previsto atualizado ${brlShort(updated)})` : ""}. Pace: ${loa > 0 ? `${pct(done / loa / (period / 6), 0)} (acima de 100% = acima do esperado; esperado ${pct(period / 6, 0)} do ano)` : "sem LOA"}. Projeção para o fechamento: ${brlShort(projected)}, ${label}${st && st !== "segue" ? ` (${signed(d)})` : ""}.`,
-          suggestions: ["O que este número significa?", "O pace está bom para esta época do ano?", "O que explica a diferença para a LOA?"],
-        }} />
+        <span className="flex items-center gap-1.5">
+          <InfoTip label={`Sobre ${title}`}>
+            <span className="block">{msg}</span>
+            <span className="mt-1.5 block text-muted">A projeção do fechamento é feita {period < 6 ? (seasonal ? "pela sazonalidade do ano passado" : "proporcionalmente a 12 meses") : "com o ano fechado"}.</span>
+            <span className="mt-1.5 block text-muted"><b className="text-ink">Ritmo</b> = percentual do previsto já realizado ÷ parte do ano que já passou ({pct(elapsed, 0)}). Acima de 100% está acima do esperado.</span>
+          </InfoTip>
+          <AskButton compact focus={{
+            title: `${title} · ${MONTH[period]}`,
+            text: `${title} (${kind === "revenue" ? "arrecadação" : "despesa empenhada"}), realizado até ${MONTH[period]}: ${brlShort(done)}${loa > 0 ? ` (${pct(done / loa, 0)} do previsto na LOA de ${brlShort(loa)}; previsto atualizado ${brlShort(updated)})` : ""}. Pace: ${loa > 0 ? `${pct(done / loa / (period / 6), 0)} (acima de 100% = acima do esperado; esperado ${pct(period / 6, 0)} do ano)` : "sem LOA"}. Projeção para o fechamento: ${brlShort(projected)}, ${label}${st && st !== "segue" ? ` (${signed(d)})` : ""}.`,
+            suggestions: ["O que este número significa?", "O pace está bom para esta época do ano?", "O que explica a diferença para a LOA?"],
+          }} />
+        </span>
       </div>
-      <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(done)}</p>
-      <p className="min-h-[2.5rem] text-sm text-faint">realizado até {MONTH[period]}{loa > 0 ? ` · ${pct(done / loa, 0)} do previsto na LOA` : ""}</p>
-      {loa > 0 && (() => {
-        const elapsed = period / 6;
-        const ritmo = done / loa / elapsed;
-        const above = ritmo >= 1;
-        const good = kind === "revenue" ? above : null;
-        return (
-          <div className="min-h-[3.25rem]">
-          <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 text-xs" title="Ritmo = percentual do previsto já realizado dividido pelo percentual do ano que já passou">
-            <span className="text-muted">Ritmo</span>
-            <b className={`tabular-nums ${good === null ? "text-gold" : good ? "text-ok" : "text-danger"}`}>{above ? "▲" : "▼"} {pct(ritmo, 0)}</b>
-            <span className="text-muted">{above ? "acima" : "abaixo"} do esperado ({pct(elapsed, 0)} do ano)</span>
-          </p>
-          <div className="relative mt-2 h-3.5" role="img" aria-label={`Realizado: ${pct(done / loa, 0)} do previsto; esperado até ${MONTH[period]}: ${pct(elapsed, 0)}`}>
-            <div className="absolute inset-0 rounded-full bg-ink/10" />
-            <div className="absolute left-0 top-[3px] h-2 rounded-full" style={{ width: `${Math.min(100, (done / loa) * 100)}%`, background: `var(--${scope.toLowerCase()})` }} />
-            <div className="absolute -top-0.5 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, elapsed * 100)}% - 1px)` }} />
-          </div>
-          </div>
-        );
-      })()}
-      <dl className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
-        <dt className="text-muted">Projeção do ano</dt>
+      <p className="display mt-1.5 text-2xl font-semibold leading-tight">{brlShort(done)}</p>
+      <p className="min-h-[2rem] text-[11px] leading-snug text-faint">realizado até {MONTH[period]}{loa > 0 ? ` · ${pct(done / loa, 0)} do previsto na LOA` : ""}</p>
+      <div className="min-h-[2.75rem]">
+        {ritmo !== null && loa > 0 && (
+          <>
+            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[11px]" title="Ritmo = percentual do previsto já realizado dividido pelo percentual do ano que já passou">
+              <span className="text-muted">Ritmo</span>
+              <b className={`tabular-nums ${good === null ? "text-gold" : good ? "text-ok" : "text-danger"}`}>{above ? "▲" : "▼"} {pct(ritmo, 0)}</b>
+              <span className="text-faint">· esperado {pct(elapsed, 0)}</span>
+            </p>
+            <div className="relative mt-1.5 h-3" role="img" aria-label={`Realizado: ${pct(done / loa, 0)} do previsto; esperado até ${MONTH[period]}: ${pct(elapsed, 0)}`}>
+              <div className="absolute inset-0 rounded-full bg-ink/10" />
+              <div className="absolute left-0 top-[2px] h-2 rounded-full" style={{ width: `${Math.min(100, (done / loa) * 100)}%`, background: `var(--${scope.toLowerCase()})` }} />
+              <div className="absolute -top-0.5 h-4 w-0.5 bg-ink" style={{ left: `calc(${Math.min(100, elapsed * 100)}% - 1px)` }} />
+            </div>
+          </>
+        )}
+      </div>
+      <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
+        <dt className="whitespace-nowrap text-muted">Projeção</dt>
         <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(projected)}</dd>
-        <dt className="text-muted">Frente à LOA</dt>
-        <dd className={`whitespace-nowrap text-right font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>{st === "segue" ? "✓" : st === "acima" ? "▲" : st === "abaixo" ? "▼" : "•"} {label}{st && st !== "segue" ? ` (${signed(d)})` : ""}</dd>
-        <dt className="text-muted">Previsto na LOA</dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(loa)}</dd>
-        <dt className="text-muted">Atualizado</dt><dd className="whitespace-nowrap text-right tabular-nums">{brlShort(updated)}{loa > 0 && updated !== loa ? <span className="text-faint"> ({signed(updated / loa - 1)})</span> : null}</dd>
+        <dt className="whitespace-nowrap text-muted">vs LOA</dt>
+        <dd className={`whitespace-nowrap text-right font-bold ${st === "segue" ? "text-ok" : bad ? "text-danger" : "text-muted"}`}>
+          {st === "segue" ? "✓ segue" : st === "acima" ? `▲ acima (${signed(d)})` : st === "abaixo" ? `▼ abaixo (${signed(d)})` : "•"}
+        </dd>
+        <dt className="whitespace-nowrap text-muted">Na LOA</dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(loa)}</dd>
+        <dt className="whitespace-nowrap text-muted">Atualizado</dt>
+        <dd className="whitespace-nowrap text-right tabular-nums">{brlShort(updated)}{loa > 0 && updated !== loa ? <span className="text-faint"> ({signed(updated / loa - 1)})</span> : null}</dd>
       </dl>
-      <p className="mt-auto pt-3 text-xs leading-relaxed text-muted">{msg} <span className="text-faint">Projeção {period < 6 ? (seasonal ? "pela sazonalidade do ano passado" : "proporcional a 12 meses") : "do ano fechado"}.</span></p>
     </section>
   );
 }
@@ -100,56 +110,65 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Verdict title="Receita" scope={f.scope} done={t.revenue.done} projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
         <Verdict title="Despesa (empenhada)" scope={f.scope} done={t.expense.done} projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
-        <section className="card flex h-full flex-col p-5">
+        <section className="card flex h-full flex-col p-4">
           <div className="flex items-start justify-between gap-2">
             <p className="eyebrow">Saldo do orçamento</p>
-            <AskButton compact focus={{
+            <span className="flex items-center gap-1.5">
+              <InfoTip label="Sobre o saldo do orçamento">
+                <span className="block">Receita realizada menos despesa empenhada até {MONTH[f.period]}. A projeção é a receita projetada menos a despesa projetada.</span>
+                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted">Na União a receita inclui a emissão de títulos para rolar a dívida; por isso o saldo do orçamento é diferente do resultado primário.</span>}
+              </InfoTip>
+              <AskButton compact focus={{
               title: "Saldo do orçamento",
               text: `Saldo do orçamento (${f.entity}), realizado até ${MONTH[f.period]} de ${f.year}: ${brlShort(doneBalance)} (receita realizada menos despesa empenhada). Projeção para o fechamento: ${brlShort(projBalance)}. Saldo na LOA: ${brlShort(loaBalance)}. ${f.scope === "FEDERAL" ? "Na União a receita inclui a emissão de títulos para rolar a dívida; o saldo do orçamento é diferente do resultado primário." : ""}`,
               suggestions: ["O que é o saldo do orçamento?", "Por que o saldo está negativo?", "Qual a diferença entre saldo e resultado primário?"],
             }} />
+            </span>
           </div>
-          <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
-          <p className="min-h-[2.5rem] text-sm text-faint">receita realizada menos despesa empenhada, até {MONTH[f.period]}</p>
-          <div className="hidden min-h-[3.25rem] xl:block" aria-hidden />
-
-          <dl className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
-            <dt className="text-muted">Projeção do ano</dt>
+          <p className="display mt-1.5 text-2xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
+          <p className="min-h-[2rem] text-[11px] leading-snug text-faint">receita menos despesa empenhada, até {MONTH[f.period]}</p>
+          <div className="hidden min-h-[2.75rem] xl:block" aria-hidden />
+          <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
+            <dt className="whitespace-nowrap text-muted">Projeção</dt>
             <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(projBalance)}</dd>
-            <dt className="text-muted">Situação</dt>
-            <dd className={`whitespace-nowrap text-right font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ Sobra prevista" : "▼ Falta prevista"}</dd>
-            <dt className="text-muted">Saldo na LOA</dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(loaBalance)}</dd>
-            <dt className="text-muted">Saldo atualizado</dt><dd className="whitespace-nowrap text-right tabular-nums">{brlShort(t.revenue.updated - t.expense.updated)}</dd>
+            <dt className="whitespace-nowrap text-muted">Situação</dt>
+            <dd className={`whitespace-nowrap text-right font-bold ${projBalance >= 0 ? "text-ok" : "text-danger"}`}>{projBalance >= 0 ? "▲ sobra" : "▼ falta"}</dd>
+            <dt className="whitespace-nowrap text-muted">Na LOA</dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(loaBalance)}</dd>
+            <dt className="whitespace-nowrap text-muted">Atualizado</dt><dd className="whitespace-nowrap text-right tabular-nums">{brlShort(t.revenue.updated - t.expense.updated)}</dd>
           </dl>
-          <p className="mt-auto pt-3 text-xs leading-relaxed text-faint">A projeção é a receita projetada menos a despesa projetada. {f.scope === "FEDERAL" ? "Na União a receita inclui a emissão de títulos para rolar a dívida, por isso o saldo do orçamento é diferente do resultado primário." : ""}</p>
         </section>
-        <section className="card flex h-full flex-col p-5" aria-label="Resultado primário">
+        <section className="card flex h-full flex-col p-4" aria-label="Resultado primário">
           <div className="flex items-start justify-between gap-2">
             <p className="eyebrow">Resultado primário</p>
-            <AskButton compact focus={{
+            <span className="flex items-center gap-1.5">
+              <InfoTip label="Sobre o resultado primário">
+                <span className="block">Receitas menos despesas, sem contar os juros da dívida. Superávit é o que sobra antes de pagar os juros; déficit é o que falta.</span>
+                <span className="mt-1.5 block text-muted">Valor: RREO, Anexo 06 (Tesouro Nacional/Siconfi). A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
+                {pibPct && <span className="mt-1.5 block text-muted">% do PIB: Banco Central, SGS {pibPct.code} ({pibPct.perimeter}), acumulado em 12 meses até {pibPct.month}.{f.scope === "FEDERAL" ? "" : " O Banco Central não publica o percentual por estado ou município."}</span>}
+              </InfoTip>
+              <AskButton compact focus={{
               title: "Resultado primário",
               text: `Resultado primário (${f.entity}) até ${MONTH[f.period]} de ${f.year}: ${prim?.realized != null ? brlShort(prim.realized) : "ainda não publicado"} (receitas primárias menos despesas primárias, sem juros; RREO Anexo 06). Meta da LDO para o ano: ${prim?.meta != null ? brlShort(prim.meta) : "não declarada"}. ${pibPct ? `Em % do PIB, acumulado em 12 meses até ${pibPct.month}: ${pibPct.pct > 0 ? "déficit de " : "superávit de "}${Math.abs(pibPct.pct).toLocaleString("pt-BR")}% (Banco Central, SGS ${pibPct.code}, ${pibPct.perimeter}).` : ""}`,
               suggestions: ["O que é resultado primário?", "Por que ele não inclui os juros?", "Isso está dentro da meta?"],
             }} />
+            </span>
           </div>
           {prim?.realized != null ? (
             <>
-              <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
-              <p className="min-h-[2.5rem] text-sm text-faint">receitas menos despesas primárias (sem juros), até {MONTH[f.period]}</p>
-              <div className="hidden min-h-[3.25rem] xl:block" aria-hidden />
-
-              <dl className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
-                <dt className="text-muted" title="A meta vale para o ano inteiro">Meta da LDO</dt>
+              <p className="display mt-1.5 text-2xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
+              <p className="min-h-[2rem] text-[11px] leading-snug text-faint">receitas menos despesas primárias, até {MONTH[f.period]}</p>
+              <div className="hidden min-h-[2.75rem] xl:block" aria-hidden />
+              <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-1.5 border-t border-line pt-2.5 text-xs">
+                <dt className="whitespace-nowrap text-muted" title="A meta vale para o ano inteiro">Meta LDO</dt>
                 <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{prim.meta != null ? brlShort(prim.meta) : "não declarada"}</dd>
-                <dt className="text-muted">Situação</dt>
+                <dt className="whitespace-nowrap text-muted">Situação</dt>
                 <dd className={`whitespace-nowrap text-right font-bold ${prim.meta != null ? (prim.realized >= prim.meta ? "text-ok" : "text-danger") : prim.realized >= 0 ? "text-ok" : "text-danger"}`}>
-                  {prim.meta != null ? (prim.realized >= prim.meta ? "▲ Acima da meta" : "▼ Abaixo da meta") : prim.realized >= 0 ? "▲ Superávit primário" : "▼ Déficit primário"}
+                  {prim.meta != null ? (prim.realized >= prim.meta ? "▲ acima da meta" : "▼ abaixo da meta") : prim.realized >= 0 ? "▲ superávit" : "▼ déficit"}
                 </dd>
-                <dt className="text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{f.scope === "FEDERAL" ? "% do PIB (12 meses)" : "% do PIB (todos os entes)"}</dt>
-                <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit de " : pibPct.pct < 0 ? "superávit de " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "indisponível"}</dd>
-                <dt className="text-muted">Vs. meta</dt><dd className="whitespace-nowrap text-right tabular-nums">{prim.meta != null ? brlShort(prim.realized - prim.meta) : "—"}</dd>
+                <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{f.scope === "FEDERAL" ? "% do PIB" : "% PIB (todos)"}</dt>
+                <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit " : pibPct.pct < 0 ? "superávit " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
+                <dt className="whitespace-nowrap text-muted">Vs. meta</dt><dd className="whitespace-nowrap text-right tabular-nums">{prim.meta != null ? brlShort(prim.realized - prim.meta) : "—"}</dd>
               </dl>
-              <p className="mt-auto pt-3 text-xs leading-relaxed text-muted">Superávit é o que sobra antes de pagar os juros da dívida; déficit é o que falta. Valor: RREO, Anexo 06 (Tesouro Nacional/Siconfi). {pibPct ? `% do PIB: Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses${f.scope === "FEDERAL" ? "" : "; o BC não publica o percentual por estado ou município"}.` : ""}</p>
             </>
           ) : (
             <p className="mt-2 text-sm text-muted">O resultado primário ainda não foi publicado no RREO deste período para {f.scope === "FEDERAL" ? "a União" : f.scope === "ESTADUAL" ? "o estado" : "o município"}.</p>
