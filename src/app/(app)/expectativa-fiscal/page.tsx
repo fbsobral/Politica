@@ -204,7 +204,7 @@ async function SeriesSection({ scope }: { scope: BudgetScope }) {
       <p className="eyebrow">Evolução</p>
       <h2 className="display text-2xl font-semibold">Receita, despesa, saldo e resultado primário</h2>
       <p className="mb-4 mt-1 text-sm text-muted">As mesmas quatro caixas de cima ao longo do tempo. Escolha o período e ligue ou desligue cada linha.</p>
-      <FiscalLineChart annual={sr.annual} bimesters={sr.bimesters} currentYear={sr.currentYear} currentPeriod={sr.currentPeriod} firstYear={sr.firstYear} entity={sr.entity} />
+      <FiscalLineChart annual={sr.annual} bimesters={sr.bimesters} currentYear={sr.currentYear} currentPeriod={sr.currentPeriod} firstYear={sr.firstYear} entity={sr.entity} pibSource={sr.pibSource} />
     </section>
   );
 }

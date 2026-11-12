@@ -315,6 +315,8 @@ export type SeriesPoint = {
   balance: number;
   /** resultado primário do RREO (Anexo 6); nulo quando o ente não o publicou */
   primary: number | null;
+  /** resultado primário em % do PIB acumulado em 12 meses, até o fim do bimestre (Banco Central; convenção deste app: positivo = superávit) */
+  pibPct: number | null;
 };
 
 export type FiscalSeries = {
@@ -327,16 +329,20 @@ export type FiscalSeries = {
   firstYear: number | null;
   currentYear: number;
   currentPeriod: number;
+  /** de onde vem o % do PIB */
+  pibSource: { code: number; perimeter: string };
   fetchedAt: string;
 };
 
-const toPoint = (s: Snapshot): SeriesPoint => ({
+const toPoint = (s: Snapshot, pib: Map<string, number>): SeriesPoint => ({
   year: s.year,
   period: s.period,
   revenue: s.totals.revenue.done,
   expense: s.totals.expense.done,
   balance: s.totals.revenue.done - s.totals.expense.done,
   primary: s.primary?.realized ?? null,
+  // o bimestre fecha nos meses 2, 4, 6, 8, 10 e 12; o BC publica o acumulado em 12 meses de cada mês (+ = déficit, então inverte)
+  pibPct: pib.has(`${s.year}-${s.period * 2}`) ? -pib.get(`${s.year}-${s.period * 2}`)! : null,
 });
 
 /** Executa as tarefas com no máximo `n` ao mesmo tempo. */
@@ -365,6 +371,15 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
   }
   if (!cur) return null;
 
+  // resultado primário em % do PIB (Banco Central): mensal, acumulado em 12 meses
+  const pibCode = scope === "FEDERAL" ? 5783 : 5786;
+  const pib = new Map<string, number>();
+  try {
+    for (const r of await sgs(pibCode, now - 31, now)) pib.set(`${r.year}-${r.month}`, r.value);
+  } catch (err) {
+    console.warn("[fiscal:series:pib]", (err as Error).message);
+  }
+
   // anos fechados: do mais recente para trás; para ao achar 2 anos seguidos sem dados depois de já ter achado algum
   const closed: SeriesPoint[] = [];
   const years = Array.from({ length: 30 }, (_, i) => cur!.year - 1 - i);
@@ -372,15 +387,16 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
   let misses = 0;
   for (let i = 0; i < years.length; i++) {
     const s = snaps[i];
-    if (s) { closed.push(toPoint(s)); misses = 0; } else if (closed.length && ++misses >= 2) break;
+    if (s) { closed.push(toPoint(s, pib)); misses = 0; } else if (closed.length && ++misses >= 2) break;
   }
   closed.sort((a, b) => a.year - b.year);
-  const annual = [...closed, toPoint(cur)];
+
+  const annual = [...closed, toPoint(cur, pib)];
 
   // bimestre a bimestre dos dois últimos anos
   const want: [number, number][] = [];
   for (const y of [cur.year - 1, cur.year]) for (let p = 1; p <= (y === cur.year ? cur.period : 6); p++) want.push([y, p]);
-  const bim = (await pool(want, 3, ([y, p]) => (y === cur!.year && p === cur!.period ? Promise.resolve(cur) : snapshot(id, y, p, { primary: true })))).filter((s): s is Snapshot => !!s).map(toPoint);
+  const bim = (await pool(want, 3, ([y, p]) => (y === cur!.year && p === cur!.period ? Promise.resolve(cur) : snapshot(id, y, p, { primary: true })))).filter((s): s is Snapshot => !!s).map((s) => toPoint(s, pib));
 
-  return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, fetchedAt: new Date().toISOString() };
+  return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, pibSource: { code: pibCode, perimeter: scope === "FEDERAL" ? "Governo Federal e Banco Central" : "todos os estados e municípios juntos" }, fetchedAt: new Date().toISOString() };
 }
