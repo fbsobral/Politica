@@ -460,11 +460,12 @@ export type PrimaryYtd = { month: number; flow: number; pct: number; code: numbe
  * Resultado primário do Governo Federal e Banco Central acumulado no ano, em R$ (soma do fluxo mensal, SGS 4639; convenção do BC: positivo = déficit)
  * e em % do PIB do mesmo período. Vai até o mês mais recente que o Banco Central já publicou, que costuma ser mais novo que o RREO.
  */
-export async function getPrimaryYtd(year: number): Promise<PrimaryYtd | null> {
+export async function getPrimaryYtd(year: number, throughMonth?: number): Promise<PrimaryYtd | null> {
   try {
-    const rows = (await sgs(4639, year, year)).filter((r) => r.year === year).sort((a, b) => a.month - b.month);
+    const rows = (await sgs(4639, year, year)).filter((r) => r.year === year && (throughMonth === undefined || r.month <= throughMonth)).sort((a, b) => a.month - b.month);
     if (!rows.length) return null;
     const last = rows[rows.length - 1].month;
+    if (throughMonth !== undefined && last !== throughMonth) return null; // o BC ainda não publicou esse mês
     // só meses seguidos desde janeiro
     if (rows.length !== last) return null;
     const flow = rows.reduce((a, r) => a + r.value, 0) * 1e6;

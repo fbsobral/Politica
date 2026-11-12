@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
 import { AskButton } from "@/components/agent/ask-button";
 import { FiscalLineChart } from "@/components/fiscal-line-chart";
@@ -7,7 +7,7 @@ import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { pib12Label, pibYtdLabel, PIB_RULES } from "@/lib/pib-pct";
 import { brDateTime } from "@/lib/stamp";
-import { getFiscal, getFiscalSeries, getPibYtd, getPrimaryPct, getPrimaryYtd, type PrimaryYtd, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
+import { getFiscal, getFiscalSeries, getPrimaryPct, getPrimaryYtd, type PrimaryYtd, type PrimaryPct, loaStatus, type FiscalData } from "@/lib/fiscal";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -92,7 +92,7 @@ function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, 
 }
 
 /** Categorias que mais se afastam da LOA na projeção (para o resumo). */
-function Detail({ f, pibPct, pibYtd, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; pibYtd: number | null; ytd: PrimaryYtd | null }) {
+function Detail({ f, pibPct, ytdB, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; ytdB: PrimaryYtd | null; ytd: PrimaryYtd | null }) {
   const t = f.totals;
   const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
   const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
@@ -148,7 +148,7 @@ function Detail({ f, pibPct, pibYtd, ytd }: { f: FiscalData; pibPct: PrimaryPct 
               <InfoTip label="Sobre o resultado primário">
                 <span className="block">Receitas menos despesas, sem contar os juros da dívida. Superávit é o que sobra antes de pagar os juros; déficit é o que falta.</span>
                 <span className="mt-1.5 block text-muted">Valor em R$: RREO, Anexo 06 (Tesouro Nacional/Siconfi), de janeiro até o último bimestre publicado. A meta da LDO vale para o ano inteiro; comparar com o parcial é só uma referência.</span>
-                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">Como ler os percentuais do PIB.</b> {PIB_RULES.ytd} {PIB_RULES.m12} A linha do mês do RREO é um cálculo do Política (resultado do RREO ÷ PIB do período); as demais vêm do Banco Central, que usa o mesmo método. O Tesouro Nacional mede o mesmo resultado de outra forma (pelo Orçamento), por isso os números diferem um pouco.</span>}
+                {f.scope === "FEDERAL" && <span className="mt-1.5 block text-muted"><b className="text-ink">Como ler os percentuais do PIB.</b> Todos vêm do Banco Central (BC), que reporta assim o resultado do Governo Federal e Banco Central. {PIB_RULES.ytd} {PIB_RULES.m12} O valor em R$ do cartão vem do RREO (Tesouro Nacional), que mede o resultado pelo Orçamento; o BC mede pela variação da dívida, por isso os números diferem um pouco (de janeiro a agosto: R$ 94,9 bi no RREO e R$ 97,1 bi no BC).</span>}
                 {pibPct && <span className="mt-1.5 block text-muted">% do PIB: Banco Central, SGS {pibPct.code} ({pibPct.perimeter}), acumulado em 12 meses até {pibPct.month}.{f.scope === "FEDERAL" ? "" : " O Banco Central não publica o percentual por estado ou município."}</span>}
               </InfoTip>
               <AskButton compact focus={{
@@ -168,11 +168,13 @@ function Detail({ f, pibPct, pibYtd, ytd }: { f: FiscalData; pibPct: PrimaryPct 
                   <>
                     <dt className="whitespace-nowrap text-muted">Situação</dt>
                     <dd className={`whitespace-nowrap text-right font-bold ${prim.realized >= 0 ? "text-ok" : "text-danger"}`}>{prim.realized >= 0 ? "▲ superávit" : "▼ déficit"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={pibYtd ? `Resultado do RREO (R$ ${(Math.abs(prim.realized) / 1e9).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} bi, jan–${MONTH[f.period]}) ÷ PIB dos mesmos meses. Cálculo do Política.` : undefined}>{pibYtdLabel(f.period * 2)}</dt>
-                    <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibYtd ? `${prim.realized >= 0 ? "superávit " : "déficit "}${Math.abs((prim.realized / pibYtd) * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={ytd ? `Banco Central: soma do resultado mensal de janeiro a ${MONTH_NAME[ytd.month]} (SGS ${ytd.code}, ${ytd.perimeter}) ÷ PIB dos mesmos meses. Mês mais novo já publicado.` : undefined}>{ytd ? pibYtdLabel(ytd.month) : "% PIB no ano"}</dt>
-                    <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{ytd ? `${ytd.pct > 0 ? "déficit " : "superávit "}${Math.abs(ytd.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
-                    <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{pibPct ? pib12Label(Number(pibPct.month.slice(0, 2))) : "% PIB 12 meses"}</dt>
+                    {[ytdB, ytd && (!ytdB || ytd.month !== ytdB.month) ? ytd : null].map((v, i) => v && (
+                      <Fragment key={`ytd${i}`}>
+                        <dt className="whitespace-nowrap text-muted" title={`Banco Central: soma do resultado mensal de janeiro a ${MONTH_NAME[v.month]} (SGS ${v.code}, ${v.perimeter}) ÷ PIB dos mesmos meses`}>{pibYtdLabel(v.month)} <span className="text-faint">BC</span></dt>
+                        <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{`{v.pct > 0 ? "déficit " : "superávit "}${Math.abs(v.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}</dd>
+                      </Fragment>
+                    ))}
+                    <dt className="whitespace-nowrap text-muted" title={pibPct ? `Banco Central, SGS ${pibPct.code} (${pibPct.perimeter}), acumulado em 12 meses até ${pibPct.month}` : undefined}>{pibPct ? pib12Label(Number(pibPct.month.slice(0, 2))) : "% PIB 12 meses"} <span className="text-faint">BC</span></dt>
                     <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{pibPct ? `${pibPct.pct > 0 ? "déficit " : pibPct.pct < 0 ? "superávit " : ""}${Math.abs(pibPct.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}</dd>
                   </>
                 ) : (
@@ -243,11 +245,12 @@ async function Content({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
   const [f, pibPct] = await Promise.all([getFiscal(scope, user), getPrimaryPct(scope)]);
   // % do PIB no ano (mesmo período do valor em R$): só faz sentido para a União, comparada com o PIB do país
-  const pibYtd = f && scope === "FEDERAL" ? await getPibYtd(f.year, f.period * 2) : null;
+  // % do PIB no ano (União), sempre do Banco Central: no mês em que o RREO termina e no mês mais novo já publicado
+  const ytdB = f && scope === "FEDERAL" ? await getPrimaryYtd(f.year, f.period * 2) : null;
   const ytd = f && scope === "FEDERAL" ? await getPrimaryYtd(f.year) : null;
   return (
     <>
-      {f ? <Detail f={f} pibPct={pibPct} pibYtd={pibYtd} ytd={ytd} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
+      {f ? <Detail f={f} pibPct={pibPct} ytdB={ytdB} ytd={ytd} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
       <div className="mt-8 max-w-3xl">
         <Notice kind="info">
           Fonte: Relatório Resumido da Execução Orçamentária (RREO), que prefeituras, estados e a União enviam a cada dois meses ao Tesouro Nacional (Siconfi): Anexo 1 (receitas e despesas), Anexo 2 (despesa por função) e Anexo 6 (metas fiscais da LDO).

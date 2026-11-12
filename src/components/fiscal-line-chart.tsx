@@ -155,7 +155,7 @@ export function FiscalLineChart({ annual, bimesters, currentYear, currentPeriod,
             <p className="mb-1 font-semibold">{byBim ? `${hp.period}º bimestre de ${hp.year} (até ${MONTH[hp.period]})` : hp.period < 6 ? `${hp.year} até ${MONTH[hp.period]} (parcial)` : `${hp.year} (ano fechado)`}</p>
             {visible.map((l) => { const v = val(hp, l.key); return (
               <p key={l.key} className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.color }} /><span className="truncate">{l.key === "pibPct" ? (hp.period === 6 || (ytdPoint(hp) && hp.pibPctYtd != null) ? pibYtdLabel(hp.period * 2) : pib12Label(hp.period * 2)) : l.label}</span></span>
+                <span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.color }} /><span className="truncate">{l.key === "pibPct" ? `${hp.period === 6 || (ytdPoint(hp) && hp.pibPctYtd != null) ? pibYtdLabel(hp.period * 2) : pib12Label(hp.period * 2)} · BC` : l.label}</span></span>
                 <b className="shrink-0 tabular-nums">{v === null ? "—" : l.key === "pibPct" ? pctFmt(v) : brl(v)}</b>
               </p>
             ); })}
