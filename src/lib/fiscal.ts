@@ -401,19 +401,50 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
   return { scope, entity: cur.name ?? (scope === "FEDERAL" ? "Governo Federal" : ""), annual, bimesters: bim, firstYear: annual[0]?.year ?? null, currentYear: cur.year, currentPeriod: cur.period, pibSource: { code: pibCode, perimeter: scope === "FEDERAL" ? "Governo Federal e Banco Central" : "todos os estados e municípios juntos" }, fetchedAt: new Date().toISOString() };
 }
 
-/** PIB acumulado em 12 meses a preços correntes (R$), no fim do mês, segundo o Banco Central (SGS 4382). */
-export async function getPib12m(year: number, month: number): Promise<number | null> {
-  const key = `fiscal:pib12m:v1:${year}-${month}`;
+/** PIB mensal a preços correntes (R$), somado de janeiro até o mês, segundo o Banco Central (SGS 4380). É o denominador de um resultado acumulado no ano. */
+export async function getPibYtd(year: number, throughMonth: number): Promise<number | null> {
+  const key = `fiscal:pibytd:v1:${year}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
-  if (hit && Date.now() - hit.fetchedAt.getTime() < 7 * DAY) return (hit.data as unknown as { v: number }).v;
+  const cachedMonths = (hit?.data as unknown as { m?: Record<string, number> } | undefined)?.m;
+  const fresh = hit && Date.now() - hit.fetchedAt.getTime() < DAY;
+  let months = cachedMonths;
+  if (!fresh || !months) {
+    try {
+      const rows = await sgs(4380, year, year);
+      months = Object.fromEntries(rows.filter((r) => r.year === year).map((r) => [String(r.month), r.value * 1e6])); // a série vem em R$ milhões
+      await db.budgetCache.upsert({ where: { key }, create: { key, data: { m: months } as never }, update: { data: { m: months } as never, fetchedAt: new Date() } });
+    } catch (err) {
+      console.warn("[fiscal:pibytd]", (err as Error).message);
+    }
+  }
+  if (!months) return null;
+  let sum = 0;
+  for (let m = 1; m <= throughMonth; m++) {
+    if (months[String(m)] === undefined) return null; // falta um mês: não soma parcial
+    sum += months[String(m)];
+  }
+  return sum;
+}
+
+export type PrimaryYtd = { month: number; flow: number; pct: number; code: number; perimeter: string };
+
+/**
+ * Resultado primário do Governo Federal e Banco Central acumulado no ano, em R$ (soma do fluxo mensal, SGS 4639; convenção do BC: positivo = déficit)
+ * e em % do PIB do mesmo período. Vai até o mês mais recente que o Banco Central já publicou, que costuma ser mais novo que o RREO.
+ */
+export async function getPrimaryYtd(year: number): Promise<PrimaryYtd | null> {
   try {
-    const row = (await sgs(4382, year - 1, year)).find((r) => r.year === year && r.month === month);
-    if (!row) return hit ? (hit.data as unknown as { v: number }).v : null;
-    const v = row.value * 1e6; // a série vem em R$ milhões
-    await db.budgetCache.upsert({ where: { key }, create: { key, data: { v } as never }, update: { data: { v } as never, fetchedAt: new Date() } });
-    return v;
+    const rows = (await sgs(4639, year, year)).filter((r) => r.year === year).sort((a, b) => a.month - b.month);
+    if (!rows.length) return null;
+    const last = rows[rows.length - 1].month;
+    // só meses seguidos desde janeiro
+    if (rows.length !== last) return null;
+    const flow = rows.reduce((a, r) => a + r.value, 0) * 1e6;
+    const pib = await getPibYtd(year, last);
+    if (!pib) return null;
+    return { month: last, flow, pct: (flow / pib) * 100, code: 4639, perimeter: "Governo Federal e Banco Central" };
   } catch (err) {
-    console.warn("[fiscal:pib12m]", (err as Error).message);
-    return hit ? (hit.data as unknown as { v: number }).v : null;
+    console.warn("[fiscal:primaryytd]", (err as Error).message);
+    return null;
   }
 }
