@@ -61,7 +61,7 @@ function Detail({ d }: { d: InflationData }) {
           <AskButton focus={{ title: "Inflação e expectativas", text: `IPCA em 12 meses: ${p2(h.y12)}${ref ? ` (até ${MES[ref.month]}/${ref.year})` : ""}. Meta: ${meta.label}. Expectativas do Focus (mediana): ${d.focus.ipca.map((f) => `${f.year}: ${p2(f.median)}`).join("; ")}.`, suggestions: ["A inflação está sob controle?", "Por que o mercado espera essa inflação?", "O que o Banco Central faz quando a inflação sai da meta?"] }} />
         </div>
         <p className="mb-4 mt-1 max-w-3xl text-sm text-muted">A faixa verde é o intervalo de tolerância da meta de cada ano. À direita, o que o mercado espera para o fim de cada ano, com a faixa entre a menor e a maior projeção.</p>
-        <InflationTrend series={h.series} bands={bands} focus={d.focus.ipca} />
+        <InflationTrend series={h.series} bands={bands} focus={d.focus.ipca} selic={d.selic ?? []} />
         {d.focus.ipca.length > 0 && (
           <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-surface">
             <table className="w-full whitespace-nowrap text-left text-sm">

@@ -21,6 +21,18 @@ type Entry = { label: string; href?: string; match?: (p: string) => boolean; chi
 const MENU: Entry[] = [
   { label: "Feed", href: "/", match: (p) => p === "/" },
   {
+    label: "Números",
+    children: [
+      { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
+      { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
+      { href: "/inflacao", label: "Inflação", hint: "IPCA, expectativas e pilares frente à meta", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
+      { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa em 5 anos e o motivo das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
+      { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, de 5 a 30 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
+      { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano, 50% economia e 50% social", icon: <IconChart />, match: (p) => p.startsWith("/score") },
+      { href: "/roi", label: "ROI do orçamento", hint: "Quanto o gasto público mudou os indicadores", icon: <IconCoins />, match: (p) => p.startsWith("/roi") },
+    ],
+  },
+  {
     label: "Quem é quem",
     children: [
       { href: "/representantes", label: "Representantes", hint: "Prefeito, vereadores, deputados, senadores", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
@@ -34,18 +46,6 @@ const MENU: Entry[] = [
       { href: "/agenda", label: "Agenda", hint: "Sessões, votações e eventos", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
       { href: "/eleicoes", label: "Eleições", hint: "Candidatos, pesquisas e notícias por cargo", icon: <IconVote />, match: (p) => p.startsWith("/eleicoes") },
       { href: "/checagens", label: "Checagens", hint: "Boatos e declarações verificados", icon: <IconShield />, match: (p) => p.startsWith("/checagens") },
-    ],
-  },
-  {
-    label: "Números",
-    children: [
-      { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
-      { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
-      { href: "/inflacao", label: "Inflação", hint: "IPCA, expectativas e pilares frente à meta", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
-      { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa em 5 anos e o motivo das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
-      { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, em 10 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
-      { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano, 50% economia e 50% social", icon: <IconChart />, match: (p) => p.startsWith("/score") },
-      { href: "/roi", label: "ROI do orçamento", hint: "Quanto o gasto público mudou os indicadores", icon: <IconCoins />, match: (p) => p.startsWith("/roi") },
     ],
   },
   { label: "Pergunte", href: "/conversar", match: (p) => p.startsWith("/conversar") },

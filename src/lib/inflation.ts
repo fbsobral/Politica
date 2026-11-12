@@ -50,6 +50,8 @@ export type InflationData = {
   ref: { year: number; month: number } | null;
   headline: { y12: number | null; m: number | null; ytd: number | null; series: { year: number; month: number; v: number }[] };
   focus: { date: string | null; ipca: FocusYear[]; next12: number | null; pillars: Record<string, FocusYear[]> };
+  /** Meta Selic (% ao ano) no fim de cada mês, definida pelo Copom (Banco Central, SGS 432) */
+  selic: { year: number; month: number; v: number }[];
   groups: Pillar[];
   bc: Pillar[];
   cores: Pillar[];
@@ -246,9 +248,10 @@ export async function buildInflation(): Promise<InflationData> {
       console.warn("[inflation]", label, (err as Error).message);
       return fallback;
     });
-  const [groupsRes, headlinePts, focus, bc, cores] = await Promise.all([
+  const [groupsRes, headlinePts, selicPts, focus, bc, cores] = await Promise.all([
     soft("IBGE", fetchGroups(), null),
     soft("Banco Central (IPCA)", sgs(433, y - 31, y), [] as { year: number; month: number; value: number }[]),
+    soft("Banco Central (Selic)", sgs(432, y - 31, y), [] as { year: number; month: number; value: number }[]),
     soft("Focus", fetchFocus(), { date: null, ipca: [], next12: null, pillars: {} } as InflationData["focus"]),
     Promise.all(BC_SERIES.map((d) => sgsPillar(d).catch(() => null))),
     Promise.all(CORE_SERIES.map((d) => sgsPillar(d).catch(() => null))),
@@ -275,6 +278,12 @@ export async function buildInflation(): Promise<InflationData> {
       series: series.slice(-(30 * 12 + 1)),
     },
     focus,
+    // última meta Selic de cada mês (a série traz uma linha por dia útil, em ordem)
+    selic: (() => {
+      const byMonth = new Map<string, { year: number; month: number; v: number }>();
+      for (const p of selicPts) byMonth.set(`${p.year}-${p.month}`, { year: p.year, month: p.month, v: p.value });
+      return [...byMonth.values()].sort((a, b) => a.year - b.year || a.month - b.month);
+    })(),
     groups: groupsRes?.groups ?? [],
     bc: bcList.map(withFocus),
     cores: cores.filter((p): p is Pillar => !!p),
@@ -285,5 +294,5 @@ export async function buildInflation(): Promise<InflationData> {
 
 /** Painel da inflação, com cache de 12 horas (o IPCA sai uma vez por mês; o Focus, toda segunda-feira). */
 export async function getInflation(opts: { force?: boolean } = {}): Promise<InflationData | null> {
-  return cached("inflation:v3", 0.5, buildInflation, opts.force);
+  return cached("inflation:v4", 0.5, buildInflation, opts.force);
 }

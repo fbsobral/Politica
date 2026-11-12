@@ -23,8 +23,10 @@ export function StatusChip({ v, band, compact }: { v: number | null; band: Band;
 
 /* ───────── Tendência: IPCA em 12 meses, banda da meta e expectativas do Focus ───────── */
 
-export function InflationTrend({ series, bands, focus }: { series: { year: number; month: number; v: number }[]; bands: Record<number, Band>; focus: FocusYear[] }) {
+export function InflationTrend({ series, bands, focus, selic }: { series: { year: number; month: number; v: number }[]; bands: Record<number, Band>; focus: FocusYear[]; selic: { year: number; month: number; v: number }[] }) {
   const [years, setYears] = useState(5);
+  const [show, setShow] = useState<Set<"ipca" | "selic" | "real">>(new Set(["ipca", "selic"]));
+  const flip = (k: "ipca" | "selic" | "real") => setShow((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const [hover, setHover] = useState<number | null>(null);
   // o SVG acompanha a largura real, para os textos não encolherem no celular
   const box = useRef<HTMLDivElement>(null);
@@ -40,11 +42,16 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
   const pts = useMemo(() => (last ? series.filter((p) => (last.year - p.year) * 12 + (last.month - p.month) < years * 12) : []), [series, years, last]);
   if (!last || !pts.length) return <p className="py-16 text-center text-sm text-muted">Série do IPCA indisponível agora.</p>;
 
+  // Selic e juro real alinhados aos meses do gráfico; juro real = (1 + Selic) ÷ (1 + IPCA em 12 meses) − 1, ex-post
+  const selicBy = new Map(selic.map((s) => [`${s.year}-${s.month}`, s.v]));
+  const selicPts = pts.map((p) => selicBy.get(`${p.year}-${p.month}`) ?? null);
+  const realPts = pts.map((p, i) => (selicPts[i] === null ? null : ((1 + selicPts[i]! / 100) / (1 + p.v / 100) - 1) * 100));
+  const hasSelic = selicPts.some((v) => v !== null);
   const fut = focus.filter((f) => f.year >= last.year && f.year <= last.year + 2);
   const idx = (y: number, m: number) => (y - pts[0].year) * 12 + (m - pts[0].month);
   const endIdx = Math.max(idx(last.year, last.month), ...fut.map((f) => idx(f.year, 12)));
   const allYears = [...new Set([...pts.map((p) => p.year), ...fut.map((f) => f.year)])].sort();
-  const vals = [...pts.map((p) => p.v), ...fut.flatMap((f) => [f.median, f.max ?? f.median, f.min ?? f.median]), ...allYears.map((y) => (bands[y]?.center ?? 3) + (bands[y]?.tol ?? 1.5))];
+  const vals = [...(show.has("ipca") ? pts.map((p) => p.v) : []), ...(show.has("selic") ? selicPts.filter((v): v is number => v !== null) : []), ...(show.has("real") ? realPts.filter((v): v is number => v !== null) : []), ...fut.flatMap((f) => [f.median, f.max ?? f.median, f.min ?? f.median]), ...allYears.map((y) => (bands[y]?.center ?? 3) + (bands[y]?.tol ?? 1.5))];
   const top = Math.ceil(Math.max(...vals) + 0.5);
   const bot = Math.min(0, Math.floor(Math.min(...vals)));
 
@@ -62,6 +69,14 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
   const yearPx = (12 / Math.max(1, endIdx)) * (W - m.l - m.r);
   // rótulos de ano: no máximo ~11 no computador e ~5 no celular
   const yearEvery = Math.max(1, Math.ceil(allYears.length / (W < 560 ? 5 : 11)));
+  // trechos contínuos (a linha quebra onde não há dado)
+  const seg = (arr: (number | null)[]) => {
+    const out: string[] = [];
+    let cur: string[] = [];
+    arr.forEach((v, i) => { if (v === null) { if (cur.length > 1) out.push(cur.join(" ")); cur = []; } else cur.push(`${x(i)},${y(v)}`); });
+    if (cur.length > 1) out.push(cur.join(" "));
+    return out;
+  };
   const ticks: number[] = [];
   for (let t = bot; t <= top; t += step) ticks.push(t);
   const h = hover !== null ? pts[hover] : null;
@@ -70,11 +85,21 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted" aria-hidden="true">
-          <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-brand" />IPCA em 12 meses</span>
+          {show.has("ipca") && <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-brand" />IPCA em 12 meses</span>}
+          {show.has("selic") && <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5" style={{ background: "#d9480f" }} />Selic (meta, % ao ano)</span>}
+          {show.has("real") && <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 border-t-2 border-dashed" style={{ borderColor: "#7c3aed" }} />Juro real (Selic descontado o IPCA)</span>}
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded-sm bg-ok/15" style={{ boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--ok) 40%, transparent)" }} />Intervalo da meta</span>
           {fut.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-brand bg-surface" />Expectativa do mercado (Focus) para dezembro</span>}
         </div>
         <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "1", l: "1 ano" }, { v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }, { v: "10", l: "10 anos" }, { v: "20", l: "20 anos" }, { v: "30", l: "30 anos" }]} />
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Linhas exibidas">
+        {([["ipca", "IPCA em 12 meses", "var(--brand)", true], ["selic", "Selic (meta)", "#d9480f", hasSelic], ["real", "Juro real (cálculo do Política)", "#7c3aed", hasSelic]] as const).map(([k, label, color, ok]) => ok && (
+          <button key={k} type="button" aria-pressed={show.has(k)} onClick={() => flip(k)} title={k === "real" ? "(1 + Selic) ÷ (1 + IPCA em 12 meses) − 1: quanto o juro rende acima da inflação. É um cálculo do Política, não um dado oficial." : undefined} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${show.has(k) ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"}`}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: show.has(k) ? color : "transparent", border: `2px solid ${color}` }} />
+            {label}
+          </button>
+        ))}
       </div>
       <div className="card relative p-3 sm:p-5">
         <div ref={box} className="w-full" />
@@ -112,9 +137,15 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
               </g>
             );
           })}
-          <polyline points={pts.map((p, i) => `${x(i)},${y(p.v)}`).join(" ")} fill="none" stroke="var(--brand)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx={x(pts.length - 1)} cy={y(last.v)} r="4.5" fill="var(--brand)" stroke="var(--surface)" strokeWidth="2" />
-          <text x={x(pts.length - 1) - 8} y={y(last.v) - 10} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--ink)">{p2(last.v)}</text>
+          {show.has("ipca") && (
+            <>
+              <polyline points={pts.map((p, i) => `${x(i)},${y(p.v)}`).join(" ")} fill="none" stroke="var(--brand)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+              <circle cx={x(pts.length - 1)} cy={y(last.v)} r="4.5" fill="var(--brand)" stroke="var(--surface)" strokeWidth="2" />
+              <text x={x(pts.length - 1) - 8} y={y(last.v) - 10} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--ink)">{p2(last.v)}</text>
+            </>
+          )}
+          {show.has("selic") && seg(selicPts).map((pl, k) => <polyline key={`s${k}`} points={pl} fill="none" stroke="#d9480f" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />)}
+          {show.has("real") && seg(realPts).map((pl, k) => <polyline key={`r${k}`} points={pl} fill="none" stroke="#7c3aed" strokeWidth="2" strokeDasharray="6 4" strokeLinejoin="round" strokeLinecap="round" />)}
           {/* expectativas */}
           {fut.map((f) => {
             const cx = x(idx(f.year, 12));
@@ -137,6 +168,8 @@ export function InflationTrend({ series, bands, focus }: { series: { year: numbe
             <p className="font-bold">{MES[h.month]}/{h.year}</p>
             {presidentAt(`${h.year}-${String(h.month).padStart(2, "0")}`) && <p className="text-muted">Presidente: {presidentAt(`${h.year}-${String(h.month).padStart(2, "0")}`)!.name}</p>}
             <p className="mt-1">IPCA em 12 meses: <b>{p2(h.v)}</b></p>
+            {selicPts[hover!] !== null && <p>Selic (meta): <b>{p2(selicPts[hover!]!)}</b> ao ano</p>}
+            {realPts[hover!] !== null && <p className="text-muted">Juro real: <b>{p2(realPts[hover!]!)}</b></p>}
             {bands[h.year] && <p className="text-muted">Meta: {p2(bands[h.year].center - bands[h.year].tol, 1)} a {p2(bands[h.year].center + bands[h.year].tol, 1)}</p>}
             {bands[h.year] && <p className="mt-0.5"><StatusChip v={h.v} band={bands[h.year]} /></p>}
           </div>
