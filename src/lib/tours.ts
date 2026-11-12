@@ -54,7 +54,7 @@ export function generalTour(city: string): Tour {
         title: "Os números do governo",
         text: "Veja para onde vai o dinheiro público, se o orçamento do ano está sendo cumprido, como está a inflação e se os indicadores melhoraram.",
         tips: ["Orçamento e Expectativa fiscal: receitas, gastos e a LOA", "Inflação e Ibovespa: preços, expectativas e a bolsa com o motivo das altas e quedas", "Indicadores, Score e ROI: resultados em até 30 anos"],
-        links: [{ href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
+        links: [{ href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
       },
       {
         screen: "chat", art: "ask",
@@ -172,7 +172,7 @@ export const MODULE_TOURS: Tour[] = [
   },
   {
     id: "inflacao",
-    name: "Inflação",
+    name: "Inflação e juros",
     match: at("/inflacao"),
     steps: [
       { screen: "infl-meta", art: "target", title: "Inflação x meta", text: "O IPCA em 12 meses comparado com a meta do governo (3% com tolerância de 1,5 ponto). A faixa verde no gráfico é o intervalo aceito.", tips: ["Desde 2025, ficar 6 meses seguidos fora da faixa conta como descumprimento"] },

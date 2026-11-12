@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Band, FocusYear, Pillar } from "@/lib/inflation";
+import { AskButton } from "@/components/agent/ask-button";
 import { ControlBar, Segmented } from "@/components/controls";
+import { InfoTip } from "@/components/info-tip";
 import { presidentAt, presidentSpans } from "@/lib/presidents";
 
 const MES = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -92,14 +94,7 @@ export function InflationTrend({ series, bands, focus, selic }: { series: { year
           {fut.length > 0 && <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border-2 border-brand bg-surface" />Expectativa do mercado (Focus) para dezembro</span>}
         </div>
         <Segmented label="Período" value={String(years)} onChange={(v) => setYears(Number(v))} options={[{ v: "1", l: "1 ano" }, { v: "2", l: "2 anos" }, { v: "5", l: "5 anos" }, { v: "10", l: "10 anos" }, { v: "20", l: "20 anos" }, { v: "30", l: "30 anos" }]} />
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Linhas exibidas">
-        {([["ipca", "IPCA em 12 meses", "var(--brand)", true], ["selic", "Selic (meta)", "#d9480f", hasSelic], ["real", "Juro real (cálculo do Política)", "#7c3aed", hasSelic]] as const).map(([k, label, color, ok]) => ok && (
-          <button key={k} type="button" aria-pressed={show.has(k)} onClick={() => flip(k)} title={k === "real" ? "(1 + Selic) ÷ (1 + IPCA em 12 meses) − 1: quanto o juro rende acima da inflação. É um cálculo do Política, não um dado oficial." : undefined} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${show.has(k) ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"}`}>
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: show.has(k) ? color : "transparent", border: `2px solid ${color}` }} />
-            {label}
-          </button>
-        ))}
+        <AskButton label="Perguntar sobre o gráfico" focus={{ title: "Inflação e juros ao longo do tempo", text: `Gráfico dos últimos ${years} ${years === 1 ? "ano" : "anos"}: IPCA em 12 meses ${last ? `(mais recente: ${p2(last.v)} em ${MES[last.month]}/${last.year})` : ""}${selicPts[selicPts.length - 1] !== null && selicPts.length ? `, Selic meta ${p2(selicPts[selicPts.length - 1]!)} ao ano` : ""}${realPts[realPts.length - 1] !== null && realPts.length ? `, juro real ${p2(realPts[realPts.length - 1]!)}` : ""}. Faixa verde = intervalo de tolerância da meta de inflação de cada ano. Linhas exibidas: ${[...show].join(", ")}. Juro real é um cálculo: (1+Selic)/(1+IPCA 12m)-1.`, suggestions: ["O que o gráfico mostra?", "Por que a Selic sobe quando a inflação sobe?", "O juro real está alto?"] }} />
       </div>
       <div className="card relative p-3 sm:p-5">
         <div ref={box} className="w-full" />
@@ -175,6 +170,17 @@ export function InflationTrend({ series, bands, focus, selic }: { series: { year
           </div>
         )}
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Linhas exibidas">
+        {([["ipca", "IPCA em 12 meses", "var(--brand)", true], ["selic", "Selic (meta)", "#d9480f", hasSelic], ["real", "Juro real (cálculo do Política)", "#7c3aed", hasSelic]] as const).map(([k, label, color, ok]) => ok && (
+          <button key={k} type="button" aria-pressed={show.has(k)} onClick={() => flip(k)} title={k === "real" ? "(1 + Selic) ÷ (1 + IPCA em 12 meses) − 1: quanto o juro rende acima da inflação. É um cálculo do Política, não um dado oficial." : undefined} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${show.has(k) ? "border-ink/40 bg-ink/5" : "border-line text-muted hover:bg-ink/5"}`}>
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: show.has(k) ? color : "transparent", border: `2px solid ${color}` }} />
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-relaxed text-faint">
+        IPCA em 12 meses: IBGE, via Banco Central (SGS 433, acumulado de 12 meses). Selic: meta definida pelo Copom no fim de cada mês (Banco Central, SGS 432; a meta existe desde março de 1999). Juro real: (1 + Selic) ÷ (1 + IPCA em 12 meses) − 1, cálculo do Política com dados oficiais, olhando para trás. Os pontos vazados à direita são as expectativas do Focus para dezembro de cada ano.
+      </p>
     </div>
   );
 }
@@ -191,152 +197,135 @@ function Spark({ h }: { h?: number[] }) {
   return <svg viewBox="0 0 60 18" className="h-[18px] w-[60px] flex-none" aria-hidden="true"><polyline points={pts} fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinejoin="round" /></svg>;
 }
 
+type PCol = "name" | "weight" | "m" | "y12" | "trend";
+
 export function InflationPillars({ groups, bc, cores, intl, br, headline }: { groups: Pillar[]; bc: Pillar[]; cores: Pillar[]; intl: Band; br: Band; headline: number | null }) {
   const views = (["groups", "bc", "cores"] as View[]).filter((v) => ({ groups, bc, cores })[v].length);
   const [view, setView] = useState<View>(views[0] ?? "groups");
   const [ref, setRef] = useState<"intl" | "br">("intl");
-  const [path, setPath] = useState<string[]>([]);
-  const [sort, setSort] = useState<"weight" | "high" | "low">("weight");
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [col, setCol] = useState<{ key: PCol; dir: 1 | -1 } | null>(null);
   const band = ref === "intl" ? intl : br;
-
   const root = ({ groups, bc, cores })[view];
-  const trail: Pillar[] = [];
-  let items = root;
-  for (const code of path) {
-    const p = items.find((i) => i.code === code);
-    if (!p?.children) break;
-    trail.push(p);
-    items = p.children;
-  }
-  const hasWeight = items.some((i) => i.weight != null);
-  const rows = [...items].filter((i) => i.y12 !== null).sort((a, b) => (sort === "weight" && hasWeight ? (b.weight ?? 0) - (a.weight ?? 0) : sort === "low" ? (a.y12 ?? 0) - (b.y12 ?? 0) : (b.y12 ?? 0) - (a.y12 ?? 0)));
-  const vals = rows.map((r) => r.y12 as number);
-  const lo = Math.min(0, ...vals, band.center - band.tol);
-  const hi = Math.max(...vals, band.center + band.tol, headline ?? 0) * 1.05;
-  const X = (v: number) => ((v - lo) / (hi - lo)) * 100;
+  const hasWeight = root.some((i) => i.weight != null);
+  const trendOf = (p: Pillar) => (p.prevY12 != null && p.y12 != null ? p.y12 - p.prevY12 : null);
+
+  const value = (p: Pillar, key: PCol): number | string | null => (key === "name" ? p.name : key === "weight" ? p.weight ?? null : key === "m" ? p.m : key === "y12" ? p.y12 : trendOf(p));
+  const order = (list: Pillar[], top: boolean) => {
+    const l = list.filter((i) => i.y12 !== null);
+    // sem escolha no cabeçalho: maior peso (ou maior inflação, quando não há pesos)
+    const c = col ?? { key: (top && hasWeight ? "weight" : "y12") as PCol, dir: -1 as const };
+    return [...l].sort((a, b) => {
+      const x = value(a, c.key), y = value(b, c.key);
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return (typeof x === "string" ? x.localeCompare(y as string, "pt-BR") : x - (y as number)) * c.dir;
+    });
+  };
+  const rows = order(root, true);
   const counts = rows.reduce((a, r) => ({ ...a, [statusOf(r.y12!, band)]: (a[statusOf(r.y12!, band)] ?? 0) + 1 }), {} as Record<St, number>);
-  const level = view === "groups" ? ["grupo", "subgrupo", "item"][trail.length] ?? "item" : "indicador";
+  const toggle = (code: string) => setOpen((o) => { const n = new Set(o); if (n.has(code)) n.delete(code); else n.add(code); return n; });
+  const levelName = view === "groups" ? "Grupo" : view === "bc" ? "Tipo de preço" : "Núcleo";
+
+  const line = (r: Pillar, depth: number, parent?: Pillar) => {
+    const v = r.y12!;
+    const kids = r.children?.length ? order(r.children, false) : [];
+    const isOpen = open.has(`${view}:${r.code}`);
+    const d = trendOf(r);
+    const f = r.focus?.[0];
+    return (
+      <Fragment key={`${view}:${depth}:${r.code}`}>
+        <tr className={`border-t border-line ${depth ? "bg-ink/[0.02]" : ""}`}>
+          <td className={`w-[38%] max-w-0 px-2.5 py-2 ${depth ? "text-muted" : "font-medium"}`} style={depth ? { paddingLeft: `${0.625 + depth * 1.25}rem` } : undefined}>
+            <div className="flex min-w-0 items-center gap-1.5" title={r.name}>
+              {kids.length > 0 ? (
+                <button type="button" aria-expanded={isOpen} onClick={() => toggle(`${view}:${r.code}`)} className="flex min-w-0 items-center gap-1.5 text-left hover:underline">
+                  <span className={`inline-block shrink-0 text-brand transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                  <span className="truncate">{r.name}</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-brand">{kids.length} {depth ? "itens" : "sub"}</span>
+                </button>
+              ) : (
+                <span className="truncate">{r.name}</span>
+              )}
+              <InfoTip label={`Explicação: ${r.name}`}>
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-faint">O que é</span>
+                <span className="mt-0.5 block">{r.desc ?? `${r.name}${parent ? `, dentro de "${parent.name}"` : ""}: parte do IPCA, a inflação oficial medida pelo IBGE.`}</span>
+                <span className="mt-1.5 block text-muted">Fonte: {r.source}.{r.weight != null ? ` Pesa ${p2(r.weight, 1)} do IPCA.` : ""}{f ? ` O Focus projeta ${p2(f.median)} para ${f.year}.` : ""}</span>
+                <span className="mt-2 block">
+                  <AskButton label="Pergunte" focus={{
+                    title: `${r.name} · inflação`,
+                    text: `${r.name}${parent ? ` (dentro de "${parent.name}")` : ""} no IPCA: ${p2(v)} em 12 meses${r.m != null ? `, ${p2(r.m)} no último mês` : ""}${r.weight != null ? `, peso ${p2(r.weight, 1)}` : ""}. Comparado com ${band.label}: ${statusOf(v, band)}. ${d !== null ? `${Math.abs(d) < 0.05 ? "Estável" : d > 0 ? "Acelerando" : "Desacelerando"} (${pp(d)} no mês).` : ""}${f ? ` Focus ${f.year}: ${p2(f.median)}.` : ""}`,
+                    suggestions: ["O que é isto, em linguagem simples?", "Por que está nesse nível?", "Isso pesa muito no bolso?"],
+                  }} />
+                </span>
+              </InfoTip>
+            </div>
+          </td>
+          {hasWeight && <td className="px-2.5 py-2 text-right tabular-nums">{r.weight != null ? p2(r.weight, 1) : "—"}</td>}
+          <td className="px-2.5 py-2 text-right tabular-nums">{r.m != null ? p2(r.m) : "—"}</td>
+          <td className="px-2.5 py-2 text-right font-semibold tabular-nums">{p2(v)}</td>
+          <td className="px-2.5 py-2 text-right"><StatusChip v={v} band={band} compact /></td>
+          <td className="px-2.5 py-2">
+            <div className="flex items-center justify-end gap-2">
+              <Spark h={r.history} />
+              <span className={`whitespace-nowrap text-xs ${d === null || Math.abs(d) < 0.05 ? "text-muted" : d > 0 ? "text-danger" : "text-ok"}`}>{d === null ? "—" : Math.abs(d) < 0.05 ? "estável" : `${d > 0 ? "▲" : "▼"} ${pp(d)}`}</span>
+            </div>
+          </td>
+        </tr>
+        {isOpen && kids.map((k) => line(k, depth + 1, r))}
+      </Fragment>
+    );
+  };
+
+  const heads: [PCol | null, string, "left" | "right", string?][] = [
+    ["name", levelName, "left"],
+    ...(hasWeight ? [["weight", "Peso", "right", "Quanto este grupo pesa no IPCA geral"] as [PCol, string, "left" | "right", string]] : []),
+    ["m", "No mês", "right"],
+    ["y12", "12 meses", "right"],
+    [null, "Situação", "right", "Dentro, acima ou abaixo da referência escolhida"],
+    ["trend", "Tendência", "right", "Mudança do acumulado em 12 meses em relação ao mês anterior"],
+  ];
 
   return (
     <div>
       <ControlBar
-        summary={`Comparando com ${ref === "intl" ? "o padrão internacional (2%)" : `a meta do Brasil (${br.center.toLocaleString("pt-BR")}%)`} · ${sort === "weight" && hasWeight ? "maior peso" : sort === "low" ? "menor inflação" : "maior inflação"}`}
-        primary={<Segmented label="Como dividir" value={view} onChange={(v) => { setView(v); setPath([]); }} options={views.map((v) => ({ v, l: VIEW_LABEL[v] }))} />}
+        summary={`Comparando com ${ref === "intl" ? "o padrão internacional (2%)" : `a meta do Brasil (${br.center.toLocaleString("pt-BR")}%)`}`}
+        primary={<Segmented label="Como dividir" value={view} onChange={(v) => { setView(v); setOpen(new Set()); setCol(null); }} options={views.map((v) => ({ v, l: VIEW_LABEL[v] }))} />}
       >
         <Segmented label="Comparar com" value={ref} onChange={setRef} options={[
           { v: "intl", l: "Padrão internacional (2%)", title: intl.source },
           { v: "br", l: `Meta do Brasil (${br.center.toLocaleString("pt-BR")}%)`, title: br.source },
         ]} />
-        <label className="flex items-center gap-2 text-sm text-muted">
-          Ordenar
-          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="input !w-40 !py-1.5">
-            {hasWeight && <option value="weight">Maior peso</option>}
-            <option value="high">Maior inflação</option>
-            <option value="low">Menor inflação</option>
-          </select>
-        </label>
       </ControlBar>
-
-      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        {trail.length ? (
-          <>
-            <button type="button" onClick={() => setPath([])} className="font-semibold text-brand underline-offset-4 hover:underline">← {VIEW_LABEL[view]}</button>
-            {trail.map((t, i) => (
-              <span key={t.code} className="flex items-center gap-2">
-                <span className="text-faint">›</span>
-                {i < trail.length - 1 ? <button type="button" onClick={() => setPath(path.slice(0, i + 1))} className="font-semibold text-brand hover:underline">{t.name}</button> : <b>{t.name}</b>}
-              </span>
-            ))}
-            {trail[trail.length - 1].y12 !== null && <span className="text-xs text-muted">· {p2(trail[trail.length - 1].y12!)} em 12 meses</span>}
-          </>
-        ) : (
-          <span className="text-xs text-muted">{view === "groups" ? "Toque num grupo para ver os subgrupos e os itens que o compõem." : view === "cores" ? "Núcleos tiram ou suavizam os preços mais voláteis para mostrar a tendência de fundo." : "O mesmo IPCA dividido pelo tipo de preço."}</span>
-        )}
-      </div>
 
       <p className="mb-3 text-xs text-muted">
         Comparando com <b className="text-ink">{band.label}</b>: <span className="text-ok">✓ {counts.dentro ?? 0} dentro</span> · <span className="text-danger">▲ {counts.acima ?? 0} acima</span> · <span className="text-danger">▼ {counts.abaixo ?? 0} abaixo</span>
+        {headline !== null && <> · IPCA geral: <b className="text-ink">{p2(headline)}</b></>}
       </p>
 
-      <div className="card p-4 sm:p-5">
-        <div className="relative">
-          {/* faixa da meta e o zero, atrás das barras */}
-          <div className="pointer-events-none absolute inset-y-0 left-[0.375rem] right-[0.375rem] sm:left-[14.625rem] sm:right-[10.125rem]" aria-hidden="true">
-            <div className="absolute inset-y-0 bg-ok/10" style={{ left: `${X(band.center - band.tol)}%`, width: `${X(band.center + band.tol) - X(band.center - band.tol)}%`, boxShadow: "inset 1px 0 0 color-mix(in srgb, var(--ok) 35%, transparent), inset -1px 0 0 color-mix(in srgb, var(--ok) 35%, transparent)" }} />
-            {lo < 0 && <div className="absolute inset-y-0 w-px bg-line-strong" style={{ left: `${X(0)}%` }} />}
-            {headline !== null && <div className="absolute inset-y-0 w-0 border-l border-dashed border-ink/50" style={{ left: `${X(headline)}%` }} title="IPCA geral" />}
-          </div>
-          <ul className="relative space-y-1">
-            {rows.map((r) => {
-              const v = r.y12!;
-              const kids = r.children?.length ?? 0;
-              const Row = kids ? "button" : "div";
-              const diff = r.prevY12 != null ? v - r.prevY12 : null;
-              const f = r.focus?.[0];
-              return (
-                <li key={r.code}>
-                  <Row
-                    {...(kids ? { type: "button" as const, onClick: () => setPath([...path, r.code]), "aria-label": `${r.name}: ver ${kids} itens` } : {})}
-                    className={`grid w-full grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 rounded-lg px-1.5 py-2 text-left sm:grid-cols-[13.5rem_1fr_9rem] ${kids ? "cursor-pointer hover:bg-ink/5" : ""}`}
-                  >
-                    <span className="order-1 min-w-0">
-                      <span className="block truncate text-sm font-medium">{kids > 0 && <span className="mr-1 text-brand">▸</span>}{r.name}</span>
-                      <span className="block truncate text-[11px] text-faint">
-                        {r.weight != null ? `peso ${p2(r.weight, 1)}` : r.source}
-                        {r.m != null ? ` · mês ${p2(r.m)}` : ""}
-                        {f ? ` · Focus ${f.year}: ${p2(f.median)}` : ""}
-                      </span>
-                    </span>
-                    <span className="relative order-3 col-span-2 block h-4 sm:order-2 sm:col-span-1">
-                      <span className="absolute top-1 h-2.5 rounded-[4px] bg-brand" style={{ left: `${Math.min(X(0), X(v))}%`, width: `${Math.max(0.6, Math.abs(X(v) - X(0)))}%` }} />
-                    </span>
-                    <span className="order-2 flex items-center justify-end gap-2 sm:order-3">
-                      <span className="hidden sm:block"><Spark h={r.history} /></span>
-                      <span className="text-right">
-                        <b className="block text-sm tabular-nums">{p2(v)}</b>
-                        <StatusChip v={v} band={band} compact />
-                      </span>
-                    </span>
-                  </Row>
-                  {(r.desc || diff !== null) && !trail.length && (
-                    <p className="-mt-1 px-1.5 pb-1 text-[11px] leading-relaxed text-muted sm:pl-[1.5rem]">
-                      {r.desc}
-                      {diff !== null && <span className="text-faint"> {r.desc ? "· " : ""}{Math.abs(diff) < 0.05 ? "estável" : diff > 0 ? "acelerando" : "desacelerando"} ({pp(diff)} no mês)</span>}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 text-[11px] text-faint" aria-hidden="true">
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 rounded-sm bg-ok/15" />Faixa da meta ({p2(band.center - band.tol, 1)} a {p2(band.center + band.tol, 1)})</span>
-          {headline !== null && <span className="inline-flex items-center gap-1.5"><span className="h-3 w-0 border-l border-dashed border-ink/60" />IPCA geral ({p2(headline)})</span>}
-          <span>Barras: acumulado em 12 meses.</span>
-        </div>
+      <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="text-xs text-muted">
+              {heads.map(([key, label, align, tip]) => {
+                const on = key !== null && col?.key === key;
+                return (
+                  <th key={label} scope="col" aria-sort={on ? (col!.dir === 1 ? "ascending" : "descending") : "none"} className={`px-2.5 py-2 font-medium ${align === "left" ? "text-left" : "text-right"}`}>
+                    {key === null ? <span title={tip}>{label}</span> : (
+                      <button type="button" title={tip ?? `Ordenar por ${label.toLowerCase()}`} onClick={() => setCol(on ? { key, dir: (col!.dir * -1) as 1 | -1 } : { key, dir: 1 })} className={`inline-flex items-center gap-1 hover:text-ink ${on ? "font-bold text-ink" : ""}`}>
+                        {label}
+                        <span aria-hidden className={`text-[10px] ${on ? "" : "opacity-30"}`}>{on ? (col!.dir === 1 ? "▲" : "▼") : "↕"}</span>
+                      </button>
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>{rows.map((r) => line(r, 0))}</tbody>
+        </table>
       </div>
-
-      <details className="mt-3">
-        <summary className="cursor-pointer text-xs font-semibold text-brand">Ver em tabela</summary>
-        <div className="mt-2 overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase text-faint">
-              <tr><th className="p-3 capitalize">{level}</th>{hasWeight && <th className="p-3 text-right">Peso</th>}<th className="p-3 text-right">No mês</th><th className="p-3 text-right">12 meses</th><th className="p-3 text-right">Situação</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.code} className="border-b border-line last:border-0">
-                  <td className="p-3">{r.name}</td>
-                  {hasWeight && <td className="p-3 text-right tabular-nums">{r.weight != null ? p2(r.weight, 1) : "—"}</td>}
-                  <td className="p-3 text-right tabular-nums">{r.m != null ? p2(r.m) : "—"}</td>
-                  <td className="p-3 text-right font-semibold tabular-nums">{p2(r.y12!)}</td>
-                  <td className="p-3 text-right"><StatusChip v={r.y12} band={band} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
 
       <p className="mt-3 text-xs leading-relaxed text-faint">
         O governo só fixa meta para o IPCA geral ({br.center.toLocaleString("pt-BR")}% ± {br.tol.toLocaleString("pt-BR")} p.p., definida pelo {br.source}). Para os pilares, que não têm meta oficial, a comparação padrão usa a meta de 2% ao ano adotada pelos principais bancos centrais do mundo, com faixa de ± 1 p.p.; você pode trocar para a meta brasileira.

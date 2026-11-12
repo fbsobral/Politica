@@ -75,7 +75,7 @@ const GROUPS: { id: string; eyebrow: string; title: string; text: string; items:
     items: [
       { icon: <IconCoins />, title: "Orçamento", text: "De onde vem e para onde vai o dinheiro, por área e subárea, em 10 anos." },
       { icon: <IconTarget />, title: "Expectativa fiscal", text: "Previsto x realizado: a lei orçamentária (LOA) está sendo cumprida? Onde o ano deve fechar." },
-      { icon: <IconTrend />, title: "Inflação", text: "IPCA frente à meta, expectativas do mercado e os pilares que puxam os preços." },
+      { icon: <IconTrend />, title: "Inflação e juros", text: "IPCA frente à meta, Selic, juro real, expectativas do mercado e os pilares que puxam os preços." },
       { icon: <IconTrend />, title: "Ibovespa", text: "A bolsa em até 5 anos, com cada alta e queda forte ligada às notícias do dia e ao provável motivo." },
       { icon: <IconChart />, title: "Indicadores", text: "Economia, dívida, segurança, pobreza e mais, em até 30 anos." },
       { icon: <IconGauge />, title: "Score dos governos", text: "Uma nota de 0 a 100 por ano, metade economia e metade social, com a régua que você escolher." },
