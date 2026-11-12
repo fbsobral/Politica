@@ -156,7 +156,7 @@ export const MODULE_TOURS: Tour[] = [
     match: at("/orcamento"),
     steps: [
       { screen: "budget-kpis", art: "coins", title: "Para onde vai o dinheiro", text: "Receitas e despesas da sua cidade, do estado e da União, como declaradas ao Tesouro Nacional. Troque a esfera nas abas do topo; Todas compara as três.", tips: ["Os resumos mostram despesa, receita e gasto por habitante do último ano fechado"] },
-      { screen: "budget-line", art: "chart", title: "Evolução em 10 anos", text: "No gráfico, escolha o que mostrar, o período e a categoria. Veja em R$, por habitante ou em % do total, com ou sem correção pela inflação.", tips: ["O ano corrente pode entrar parcial ou projetado"] },
+      { screen: "budget-line", art: "chart", title: "Evolução em 10 anos", text: "No gráfico, escolha o que mostrar, o período e a categoria. Veja em R$, por habitante ou em % do total, com ou sem correção pela inflação.", tips: ["O ano corrente pode entrar parcial ou projetado", "Logo abaixo, o resultado primário mostra se sobrou (superávit) ou faltou (déficit) dinheiro em cada ano, e o que explica a variação"] },
       { screen: "budget-bars", art: "list", title: "Categorias e subcategorias", text: "De onde vem e para onde vai o dinheiro, por área. Toque em ver subcategorias para detalhar e em O que é isso? para entender cada termo." },
     ],
   },
