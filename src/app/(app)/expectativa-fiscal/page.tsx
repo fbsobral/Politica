@@ -92,7 +92,7 @@ function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, 
 }
 
 /** Categorias que mais se afastam da LOA na projeção (para o resumo). */
-function Detail({ f, pibPct, ytdB, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; ytdB: PrimaryYtd | null; ytd: PrimaryYtd | null }) {
+function Detail({ f, pibPct, ytd }: { f: FiscalData; pibPct: PrimaryPct | null; ytd: PrimaryYtd | null }) {
   const t = f.totals;
   const pr = f.projection["total:revenue"] ?? { value: t.revenue.done, seasonal: false };
   const pe = f.projection["total:expense"] ?? { value: t.expense.done, seasonal: false };
@@ -172,7 +172,7 @@ function Detail({ f, pibPct, ytdB, ytd }: { f: FiscalData; pibPct: PrimaryPct | 
                     <dt className="whitespace-nowrap text-muted">Situação</dt>
                     <dd className={`whitespace-nowrap text-right font-bold ${mainVal >= 0 ? "text-ok" : "text-danger"}`}>{mainVal >= 0 ? "▲ superávit" : "▼ déficit"}</dd>
                     {bcMain != null && prim.realized != null && <><dt className="whitespace-nowrap text-muted" title="Resultado pelo Orçamento (RREO, Anexo 06, Tesouro Nacional); difere do Banco Central, que mede pela variação da dívida">R$ jan–{MONTH[f.period]} <span className="text-faint">RREO</span></dt><dd className="whitespace-nowrap text-right font-semibold tabular-nums">{brlShort(prim.realized)}</dd></>}
-                    {[ytdB, ytd && (!ytdB || ytd.month !== ytdB.month) ? ytd : null].map((v, i) => v && (
+                    {[ytd].map((v, i) => v && (
                       <Fragment key={`ytd${i}`}>
                         <dt className="whitespace-nowrap text-muted" title={`Banco Central: soma do resultado mensal de janeiro a ${MONTH_NAME[v.month]} (SGS ${v.code}, ${v.perimeter}) ÷ PIB dos mesmos meses`}>{pibYtdLabel(v.month)} <span className="text-faint">BC</span></dt>
                         <dd className="whitespace-nowrap text-right font-semibold tabular-nums">{`${v.pct > 0 ? "déficit " : "superávit "}${Math.abs(v.pct).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}</dd>
@@ -249,12 +249,10 @@ async function Content({ scope }: { scope: BudgetScope }) {
   const user = await requireUser();
   const [f, pibPct] = await Promise.all([getFiscal(scope, user), getPrimaryPct(scope)]);
   // % do PIB no ano (mesmo período do valor em R$): só faz sentido para a União, comparada com o PIB do país
-  // % do PIB no ano (União), sempre do Banco Central: no mês em que o RREO termina e no mês mais novo já publicado
-  const ytdB = f && scope === "FEDERAL" ? await getPrimaryYtd(f.year, f.period * 2) : null;
   const ytd = f && scope === "FEDERAL" ? await getPrimaryYtd(f.year) : null;
   return (
     <>
-      {f ? <Detail f={f} pibPct={pibPct} ytdB={ytdB} ytd={ytd} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
+      {f ? <Detail f={f} pibPct={pibPct} ytd={ytd} /> : <EmptyState title="Dados indisponíveis">Não encontrei o relatório bimestral (RREO) deste ente no Tesouro Nacional, ou a fonte não respondeu agora. Tente novamente em alguns minutos.</EmptyState>}
       <div className="mt-8 max-w-3xl">
         <Notice kind="info">
           Fonte: Relatório Resumido da Execução Orçamentária (RREO), que prefeituras, estados e a União enviam a cada dois meses ao Tesouro Nacional (Siconfi): Anexo 1 (receitas e despesas), Anexo 2 (despesa por função) e Anexo 6 (metas fiscais da LDO).
