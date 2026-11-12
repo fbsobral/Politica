@@ -382,12 +382,14 @@ export async function getFiscalSeries(scope: BudgetScope, user: { uf: string; mu
 
   // anos fechados: do mais recente para trás; para ao achar 2 anos seguidos sem dados depois de já ter achado algum
   const closed: SeriesPoint[] = [];
-  const years = Array.from({ length: 30 }, (_, i) => cur!.year - 1 - i);
-  const snaps = await pool(years, 3, (y) => snapshot(id, y, 6, { primary: true }));
   let misses = 0;
-  for (let i = 0; i < years.length; i++) {
-    const s = snaps[i];
-    if (s) { closed.push(toPoint(s, pib)); misses = 0; } else if (closed.length && ++misses >= 2) break;
+  // do mais recente para trás, 3 anos por vez; para depois de 2 anos seguidos sem dados (o RREO padronizado só existe desde ~2015)
+  for (let y = cur.year - 1; y >= cur.year - 30 && misses < 2; y -= 3) {
+    const batch = [y, y - 1, y - 2].filter((x) => x >= cur!.year - 30);
+    const snaps = await Promise.all(batch.map((yy) => snapshot(id, yy, 6, { primary: true })));
+    for (let k = 0; k < batch.length && misses < 2; k++) {
+      if (snaps[k]) { closed.push(toPoint(snaps[k]!, pib)); misses = 0; } else if (closed.length) misses++;
+    }
   }
   closed.sort((a, b) => a.year - b.year);
 

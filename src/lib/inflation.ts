@@ -6,6 +6,9 @@ export type Band = { center: number; tol: number; label: string; source: string 
 
 /** Meta do Conselho Monetário Nacional para o IPCA. Desde 2025 a meta é contínua (3% ± 1,5 p.p., medida no acumulado em 12 meses). */
 const CMN: Record<number, number> = { 2004: 5.5, 2005: 4.5, 2006: 4.5, 2007: 4.5, 2008: 4.5, 2009: 4.5, 2010: 4.5, 2011: 4.5, 2012: 4.5, 2013: 4.5, 2014: 4.5, 2015: 4.5, 2016: 4.5, 2017: 4.5, 2018: 4.5, 2019: 4.25, 2020: 4, 2021: 3.75, 2022: 3.5, 2023: 3.25, 2024: 3 };
+/** Primeiro ano com meta no cadastro abaixo (metas anteriores a 2004 não estão cadastradas). */
+export const META_FROM = 2004;
+
 export function cmnMeta(year: number): Band {
   const center = CMN[year] ?? 3;
   // tolerância: 2,5 p.p. até 2005, 2 p.p. de 2006 a 2016 e 1,5 p.p. desde 2017

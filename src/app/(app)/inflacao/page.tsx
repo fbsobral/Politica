@@ -5,7 +5,7 @@ import { MiniCard } from "@/components/mini-card";
 import { EmptyState, NationalOnly, Notice, PageHeader } from "@/components/ui";
 import { brDateTime } from "@/lib/stamp";
 import { requireUser } from "@/lib/user";
-import { cmnMeta, getInflation, INTL, statusOf, type Band, type InflationData, type Pillar } from "@/lib/inflation";
+import { cmnMeta, getInflation, META_FROM, INTL, statusOf, type Band, type InflationData, type Pillar } from "@/lib/inflation";
 
 export const metadata = { title: "Inflação e juros" };
 export const dynamic = "force-dynamic";
@@ -27,7 +27,8 @@ function Detail({ d }: { d: InflationData }) {
   const s0 = d.focus.selic?.find((f) => f.year === year);
   const s1 = d.focus.selic?.find((f) => f.year === year + 1);
   const bands: Record<number, Band> = {};
-  for (let y = year - 31; y <= year + 3; y++) bands[y] = cmnMeta(y);
+  // só há meta no nosso cadastro a partir de 2004; antes disso o gráfico não desenha faixa (não vale inventar uma)
+  for (let y = Math.max(META_FROM, year - 31); y <= year + 3; y++) bands[y] = cmnMeta(y);
   // meta contínua (desde 2025): descumprimento = 6 meses seguidos fora do intervalo
   const sr = h.series;
   let outside = 0;
@@ -61,7 +62,7 @@ function Detail({ d }: { d: InflationData }) {
     <div className="space-y-8">
       <p className="rounded-xl border border-line bg-surface px-4 py-2.5 text-sm" role="status">
         <b>Último dado:</b> IPCA de {ref ? `${MES[ref.month]} de ${ref.year}` : "—"}{sNow ? <>; Selic (meta) de {MES[sNow.month]} de {sNow.year}</> : ""}{d.focus.date ? <>; Focus de {new Date(`${d.focus.date}T12:00:00`).toLocaleDateString("pt-BR")}</> : ""}.{" "}
-        <span className="text-muted">Dados coletados do IBGE e do Banco Central em <b className="text-ink">{brDateTime(d.fetchedAt)}</b> e renovados a cada 30 minutos.</span>
+        <span className="text-muted">Dados coletados do IBGE e do Banco Central em <b className="text-ink">{brDateTime(d.fetchedAt)}</b> e renovados a cada 12 horas.</span>
       </p>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Resumo">
