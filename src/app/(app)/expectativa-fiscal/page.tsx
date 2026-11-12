@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { BudgetPlanChart } from "@/components/budget-plan-chart";
+import { AskButton } from "@/components/agent/ask-button";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { brlShort, pct, type BudgetScope } from "@/lib/budget";
 import { brDateTime } from "@/lib/stamp";
@@ -34,7 +35,14 @@ function Verdict({ title, scope, done, projected, loa, updated, kind, seasonal, 
           : "Os gastos caminham para o valor aprovado na lei orçamentária.";
   return (
     <section className="card flex h-full flex-col p-5">
-      <p className="eyebrow">{title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="eyebrow">{title}</p>
+        <AskButton compact focus={{
+          title: `${title} · ${MONTH[period]}`,
+          text: `${title} (${kind === "revenue" ? "arrecadação" : "despesa empenhada"}), realizado até ${MONTH[period]}: ${brlShort(done)}${loa > 0 ? ` (${pct(done / loa, 0)} do previsto na LOA de ${brlShort(loa)}; previsto atualizado ${brlShort(updated)})` : ""}. Pace: ${loa > 0 ? `${pct(done / loa / (period / 6), 0)} (acima de 100% = acima do esperado; esperado ${pct(period / 6, 0)} do ano)` : "sem LOA"}. Projeção para o fechamento: ${brlShort(projected)}, ${label}${st && st !== "segue" ? ` (${signed(d)})` : ""}.`,
+          suggestions: ["O que este número significa?", "O pace está bom para esta época do ano?", "O que explica a diferença para a LOA?"],
+        }} />
+      </div>
       <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(done)}</p>
       <p className="min-h-[2.5rem] text-sm text-faint">realizado até {MONTH[period]}{loa > 0 ? ` · ${pct(done / loa, 0)} do previsto na LOA` : ""}</p>
       {loa > 0 && (() => {
@@ -93,7 +101,14 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
         <Verdict title="Receita" scope={f.scope} done={t.revenue.done} projected={pr.value} loa={t.revenue.initial} updated={t.revenue.updated} kind="revenue" seasonal={pr.seasonal} period={f.period} />
         <Verdict title="Despesa (empenhada)" scope={f.scope} done={t.expense.done} projected={pe.value} loa={t.expense.initial} updated={t.expense.updated} kind="expense" seasonal={pe.seasonal} period={f.period} />
         <section className="card flex h-full flex-col p-5">
-          <p className="eyebrow">Saldo do orçamento</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="eyebrow">Saldo do orçamento</p>
+            <AskButton compact focus={{
+              title: "Saldo do orçamento",
+              text: `Saldo do orçamento (${f.entity}), realizado até ${MONTH[f.period]} de ${f.year}: ${brlShort(doneBalance)} (receita realizada menos despesa empenhada). Projeção para o fechamento: ${brlShort(projBalance)}. Saldo na LOA: ${brlShort(loaBalance)}. ${f.scope === "FEDERAL" ? "Na União a receita inclui a emissão de títulos para rolar a dívida; o saldo do orçamento é diferente do resultado primário." : ""}`,
+              suggestions: ["O que é o saldo do orçamento?", "Por que o saldo está negativo?", "Qual a diferença entre saldo e resultado primário?"],
+            }} />
+          </div>
           <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(doneBalance)}</p>
           <p className="min-h-[2.5rem] text-sm text-faint">realizado até {MONTH[f.period]}: receita realizada menos despesa empenhada</p>
           <dl className="mt-3 grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
@@ -107,7 +122,14 @@ function Detail({ f, pibPct }: { f: FiscalData; pibPct: PrimaryPct | null }) {
           <p className="mt-auto pt-3 text-xs leading-relaxed text-faint">A projeção é a receita projetada menos a despesa projetada. {f.scope === "FEDERAL" ? "Na União a receita inclui a emissão de títulos para rolar a dívida, por isso o saldo do orçamento é diferente do resultado primário." : ""}</p>
         </section>
         <section className="card flex h-full flex-col p-5" aria-label="Resultado primário">
-          <p className="eyebrow">Resultado primário</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="eyebrow">Resultado primário</p>
+            <AskButton compact focus={{
+              title: "Resultado primário",
+              text: `Resultado primário (${f.entity}) até ${MONTH[f.period]} de ${f.year}: ${prim?.realized != null ? brlShort(prim.realized) : "ainda não publicado"} (receitas primárias menos despesas primárias, sem juros; RREO Anexo 06). Meta da LDO para o ano: ${prim?.meta != null ? brlShort(prim.meta) : "não declarada"}. ${pibPct ? `Em % do PIB, acumulado em 12 meses até ${pibPct.month}: ${pibPct.pct > 0 ? "déficit de " : "superávit de "}${Math.abs(pibPct.pct).toLocaleString("pt-BR")}% (Banco Central, SGS ${pibPct.code}, ${pibPct.perimeter}).` : ""}`,
+              suggestions: ["O que é resultado primário?", "Por que ele não inclui os juros?", "Isso está dentro da meta?"],
+            }} />
+          </div>
           {prim?.realized != null ? (
             <>
               <p className="display mt-2 text-3xl font-semibold leading-tight">{brlShort(prim.realized)}</p>
