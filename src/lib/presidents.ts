@@ -4,6 +4,11 @@ export type PresidentTerm = { id: string; name: string; from: string; to: string
 
 /** Mesmas cores do Score. Dilma foi afastada em 12/05/2016; Temer governou a partir daí (interino até 31/08/2016). */
 export const PRESIDENT_TERMS: PresidentTerm[] = [
+  { id: "geisel", name: "Geisel", from: "1974-03", to: "1979-02", color: "#868e96" },
+  { id: "figueiredo", name: "Figueiredo", from: "1979-03", to: "1985-02", color: "#495057" },
+  { id: "sarney", name: "Sarney", from: "1985-03", to: "1990-02", color: "#1971c2" },
+  { id: "collor", name: "Collor", from: "1990-03", to: "1992-09", color: "#0c8599" },
+  { id: "itamar", name: "Itamar", from: "1992-10", to: "1994-12", color: "#5f3dc4" },
   { id: "fhc", name: "FHC", from: "1995-01", to: "2002-12", color: "#2b8a3e" },
   { id: "lula12", name: "Lula", from: "2003-01", to: "2010-12", color: "#e03131" },
   { id: "dilma", name: "Dilma", from: "2011-01", to: "2016-04", color: "#c2255c" },

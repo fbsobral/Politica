@@ -16,6 +16,7 @@ export default async function MaisPage() {
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
     { href: "/expectativa-fiscal", t: "Expectativa fiscal", d: "Previsto x realizado: a LOA está sendo cumprida?", i: <IconCoins /> },
     { href: "/inflacao", t: "Inflação e juros", d: "IPCA, Selic, juro real e expectativas do mercado", i: <IconChart /> },
+    { href: "/salarios", t: "Salários e lucros", d: "Participação dos salários e taxa de exploração", i: <IconChart /> },
     { href: "/ibovespa", t: "Ibovespa", d: "A bolsa em 5 anos e o motivo das altas e quedas", i: <IconChart /> },
     { href: "/indicadores", t: "Indicadores", d: "Economia, dívida, segurança e pobreza em 10 anos", i: <IconChart /> },
     { href: "/score", t: "Score dos governos", d: "Nota por ano: 50% economia, 50% social", i: <IconChart /> },

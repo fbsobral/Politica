@@ -428,6 +428,18 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <p className="text-[8.5px] leading-snug text-muted">• Quando o dólar sobe, o Ibovespa tende a cair (correlação −0,58).</p>
     </Frame>
   ),
+  "labor-share": () => (
+    <Frame title="Salários e lucros" scope="F">
+      <div className="flex gap-1"><Chip on>Participação dos salários</Chip><Chip>Taxa de exploração</Chip></div>
+      <Hl className="rounded-lg border border-line bg-surface p-1">
+        <svg viewBox="0 0 260 60" className="w-full" aria-hidden>
+          <rect x="0" y="6" width="110" height="3" rx="1.5" fill="#e03131" opacity="0.8" /><rect x="112" y="6" width="70" height="3" rx="1.5" fill="#c2255c" opacity="0.8" /><rect x="184" y="6" width="76" height="3" rx="1.5" fill="#0e8a5f" opacity="0.8" />
+          <polyline points="4,44 40,40 76,34 112,28 148,24 184,30 220,36 256,32" fill="none" stroke="var(--brand)" strokeWidth="2" />
+        </svg>
+      </Hl>
+      <p className="text-[8.5px] text-muted">Salários no PIB: <b className="text-ink">42,8%</b> · R$ 1,05 de excedente por R$ 1 de salário</p>
+    </Frame>
+  ),
   chat: () => (
     <Frame title="Pergunte">
       <Bubble me>A prefeitura está gastando o que prometeu em saúde?</Bubble>
