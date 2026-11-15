@@ -195,7 +195,7 @@ export const MODULE_TOURS: Tour[] = [
     name: "Salários e lucros",
     match: at("/salarios"),
     steps: [
-      { screen: "labor-share", art: "chart", title: "Quanto vai para os salários", text: "A participação dos salários mostra a fatia da renda do país que vai para os empregados; a taxa de exploração compara o que fica com o capital com o que vai para os salários.", tips: ["Troque a medida e escolha o período: de 1 a 50 anos", "A faixa no topo e a tabela mostram cada governo"] },
+      { screen: "labor-share", art: "chart", title: "Quanto vai para os salários", text: "A participação dos salários mostra a fatia da renda do país que vai para os empregados; a taxa de exploração compara o que fica com o capital com o que vai para os salários; a taxa de lucro mostra quanto o capital rende sobre si mesmo.", tips: ["Troque a medida e escolha o período: de 1 a 50 anos", "A faixa no topo e a tabela mostram cada governo"] },
     ],
   },
   {

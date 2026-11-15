@@ -157,15 +157,41 @@ async function series(p: Plan): Promise<SharePoint[]> {
   return pts;
 }
 
-/** Penn World Table (via FRED): participação da remuneração do trabalho no PIB, Brasil, desde 1950. Inclui a parte do trabalho dos autônomos. */
-async function pwt(): Promise<{ year: number; share: number }[]> {
-  const res = await fetch("https://fred.stlouisfed.org/graph/fredgraph.csv?id=LABSHPBRA156NRUG", { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`FRED ${res.status}`);
-  const out: { year: number; share: number }[] = [];
+/** Série anual do FRED (CSV público, sem chave): ano → valor. */
+async function fred(id: string): Promise<Map<number, number>> {
+  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`FRED ${id} ${res.status}`);
+  const out = new Map<number, number>();
   for (const line of (await res.text()).split(/\r?\n/).slice(1)) {
     const [d, v] = line.split(",");
-    const share = Number(v);
-    if (/^\d{4}-/.test(d ?? "") && Number.isFinite(share) && share > 0.2 && share < 0.9) out.push({ year: Number(d.slice(0, 4)), share });
+    const n = Number(v);
+    if (/^\d{4}-/.test(d ?? "") && Number.isFinite(n)) out.set(Number(d.slice(0, 4)), n);
+  }
+  return out;
+}
+
+type LongPoint = { year: number; share: number; exploitation: number; profitRate: number | null; profitShare: number; outputCapital: number | null };
+
+/**
+ * Penn World Table (via FRED), Brasil, desde 1950:
+ *   participação do trabalho no PIB (inclui a parte do trabalho dos autônomos);
+ *   taxa de lucro bruta = (1 − participação do trabalho) × PIB ÷ estoque de capital, os dois a preços correntes de PPC.
+ */
+async function pwt(): Promise<LongPoint[]> {
+  const [labsh, gdp, cap] = await Promise.all([
+    fred("LABSHPBRA156NRUG"),
+    fred("CGDPOBRA666NRUG").catch(() => new Map<number, number>()),
+    fred("CKSPPPBRA666NRUG").catch(() => new Map<number, number>()),
+  ]);
+  const out: LongPoint[] = [];
+  for (const [year, share] of [...labsh.entries()].sort((a, b) => a[0] - b[0])) {
+    if (!(share > 0.2 && share < 0.9)) continue;
+    const y = gdp.get(year), k = cap.get(year);
+    const outputCapital = y && k && k > 0 ? y / k : null;
+    let profitRate = outputCapital !== null ? (1 - share) * outputCapital : null;
+    // validação: taxa de lucro bruta da economia fica tipicamente entre 3% e 60%
+    if (profitRate !== null && (profitRate < 0.03 || profitRate > 0.6)) profitRate = null;
+    out.push({ year, share, exploitation: (1 - share) / share, profitRate, profitShare: 1 - share, outputCapital: profitRate !== null ? outputCapital : null });
   }
   return out;
 }
@@ -176,7 +202,7 @@ export type LaborShareData = {
   annualSource: string | null;
   quarterlySource: string | null;
   /** participação do trabalho no PIB (Penn World Table), longo prazo */
-  longRun: { year: number; share: number; exploitation: number }[];
+  longRun: LongPoint[];
   errors: string[];
   fetchedAt: string;
 };
@@ -192,7 +218,7 @@ export async function buildLaborShare(): Promise<LaborShareData> {
     pwt().catch((err) => {
       errors.push("Penn World Table");
       console.warn("[labor-share] pwt", (err as Error).message);
-      return [] as { year: number; share: number }[];
+      return [] as LongPoint[];
     }),
   ]);
   const [annual, quarterly] = await Promise.all([
@@ -205,7 +231,7 @@ export async function buildLaborShare(): Promise<LaborShareData> {
     quarterly,
     annualSource: plans.annual && annual.length ? `IBGE, Contas Nacionais (tabela ${plans.annual.table}: ${plans.annual.name})` : null,
     quarterlySource: plans.quarterly && quarterly.length ? `IBGE (tabela ${plans.quarterly.table}: ${plans.quarterly.name})` : null,
-    longRun: long.map((p) => ({ ...p, exploitation: (1 - p.share) / p.share })),
+    longRun: long,
     errors,
     fetchedAt: new Date().toISOString(),
   };
@@ -213,5 +239,5 @@ export async function buildLaborShare(): Promise<LaborShareData> {
 
 /** Dados de salários e lucros do Brasil (cache de 7 dias: as contas nacionais saem uma vez por ano, as trimestrais a cada 3 meses). */
 export async function getLaborShare(opts: { force?: boolean } = {}): Promise<LaborShareData | null> {
-  return cached("labor-share:v1", 7, buildLaborShare, opts.force);
+  return cached("labor-share:v2", 7, buildLaborShare, opts.force);
 }
