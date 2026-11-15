@@ -7,8 +7,8 @@ import { useState } from "react";
 /** Botão de um grupo segmentado. */
 export const segClass = (on: boolean) => `whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${on ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink"}`;
 
-/** Caixa do grupo segmentado; rola de lado quando não cabe (celular). */
-export const SEG_GROUP = "flex max-w-full gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+/** Caixa do grupo segmentado: quando não cabe (celular), as opções quebram de linha, para nenhuma ficar escondida. */
+export const SEG_GROUP = "flex max-w-full flex-wrap gap-0.5 rounded-xl border border-line bg-surface p-0.5";
 
 export function Segmented<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { v: T; l: React.ReactNode; title?: string; disabled?: boolean }[]; onChange: (v: T) => void }) {
   return (
