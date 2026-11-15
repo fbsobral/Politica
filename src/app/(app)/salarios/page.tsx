@@ -11,6 +11,15 @@ export const dynamic = "force-dynamic";
 const pct = (v: number | null | undefined, d = 1) => (v == null ? "—" : `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%`);
 const rs = (v: number | null | undefined) => (v == null ? "—" : `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
+/** valor absoluto compacto (R$ 4,2 tri · US$ 380 bi) */
+const big = (v: number | null | undefined, cur = "R$") => {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const a = Math.abs(v);
+  const f = (n: number, u: string) => `${cur} ${n.toLocaleString("pt-BR", { maximumFractionDigits: n >= 100 ? 0 : n >= 10 ? 1 : 2 })} ${u}`;
+  return a >= 1e12 ? f(v / 1e12, "tri") : a >= 1e9 ? f(v / 1e9, "bi") : a >= 1e6 ? f(v / 1e6, "mi") : `${cur} ${Math.round(v).toLocaleString("pt-BR")}`;
+};
+const Memo = ({ children }: { children: React.ReactNode }) => <p className="mt-1 text-[11px] leading-snug text-muted">{children}</p>;
+
 function Detail({ d }: { d: LaborShareData }) {
   const last = d.annual.at(-1);
   const ten = last ? d.annual.find((p) => p.year === last.year - 10) : undefined;
@@ -20,10 +29,20 @@ function Detail({ d }: { d: LaborShareData }) {
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumo">
-        <StatTile label={`Salários no PIB ${last?.year ?? ""}`} value={pct(last?.wageGdp)} hint={pp(last?.wageGdp, ten?.wageGdp) ?? "remuneração dos empregados ÷ PIB"} />
-        <StatTile label="Na renda dos fatores" value={pct(last?.wageFactor)} hint={pp(last?.wageFactor, ten?.wageFactor) ?? "sem impostos sobre a produção"} />
-        <StatTile label="Taxa de exploração" value={rs(last?.exploitation)} hint="de excedente operacional para cada R$ 1 de salário" />
-        {pr ? <StatTile label={`Taxa de lucro ${pr.year}`} value={pct(pr.profitRate)} hint="lucro bruto ÷ estoque de capital (Penn World Table)" /> : <StatTile label={`Longo prazo ${lr?.year ?? ""}`} value={pct(lr?.share)} hint="trabalho no PIB, com autônomos (Penn World Table)" />}
+        <StatTile label={`Salários no PIB ${last?.year ?? ""}`} value={pct(last?.wageGdp)} hint={pp(last?.wageGdp, ten?.wageGdp) ?? "remuneração dos empregados ÷ PIB"}>
+          {last?.gdp && <Memo>{big(last.wages)} de remuneração ÷ {big(last.gdp)} de PIB</Memo>}
+        </StatTile>
+        <StatTile label="Na renda dos fatores" value={pct(last?.wageFactor)} hint={pp(last?.wageFactor, ten?.wageFactor) ?? "sem impostos sobre a produção"}>
+          {last && <Memo>{big(last.wages)} ÷ {big(last.wages + last.surplus + (last.mixed ?? 0))} de renda dos fatores</Memo>}
+        </StatTile>
+        <StatTile label="Taxa de exploração" value={rs(last?.exploitation)} hint="de excedente operacional para cada R$ 1 de salário">
+          {last && <Memo>{big(last.surplus)} de excedente ÷ {big(last.wages)} de remuneração</Memo>}
+        </StatTile>
+        {pr ? (
+          <StatTile label={`Taxa de lucro ${pr.year}`} value={pct(pr.profitRate)} hint="lucro bruto ÷ estoque de capital (Penn World Table)">
+            {pr.gdpPpp && pr.capitalPpp && <Memo>{big((1 - pr.share) * pr.gdpPpp, "US$")} de lucro ÷ {big(pr.capitalPpp, "US$")} de capital (PPC)</Memo>}
+          </StatTile>
+        ) : <StatTile label={`Longo prazo ${lr?.year ?? ""}`} value={pct(lr?.share)} hint="trabalho no PIB, com autônomos (Penn World Table)" />}
       </section>
 
       <section className="card p-5 sm:p-6" aria-label="O que são estes números">

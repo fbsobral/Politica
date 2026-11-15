@@ -132,7 +132,15 @@ export type SharePoint = {
   wageFactor: number | null;
   /** excedente operacional ÷ remuneração dos empregados */
   exploitation: number;
+  /** valores de origem, em reais correntes (memória de cálculo) */
+  wages: number;
+  surplus: number;
+  mixed: number | null;
+  gdp: number | null;
 };
+
+/** Fator para converter a unidade do IBGE em reais ("Milhões de Reais" → 1e6). */
+const scaleOf = (unit: string) => (/milh/i.test(unit) ? 1e6 : /bilh/i.test(unit) ? 1e9 : /\bmil\b/i.test(unit) ? 1e3 : 1);
 
 async function series(p: Plan): Promise<SharePoint[]> {
   const [w, s, m, g] = await Promise.all([
@@ -152,7 +160,8 @@ async function series(p: Plan): Promise<SharePoint[]> {
     // validação: fora destas faixas, a tabela encontrada não é a certa
     if ((wageGdp !== null && (wageGdp < 0.2 || wageGdp > 0.8)) || wageFactor < 0.2 || wageFactor > 0.9 || exploitation < 0.1 || exploitation > 4) continue;
     const year = Number(k.slice(0, 4));
-    pts.push({ period: k.length === 6 ? `${year}-T${Number(k.slice(4))}` : k, year, wageGdp, wageFactor, exploitation });
+    const f = scaleOf(p.locs.wages!.unit);
+    pts.push({ period: k.length === 6 ? `${year}-T${Number(k.slice(4))}` : k, year, wageGdp, wageFactor, exploitation, wages: wage * f, surplus: surplus * f, mixed: mixed > 0 ? mixed * f : null, gdp: gdp > 0 ? gdp * f : null });
   }
   return pts;
 }
@@ -170,7 +179,17 @@ async function fred(id: string): Promise<Map<number, number>> {
   return out;
 }
 
-type LongPoint = { year: number; share: number; exploitation: number; profitRate: number | null; profitShare: number; outputCapital: number | null };
+type LongPoint = {
+  year: number;
+  share: number;
+  exploitation: number;
+  profitRate: number | null;
+  profitShare: number;
+  outputCapital: number | null;
+  /** valores de origem em dólares a preços correntes de PPC (memória de cálculo) */
+  gdpPpp: number | null;
+  capitalPpp: number | null;
+};
 
 /**
  * Penn World Table (via FRED), Brasil, desde 1950:
@@ -191,7 +210,8 @@ async function pwt(): Promise<LongPoint[]> {
     let profitRate = outputCapital !== null ? (1 - share) * outputCapital : null;
     // validação: taxa de lucro bruta da economia fica tipicamente entre 3% e 60%
     if (profitRate !== null && (profitRate < 0.03 || profitRate > 0.6)) profitRate = null;
-    out.push({ year, share, exploitation: (1 - share) / share, profitRate, profitShare: 1 - share, outputCapital: profitRate !== null ? outputCapital : null });
+    // a PWT publica PIB e capital em milhões de dólares
+    out.push({ year, share, exploitation: (1 - share) / share, profitRate, profitShare: 1 - share, outputCapital: profitRate !== null ? outputCapital : null, gdpPpp: y ? y * 1e6 : null, capitalPpp: k && profitRate !== null ? k * 1e6 : null });
   }
   return out;
 }
@@ -239,5 +259,5 @@ export async function buildLaborShare(): Promise<LaborShareData> {
 
 /** Dados de salários e lucros do Brasil (cache de 7 dias: as contas nacionais saem uma vez por ano, as trimestrais a cada 3 meses). */
 export async function getLaborShare(opts: { force?: boolean } = {}): Promise<LaborShareData | null> {
-  return cached("labor-share:v2", 7, buildLaborShare, opts.force);
+  return cached("labor-share:v3", 7, buildLaborShare, opts.force);
 }

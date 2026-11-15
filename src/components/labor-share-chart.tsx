@@ -9,9 +9,33 @@ type Measure = "share" | "exploit" | "profit";
 type Range = 1 | 2 | 5 | 10 | 20 | 30 | 50;
 const RANGES: Range[] = [1, 2, 5, 10, 20, 30, 50];
 
-type Line = { id: string; name: string; color: string; dash?: string; values: (number | null)[] };
+type Line = { id: string; name: string; color: string; dash?: string; values: (number | null)[]; /** memória de cálculo de cada ponto */ memo: (string | null)[] };
+type IbgeRow = LaborShareData["annual"][number];
+type PwtRow = LaborShareData["longRun"][number];
 
 const pct = (v: number, d = 1) => `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%`;
+/** valor absoluto compacto: R$ 4,2 tri · US$ 380 bi */
+const big = (v: number | null | undefined, cur: "R$" | "US$") => {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const a = Math.abs(v);
+  const f = (n: number, u: string) => `${cur} ${n.toLocaleString("pt-BR", { maximumFractionDigits: n >= 100 ? 0 : n >= 10 ? 1 : 2 })} ${u}`;
+  if (a >= 1e12) return f(v / 1e12, "tri");
+  if (a >= 1e9) return f(v / 1e9, "bi");
+  if (a >= 1e6) return f(v / 1e6, "mi");
+  return `${cur} ${Math.round(v).toLocaleString("pt-BR")}`;
+};
+const brl = (v: number | null | undefined) => big(v, "R$");
+const usd = (v: number | null | undefined) => big(v, "US$");
+/** memórias de cálculo */
+const M = {
+  wageGdp: (p?: IbgeRow) => (p?.gdp ? `Remuneração ${brl(p.wages)} ÷ PIB ${brl(p.gdp)}` : null),
+  wageFactor: (p?: IbgeRow) => (p ? `Remuneração ${brl(p.wages)} ÷ renda dos fatores ${brl(p.wages + p.surplus + (p.mixed ?? 0))}` : null),
+  exploit: (p?: IbgeRow) => (p ? `Excedente ${brl(p.surplus)} ÷ remuneração ${brl(p.wages)}` : null),
+  pwtShare: (p?: PwtRow) => (p?.gdpPpp ? `Trabalho ${usd(p.share * p.gdpPpp)} ÷ PIB ${usd(p.gdpPpp)} (PPC)` : null),
+  pwtExploit: (p?: PwtRow) => (p?.gdpPpp ? `Capital ${usd((1 - p.share) * p.gdpPpp)} ÷ trabalho ${usd(p.share * p.gdpPpp)} (PPC)` : null),
+  profit: (p?: PwtRow) => (p?.gdpPpp && p.capitalPpp ? `Lucro bruto ${usd((1 - p.share) * p.gdpPpp)} ÷ capital ${usd(p.capitalPpp)} (PPC)` : null),
+};
+
 const rs = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function LaborShareChart({ data }: { data: LaborShareData }) {
@@ -33,17 +57,17 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
   const quarterly = range <= 2 && data.quarterly.length >= 4 && measure !== "profit";
   const fmt = (v: number) => (measure === "exploit" ? rs(v) : pct(v));
 
-  const { keys, labels, lines } = useMemo(() => {
+  const { keys, labels, lines, ibgeRows, pwtRows } = useMemo(() => {
     if (quarterly) {
       const pts = data.quarterly.slice(-(range * 4));
       const k = pts.map((p) => p.period);
       const ls: Line[] = measure === "share"
         ? [
-            { id: "q-gdp", name: "Salários no PIB (IBGE, trimestral)", color: "var(--brand)", values: pts.map((p) => p.wageGdp) },
-            { id: "q-fac", name: "Salários na renda dos fatores (IBGE)", color: "var(--estadual)", dash: "6 4", values: pts.map((p) => p.wageFactor) },
+            { id: "q-gdp", name: "Salários no PIB (IBGE, trimestral)", color: "var(--brand)", values: pts.map((p) => p.wageGdp), memo: pts.map((p) => M.wageGdp(p)) },
+            { id: "q-fac", name: "Salários na renda dos fatores (IBGE)", color: "var(--estadual)", dash: "6 4", values: pts.map((p) => p.wageFactor), memo: pts.map((p) => M.wageFactor(p)) },
           ]
-        : [{ id: "q-exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: pts.map((p) => p.exploitation) }];
-      return { keys: k.map((p) => `${p.slice(0, 4)}-${String((Number(p.slice(-1)) - 1) * 3 + 2).padStart(2, "0")}`), labels: k.map((p) => p.replace("-T", " T")), lines: ls };
+        : [{ id: "q-exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: pts.map((p) => p.exploitation), memo: pts.map((p) => M.exploit(p)) }];
+      return { keys: k.map((p) => `${p.slice(0, 4)}-${String((Number(p.slice(-1)) - 1) * 3 + 2).padStart(2, "0")}`), labels: k.map((p) => p.replace("-T", " T")), lines: ls, ibgeRows: pts, pwtRows: [] as PwtRow[] };
     }
     const ibge = new Map(data.annual.map((p) => [p.year, p]));
     const pwt = new Map(data.longRun.map((p) => [p.year, p]));
@@ -52,18 +76,24 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
     const years: number[] = [];
     for (let y = firstYear; y <= lastYear; y++) if (ibge.has(y) || pwt.has(y)) years.push(y);
     const ls: Line[] = measure === "profit"
-      ? [{ id: "profit", name: "Taxa de lucro bruta (Penn World Table)", color: "var(--danger)", values: years.map((y) => pwt.get(y)?.profitRate ?? null) }]
+      ? [{ id: "profit", name: "Taxa de lucro bruta (Penn World Table)", color: "var(--danger)", values: years.map((y) => pwt.get(y)?.profitRate ?? null), memo: years.map((y) => M.profit(pwt.get(y))) }]
       : measure === "share"
       ? [
-          { id: "gdp", name: "Salários no PIB (IBGE)", color: "var(--brand)", values: years.map((y) => ibge.get(y)?.wageGdp ?? null) },
-          { id: "fac", name: "Salários na renda dos fatores (IBGE)", color: "var(--estadual)", dash: "6 4", values: years.map((y) => ibge.get(y)?.wageFactor ?? null) },
-          { id: "pwt", name: "Trabalho no PIB, com autônomos (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.share ?? null) },
+          { id: "gdp", name: "Salários no PIB (IBGE)", color: "var(--brand)", values: years.map((y) => ibge.get(y)?.wageGdp ?? null), memo: years.map((y) => M.wageGdp(ibge.get(y))) },
+          { id: "fac", name: "Salários na renda dos fatores (IBGE)", color: "var(--estadual)", dash: "6 4", values: years.map((y) => ibge.get(y)?.wageFactor ?? null), memo: years.map((y) => M.wageFactor(ibge.get(y))) },
+          { id: "pwt", name: "Trabalho no PIB, com autônomos (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.share ?? null), memo: years.map((y) => M.pwtShare(pwt.get(y))) },
         ]
       : [
-          { id: "exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: years.map((y) => ibge.get(y)?.exploitation ?? null) },
-          { id: "pwtx", name: "Renda do capital por R$ 1 do trabalho (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.exploitation ?? null) },
+          { id: "exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: years.map((y) => ibge.get(y)?.exploitation ?? null), memo: years.map((y) => M.exploit(ibge.get(y))) },
+          { id: "pwtx", name: "Renda do capital por R$ 1 do trabalho (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.exploitation ?? null), memo: years.map((y) => M.pwtExploit(pwt.get(y))) },
         ];
-    return { keys: years.map((y) => `${y}-07`), labels: years.map(String), lines: ls.filter((l) => l.values.some((v) => v !== null)) };
+    return {
+      keys: years.map((y) => `${y}-07`),
+      labels: years.map(String),
+      lines: ls.filter((l) => l.values.some((v) => v !== null)),
+      ibgeRows: measure === "profit" ? [] : years.map((y) => ibge.get(y)).filter((p): p is IbgeRow => !!p),
+      pwtRows: years.map((y) => pwt.get(y)).filter((p): p is PwtRow => !!p && (measure !== "profit" || p.profitRate !== null)),
+    };
   }, [data, measure, range, quarterly]);
 
   const visible = lines.filter((l) => !off[l.id]);
@@ -154,10 +184,13 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
           </svg>
         )}
         {hover !== null && n > 0 && (
-          <div className="pointer-events-none absolute left-4 top-3 max-w-[17rem] rounded-xl border border-line bg-surface/95 p-2.5 text-xs shadow-pop backdrop-blur sm:left-20">
+          <div className="pointer-events-none absolute left-3 right-3 top-3 rounded-xl border border-line bg-surface/95 p-2.5 text-xs shadow-pop backdrop-blur sm:left-20 sm:right-auto sm:max-w-[22rem]">
             <p className="font-bold">{labels[hover]}{presidentAt(keys[hover]) ? ` · ${presidentAt(keys[hover])!.name}` : ""}</p>
             {visible.map((l) => l.values[hover] !== null && (
-              <p key={l.id} className="mt-0.5 flex items-center justify-between gap-3"><span className="truncate text-muted">{l.name.replace(/ \(.*\)$/, "")}</span><b>{fmt(l.values[hover]!)}</b></p>
+              <div key={l.id} className="mt-1">
+                <p className="flex items-center justify-between gap-3"><span className="truncate text-muted">{l.name.replace(/ \(.*\)$/, "")}</span><b>{fmt(l.values[hover]!)}</b></p>
+                {l.memo[hover] && <p className="text-[11px] text-faint">= {l.memo[hover]}</p>}
+              </div>
             ))}
           </div>
         )}
@@ -171,6 +204,7 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
         </p>
       )}
 
+      <CalcReport measure={measure} ibge={ibgeRows} pwt={pwtRows} quarterly={quarterly} />
       {measure === "profit" && <ProfitDecomposition data={data} fromYear={Number(labels[0]?.slice(0, 4)) || 0} toYear={Number(labels.at(-1)?.slice(0, 4)) || 0} />}
       <ByPresident data={data} measure={measure} fromYear={Number(labels[0]?.slice(0, 4)) || 0} />
     </div>
@@ -255,5 +289,101 @@ function ProfitDecomposition({ data, fromYear, toYear }: { data: LaborShareData;
         </table>
       </div>
     </div>
+  );
+}
+
+/* ───────── Relatório: memória de cálculo de cada medida ───────── */
+
+type Col<T> = { h: string; v: (r: T) => number | null; f: (v: number | null) => string; result?: boolean };
+
+const pctF = (v: number | null) => (v == null ? "—" : pct(v));
+const rsF = (v: number | null) => (v == null ? "—" : rs(v));
+
+function downloadCsv(name: string, head: string[], rows: (string | number | null)[][]) {
+  const cell = (x: string | number | null) => (x == null ? "" : typeof x === "number" ? String(x).replace(".", ",") : `"${x.replace(/"/g, '""')}"`);
+  const csv = "\ufeff" + [head.map(cell).join(";"), ...rows.map((r) => r.map(cell).join(";"))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function Table<T extends { period?: string; year: number }>({ title, note, cols, rows, file }: { title: string; note: string; cols: Col<T>[]; rows: T[]; file: string }) {
+  if (!rows.length) return null;
+  const label = (r: T) => (r.period ? r.period.replace("-T", " T") : String(r.year));
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold">{title}</p>
+        <button type="button" onClick={() => downloadCsv(file, ["Período", ...cols.map((c) => c.h)], [...rows].reverse().map((r) => [label(r), ...cols.map((c) => c.v(r))]))} className="text-xs font-semibold text-brand hover:underline">⇩ Baixar CSV</button>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+        <table className="w-full whitespace-nowrap text-left text-sm">
+          <thead className="border-b border-line text-xs uppercase text-faint"><tr><th className="p-3">Período</th>{cols.map((c) => <th key={c.h} className="p-3 text-right">{c.h}</th>)}</tr></thead>
+          <tbody>
+            {[...rows].reverse().map((r) => (
+              <tr key={label(r)} className="border-b border-line last:border-0">
+                <td className="p-3 font-medium">{label(r)}</td>
+                {cols.map((c) => <td key={c.h} className={`p-3 text-right tabular-nums ${c.result ? "font-semibold" : ""}`}>{c.f(c.v(r))}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-faint">{note}</p>
+    </div>
+  );
+}
+
+function CalcReport({ measure, ibge, pwt, quarterly }: { measure: Measure; ibge: IbgeRow[]; pwt: PwtRow[]; quarterly: boolean }) {
+  const unitNote = quarterly ? "Valores do trimestre, em reais correntes." : "Valores do ano, em reais correntes.";
+  const ppcNote = "Penn World Table: dólares a preços correntes de paridade de poder de compra (PPC); a renda do trabalho inclui a parte estimada dos autônomos.";
+  const lab = (r: PwtRow) => (r.gdpPpp ? r.share * r.gdpPpp : null);
+  const cap = (r: PwtRow) => (r.gdpPpp ? (1 - r.share) * r.gdpPpp : null);
+  return (
+    <details className="mt-4 rounded-2xl border border-line bg-surface-2/50 p-3 sm:p-4" open={false}>
+      <summary className="cursor-pointer text-sm font-semibold text-brand">Memória de cálculo: os valores que dão origem a cada taxa</summary>
+      {measure === "share" && (
+        <>
+          <Table<IbgeRow> title="Participação dos salários · IBGE" file="participacao-salarios-ibge.csv" rows={ibge} note={`${unitNote} Renda dos fatores = remuneração dos empregados + excedente operacional bruto + rendimento misto bruto (sem impostos sobre a produção).`} cols={[
+            { h: "Remuneração dos empregados", v: (r) => r.wages, f: brl },
+            { h: "PIB", v: (r) => r.gdp, f: brl },
+            { h: "Renda dos fatores", v: (r) => r.wages + r.surplus + (r.mixed ?? 0), f: brl },
+            { h: "Salários no PIB", v: (r) => r.wageGdp, f: pctF, result: true },
+            { h: "Na renda dos fatores", v: (r) => r.wageFactor, f: pctF, result: true },
+          ]} />
+          <Table<PwtRow> title="Participação do trabalho · Penn World Table" file="participacao-trabalho-pwt.csv" rows={pwt} note={ppcNote} cols={[
+            { h: "Renda do trabalho", v: lab, f: usd },
+            { h: "PIB", v: (r) => r.gdpPpp, f: usd },
+            { h: "Trabalho no PIB", v: (r) => r.share, f: pctF, result: true },
+          ]} />
+        </>
+      )}
+      {measure === "exploit" && (
+        <>
+          <Table<IbgeRow> title="Taxa de exploração · IBGE" file="taxa-exploracao-ibge.csv" rows={ibge} note={`${unitNote} Excedente operacional bruto: lucros, juros e aluguéis antes da depreciação.`} cols={[
+            { h: "Excedente operacional bruto", v: (r) => r.surplus, f: brl },
+            { h: "Remuneração dos empregados", v: (r) => r.wages, f: brl },
+            { h: "Excedente por R$ 1 de salário", v: (r) => r.exploitation, f: rsF, result: true },
+          ]} />
+          <Table<PwtRow> title="Capital por trabalho · Penn World Table" file="capital-trabalho-pwt.csv" rows={pwt} note={ppcNote} cols={[
+            { h: "Renda do capital", v: cap, f: usd },
+            { h: "Renda do trabalho", v: lab, f: usd },
+            { h: "Capital por R$ 1 do trabalho", v: (r) => r.exploitation, f: rsF, result: true },
+          ]} />
+        </>
+      )}
+      {measure === "profit" && (
+        <Table<PwtRow> title="Taxa de lucro · Penn World Table" file="taxa-lucro-pwt.csv" rows={pwt} note={`${ppcNote} Lucro bruto = PIB × (1 − participação do trabalho).`} cols={[
+          { h: "PIB", v: (r) => r.gdpPpp, f: usd },
+          { h: "Fatia dos lucros", v: (r) => r.profitShare, f: pctF },
+          { h: "Lucro bruto", v: cap, f: usd },
+          { h: "Estoque de capital", v: (r) => r.capitalPpp, f: usd },
+          { h: "Taxa de lucro", v: (r) => r.profitRate, f: pctF, result: true },
+        ]} />
+      )}
+    </details>
   );
 }
