@@ -30,7 +30,7 @@ const usd = (v: number | null | undefined) => big(v, "US$");
 const M = {
   wageGdp: (p?: IbgeRow) => (p?.gdp ? `Remuneração ${brl(p.wages)} ÷ PIB ${brl(p.gdp)}` : null),
   wageFactor: (p?: IbgeRow) => (p ? `Remuneração ${brl(p.wages)} ÷ renda dos fatores ${brl(p.wages + p.surplus + (p.mixed ?? 0))}` : null),
-  exploit: (p?: IbgeRow) => (p ? `Excedente ${brl(p.surplus)} ÷ remuneração ${brl(p.wages)}` : null),
+  exploit: (p?: IbgeRow) => (p ? `Excedente e rendimento misto ${brl(p.surplus)} ÷ remuneração ${brl(p.wages)}` : null),
   pwtShare: (p?: PwtRow) => (p?.gdpPpp ? `Trabalho ${usd(p.share * p.gdpPpp)} ÷ PIB ${usd(p.gdpPpp)} (PPC)` : null),
   pwtExploit: (p?: PwtRow) => (p?.gdpPpp ? `Capital ${usd((1 - p.share) * p.gdpPpp)} ÷ trabalho ${usd(p.share * p.gdpPpp)} (PPC)` : null),
   profit: (p?: PwtRow) => (p?.gdpPpp && p.capitalPpp ? `Lucro bruto ${usd((1 - p.share) * p.gdpPpp)} ÷ capital ${usd(p.capitalPpp)} (PPC)` : null),
@@ -66,7 +66,7 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
             { id: "q-gdp", name: "Salários no PIB (IBGE, trimestral)", color: "var(--brand)", values: pts.map((p) => p.wageGdp), memo: pts.map((p) => M.wageGdp(p)) },
             { id: "q-fac", name: "Salários na renda dos fatores (IBGE)", color: "var(--estadual)", dash: "6 4", values: pts.map((p) => p.wageFactor), memo: pts.map((p) => M.wageFactor(p)) },
           ]
-        : [{ id: "q-exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: pts.map((p) => p.exploitation), memo: pts.map((p) => M.exploit(p)) }];
+        : [{ id: "q-exp", name: "Excedente e rendimento misto por R$ 1 de salário (IBGE)", color: "var(--danger)", values: pts.map((p) => p.exploitation), memo: pts.map((p) => M.exploit(p)) }];
       return { keys: k.map((p) => `${p.slice(0, 4)}-${String((Number(p.slice(-1)) - 1) * 3 + 2).padStart(2, "0")}`), labels: k.map((p) => p.replace("-T", " T")), lines: ls, ibgeRows: pts, pwtRows: [] as PwtRow[] };
     }
     const ibge = new Map(data.annual.map((p) => [p.year, p]));
@@ -84,7 +84,7 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
           { id: "pwt", name: "Trabalho no PIB, com autônomos (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.share ?? null), memo: years.map((y) => M.pwtShare(pwt.get(y))) },
         ]
       : [
-          { id: "exp", name: "Excedente operacional por R$ 1 de salário (IBGE)", color: "var(--danger)", values: years.map((y) => ibge.get(y)?.exploitation ?? null), memo: years.map((y) => M.exploit(ibge.get(y))) },
+          { id: "exp", name: "Excedente e rendimento misto por R$ 1 de salário (IBGE)", color: "var(--danger)", values: years.map((y) => ibge.get(y)?.exploitation ?? null), memo: years.map((y) => M.exploit(ibge.get(y))) },
           { id: "pwtx", name: "Renda do capital por R$ 1 do trabalho (Penn World Table)", color: "var(--muted)", dash: "2 4", values: years.map((y) => pwt.get(y)?.exploitation ?? null), memo: years.map((y) => M.pwtExploit(pwt.get(y))) },
         ];
     return {
@@ -128,7 +128,7 @@ export function LaborShareChart({ data }: { data: LaborShareData }) {
         <p className="mb-3 rounded-xl bg-brand-soft/70 px-3 py-2 text-xs leading-relaxed text-muted">A taxa de lucro precisa do estoque de capital, que só a Penn World Table estima para o Brasil (até {Math.max(...data.longRun.filter((p) => p.profitRate !== null).map((p) => p.year))}); por isso a série termina antes das demais.</p>
       )}
       {range <= 2 && !quarterly && measure !== "profit" && (
-        <p className="mb-3 rounded-xl bg-brand-soft/70 px-3 py-2 text-xs leading-relaxed text-muted">As contas nacionais anuais saem com cerca de dois anos de atraso e o IBGE não publicou a versão trimestral desta conta; o gráfico mostra os anos mais recentes disponíveis.</p>
+        <p className="mb-3 rounded-xl bg-brand-soft/70 px-3 py-2 text-xs leading-relaxed text-muted">A conta de geração da renda só existe em versão anual, e a série publicada vai até {data.annual.at(-1)?.year ?? "o último ano disponível"}; o gráfico mostra os anos mais recentes disponíveis.</p>
       )}
 
       <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Séries no gráfico">
@@ -347,7 +347,7 @@ function CalcReport({ measure, ibge, pwt, quarterly }: { measure: Measure; ibge:
       <summary className="cursor-pointer text-sm font-semibold text-brand">Memória de cálculo: os valores que dão origem a cada taxa</summary>
       {measure === "share" && (
         <>
-          <Table<IbgeRow> title="Participação dos salários · IBGE" file="participacao-salarios-ibge.csv" rows={ibge} note={`${unitNote} Renda dos fatores = remuneração dos empregados + excedente operacional bruto + rendimento misto bruto (sem impostos sobre a produção).`} cols={[
+          <Table<IbgeRow> title="Participação dos salários · IBGE" file="participacao-salarios-ibge.csv" rows={ibge} note={`${unitNote} Renda dos fatores = remuneração dos empregados + excedente operacional e rendimento misto (sem impostos sobre a produção).`} cols={[
             { h: "Remuneração dos empregados", v: (r) => r.wages, f: brl },
             { h: "PIB", v: (r) => r.gdp, f: brl },
             { h: "Renda dos fatores", v: (r) => r.wages + r.surplus + (r.mixed ?? 0), f: brl },
@@ -363,8 +363,8 @@ function CalcReport({ measure, ibge, pwt, quarterly }: { measure: Measure; ibge:
       )}
       {measure === "exploit" && (
         <>
-          <Table<IbgeRow> title="Taxa de exploração · IBGE" file="taxa-exploracao-ibge.csv" rows={ibge} note={`${unitNote} Excedente operacional bruto: lucros, juros e aluguéis antes da depreciação.`} cols={[
-            { h: "Excedente operacional bruto", v: (r) => r.surplus, f: brl },
+          <Table<IbgeRow> title="Taxa de exploração · IBGE" file="taxa-exploracao-ibge.csv" rows={ibge} note={`${unitNote} Excedente operacional bruto (lucros, juros e aluguéis antes da depreciação) somado ao rendimento misto (renda de autônomos e pequenos negócios familiares, que mistura trabalho e capital): é assim que a conta do Brasil é publicada pela OCDE.`} cols={[
+            { h: "Excedente operacional + rendimento misto", v: (r) => r.surplus, f: brl },
             { h: "Remuneração dos empregados", v: (r) => r.wages, f: brl },
             { h: "Excedente por R$ 1 de salário", v: (r) => r.exploitation, f: rsF, result: true },
           ]} />

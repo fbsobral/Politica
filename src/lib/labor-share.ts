@@ -1,4 +1,4 @@
-import { cached, getJson, sidra, sidraYears } from "@/lib/indicators/core";
+import { cached } from "@/lib/indicators/core";
 
 /*
  * Participação dos salários e taxa de exploração (Brasil), no sentido usado por Clara Mattei em "A Ordem do Capital":
@@ -6,169 +6,73 @@ import { cached, getJson, sidra, sidraYears } from "@/lib/indicators/core";
  *   taxa de exploração        = excedente operacional bruto ÷ remuneração dos empregados
  *                               (quanto o capital recebe para cada R$ 1 pago em salários).
  *
- * As tabelas do IBGE são DESCOBERTAS pelo nome no catálogo do SIDRA (sem códigos fixos) e os valores são validados:
- * se algo não fizer sentido, o bloco fica indisponível em vez de mostrar número errado.
+ * Dados do IBGE (Sistema de Contas Nacionais) via OCDE e, para o longo prazo e a taxa de lucro, Penn World Table via FRED.
+ * Os valores são validados: se algo não fizer sentido, o bloco fica indisponível em vez de mostrar número errado.
  */
 
-const IBGE = "https://servicodados.ibge.gov.br/api/v3/agregados";
-
-type Catalog = { id: string; nome: string; agregados: { id: string; nome: string }[] }[];
-type Meta = {
-  id: number;
-  nome: string;
-  periodicidade: { frequencia: string; inicio: number; fim: number };
-  variaveis: { id: number; nome: string; unidade: string }[];
-  classificacoes: { id: number; nome: string; categorias: { id: number; nome: string; nivel?: number }[] }[];
-};
-type ValuesResp = { id: string; variavel: string; unidade: string; resultados: { classificacoes: { id: string; categoria: Record<string, string> }[]; series: { serie: Record<string, string> }[] }[] }[];
-
-const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
-
-/** Itens da conta de geração da renda, reconhecidos pelo nome. */
-const ITEMS = {
-  wages: (n: string) => /remuneracao dos empregados/.test(n) && !/contribuic|salarios e ordenados/.test(n),
-  surplus: (n: string) => /excedente operacional/.test(n) && !/liquido/.test(n) && !/rendimento misto/.test(n),
-  mixed: (n: string) => /rendimento misto/.test(n) && !/liquido/.test(n) && !/excedente/.test(n),
-  gdp: (n: string) => /^(produto interno bruto|pib)( a precos de mercado)?$/.test(n) || /^pib a precos (correntes|de mercado)/.test(n),
-};
-type ItemKey = keyof typeof ITEMS;
-
-/** Onde cada item está numa tabela: como variável própria ou como categoria de uma classificação. */
-type Loc = { variable: number; unit: string; classification?: { id: number; category: number } };
-type Plan = { table: number; name: string; freq: "anual" | "trimestral"; from: number; to: number; locs: Partial<Record<ItemKey, Loc>> };
-
-const MONEY = /reais|r\$/i;
-
-function locate(meta: Meta, key: ItemKey): Loc | null {
-  const test = ITEMS[key];
-  const v = meta.variaveis.find((x) => test(norm(x.nome)) && MONEY.test(x.unidade));
-  if (v) return { variable: v.id, unit: v.unidade };
-  const money = meta.variaveis.find((x) => MONEY.test(x.unidade) && !/variacao|indice|taxa|%/.test(norm(x.nome)));
-  if (!money) return null;
-  for (const c of meta.classificacoes) {
-    const cat = c.categorias.find((k) => test(norm(k.nome)));
-    if (cat) return { variable: money.id, unit: money.unidade, classification: { id: c.id, category: cat.id } };
-  }
-  return null;
-}
-
-async function discover(): Promise<{ annual: Plan | null; quarterly: Plan | null }> {
-  const catalog = await getJson<Catalog>(IBGE, 60000);
-  const candidates = catalog
-    .filter((p) => /contas? (nacionais|economicas|trimestrais)|sistema de contas/.test(norm(p.nome)))
-    .flatMap((p) => p.agregados)
-    .filter((a) => /renda|remuneracao|excedente|geracao|otica/.test(norm(a.nome)))
-    .slice(0, 25);
-  const plans: Plan[] = [];
-  for (const a of candidates) {
-    try {
-      const meta = await getJson<Meta>(`${IBGE}/${a.id}/metadados`, 30000);
-      const locs: Partial<Record<ItemKey, Loc>> = {};
-      for (const k of Object.keys(ITEMS) as ItemKey[]) {
-        const l = locate(meta, k);
-        if (l) locs[k] = l;
-      }
-      if (!locs.wages || !locs.surplus) continue;
-      const f = norm(meta.periodicidade.frequencia);
-      const freq = f.startsWith("anual") ? "anual" : f.startsWith("trimestr") ? "trimestral" : null;
-      if (!freq) continue;
-      plans.push({ table: meta.id, name: meta.nome, freq, from: meta.periodicidade.inicio, to: meta.periodicidade.fim, locs });
-    } catch (err) {
-      console.warn("[labor-share] metadados", a.id, (err as Error).message);
-    }
-  }
-  // a mais nova e mais longa de cada periodicidade
-  const best = (freq: Plan["freq"]) => plans.filter((p) => p.freq === freq).sort((a, b) => b.to - a.to || a.from - b.from)[0] ?? null;
-  return { annual: best("anual"), quarterly: best("trimestral") };
-}
-
-/** Períodos do SIDRA entre início e fim (anos: 2000; trimestres: 200001). */
-function periods(p: Plan): string[] {
-  const out: string[] = [];
-  if (p.freq === "anual") for (let y = Math.max(p.from, 1990); y <= p.to; y++) out.push(String(y));
-  else {
-    const start = Math.max(p.from, 200001);
-    for (let y = Math.floor(start / 100); y <= Math.floor(p.to / 100); y++) for (let q = 1; q <= 4; q++) {
-      const k = y * 100 + q;
-      if (k >= start && k <= p.to) out.push(String(k));
-    }
-  }
-  return out;
-}
-
-async function fetchItem(p: Plan, loc: Loc): Promise<Record<string, number>> {
-  const per = periods(p);
-  const out: Record<string, number> = {};
-  // o SIDRA limita o tamanho da consulta: lotes de 40 períodos
-  for (let i = 0; i < per.length; i += 40) {
-    const cls = loc.classification ? `&classificacao=${loc.classification.id}[${loc.classification.category}]` : "";
-    const r = await getJson<ValuesResp>(`${IBGE}/${p.table}/periodos/${per.slice(i, i + 40).join("|")}/variaveis/${loc.variable}?localidades=N1[all]${cls}`, 40000);
-    for (const v of r) for (const res of v.resultados) for (const s of res.series) for (const [k, val] of Object.entries(s.serie)) {
-      const n = Number(val);
-      if (Number.isFinite(n)) out[k] = n;
-    }
-  }
-  return out;
-}
-
-/** PIB anual em R$ milhões (IBGE, tabela 6784, a mesma usada em Indicadores), quando a tabela de renda não traz o PIB. */
-async function gdpFallback(p: Plan): Promise<Record<string, number>> {
-  if (p.freq !== "anual" || !/milh/i.test(p.locs.wages!.unit)) return {};
-  try {
-    const rows = await sidra("t/6784/n1/1/v/9808/p/all");
-    return Object.fromEntries(Object.entries(sidraYears(rows, "D3C")).map(([y, v]) => [String(y), v]));
-  } catch {
-    return {};
-  }
-}
+const OECD_INCOME = "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NAMAIN10@DF_TABLE1_INCOME,/A.BRA..........";
+/** a API da OCDE devolve erro 500 com "Accept-Language: *", que o fetch do Node envia por padrão */
+const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)", "Accept-Language": "en" };
 
 export type SharePoint = {
-  /** "2015" ou "2015-T3" */
+  /** "2015" (ou "2015-T3" numa série trimestral) */
   period: string;
   year: number;
   /** remuneração dos empregados ÷ PIB */
   wageGdp: number | null;
-  /** remuneração ÷ (remuneração + excedente operacional + rendimento misto) */
+  /** remuneração ÷ (remuneração + excedente operacional e rendimento misto) */
   wageFactor: number | null;
-  /** excedente operacional ÷ remuneração dos empregados */
+  /** excedente operacional e rendimento misto ÷ remuneração dos empregados */
   exploitation: number;
   /** valores de origem, em reais correntes (memória de cálculo) */
   wages: number;
+  /** excedente operacional bruto + rendimento misto bruto (a OCDE publica os dois somados para o Brasil) */
   surplus: number;
   mixed: number | null;
   gdp: number | null;
 };
 
-/** Fator para converter a unidade do IBGE em reais ("Milhões de Reais" → 1e6). */
-const scaleOf = (unit: string) => (/milh/i.test(unit) ? 1e6 : /bilh/i.test(unit) ? 1e9 : /\bmil\b/i.test(unit) ? 1e3 : 1);
-
-async function series(p: Plan): Promise<SharePoint[]> {
-  const [w, s, m, g] = await Promise.all([
-    fetchItem(p, p.locs.wages!),
-    fetchItem(p, p.locs.surplus!),
-    p.locs.mixed ? fetchItem(p, p.locs.mixed).catch(() => ({})) : Promise.resolve({} as Record<string, number>),
-    p.locs.gdp ? fetchItem(p, p.locs.gdp).catch(() => ({})) : gdpFallback(p),
-  ]);
-  const pts: SharePoint[] = [];
-  for (const k of Object.keys(w).sort()) {
-    const wage = w[k], surplus = (s as Record<string, number>)[k];
-    if (!(wage > 0) || !(surplus > 0)) continue;
-    const mixed = (m as Record<string, number>)[k], gdp = (g as Record<string, number>)[k];
-    const wageGdp = gdp > 0 ? wage / gdp : null;
-    const wageFactor = wage / (wage + surplus + (mixed > 0 ? mixed : 0));
-    const exploitation = surplus / wage;
-    // validação: fora destas faixas, a tabela encontrada não é a certa
-    if ((wageGdp !== null && (wageGdp < 0.2 || wageGdp > 0.8)) || wageFactor < 0.2 || wageFactor > 0.9 || exploitation < 0.1 || exploitation > 4) continue;
-    const year = Number(k.slice(0, 4));
-    const f = scaleOf(p.locs.wages!.unit);
-    pts.push({ period: k.length === 6 ? `${year}-T${Number(k.slice(4))}` : k, year, wageGdp, wageFactor, exploitation, wages: wage * f, surplus: surplus * f, mixed: mixed > 0 ? mixed * f : null, gdp: gdp > 0 ? gdp * f : null });
+/**
+ * Conta de geração da renda do Brasil (IBGE, Sistema de Contas Nacionais), publicada pela OCDE
+ * (o SIDRA não traz esta conta): remuneração dos empregados (D1), excedente operacional e rendimento misto (B2A3G) e PIB.
+ */
+async function nationalAccounts(): Promise<SharePoint[]> {
+  const res = await fetch(`${OECD_INCOME}?startPeriod=1990&format=csvfile`, { headers: HEADERS, signal: AbortSignal.timeout(60000) });
+  if (!res.ok) throw new Error(`OCDE ${res.status}`);
+  const lines = (await res.text()).split(/\r?\n/);
+  const head = lines[0]?.split(",") ?? [];
+  const ix = (n: string) => head.indexOf(n);
+  const [iT, iA, iU, iP, iS, iY, iV, iM] = ["TRANSACTION", "ACTIVITY", "UNIT_MEASURE", "PRICE_BASE", "SECTOR", "TIME_PERIOD", "OBS_VALUE", "UNIT_MULT"].map(ix);
+  if ([iT, iA, iU, iY, iV].some((i) => i < 0)) throw new Error("CSV da OCDE sem as colunas esperadas");
+  const v: Record<string, Record<number, number>> = {};
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(",");
+    if (c.length < head.length || c[iV] === "") continue;
+    // reais correntes, economia inteira
+    if (c[iU] !== "XDC" || (iP >= 0 && c[iP] !== "V") || (iS >= 0 && c[iS] !== "S1") || !["_T", "_Z"].includes(c[iA])) continue;
+    const t = c[iT];
+    if (!["D1", "B2A3G", "B1GQ"].includes(t)) continue;
+    const n = Number(c[iV]) * Math.pow(10, Number(c[iM]) || 0);
+    if (Number.isFinite(n)) (v[t] ??= {})[Number(c[iY])] = n;
   }
+  const pts: SharePoint[] = [];
+  for (const y of Object.keys(v.D1 ?? {}).map(Number).sort((a, b) => a - b)) {
+    const wage = v.D1[y], surplus = v.B2A3G?.[y], gdp = v.B1GQ?.[y];
+    if (!(wage > 0) || !(surplus > 0)) continue;
+    const wageGdp = gdp > 0 ? wage / gdp : null;
+    const wageFactor = wage / (wage + surplus);
+    const exploitation = surplus / wage;
+    // validação: fora destas faixas, os dados não são os esperados
+    if ((wageGdp !== null && (wageGdp < 0.2 || wageGdp > 0.8)) || wageFactor < 0.2 || wageFactor > 0.9 || exploitation < 0.1 || exploitation > 4) continue;
+    pts.push({ period: String(y), year: y, wageGdp, wageFactor, exploitation, wages: wage, surplus, mixed: null, gdp: gdp > 0 ? gdp : null });
+  }
+  if (!pts.length) throw new Error("OCDE sem a conta de renda do Brasil");
   return pts;
 }
 
 /** Série anual do FRED (CSV público, sem chave): ano → valor. */
 async function fred(id: string): Promise<Map<number, number>> {
-  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(30000) });
+  const res = await fetch(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}`, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`FRED ${id} ${res.status}`);
   const out = new Map<number, number>();
   for (const line of (await res.text()).split(/\r?\n/).slice(1)) {
@@ -229,11 +133,11 @@ export type LaborShareData = {
 
 export async function buildLaborShare(): Promise<LaborShareData> {
   const errors: string[] = [];
-  const [plans, long] = await Promise.all([
-    discover().catch((err) => {
-      errors.push("IBGE");
-      console.warn("[labor-share] catálogo", (err as Error).message);
-      return { annual: null, quarterly: null };
+  const [annual, long] = await Promise.all([
+    nationalAccounts().catch((err) => {
+      errors.push("IBGE/OCDE");
+      console.warn("[labor-share] contas nacionais", (err as Error).message);
+      return [] as SharePoint[];
     }),
     pwt().catch((err) => {
       errors.push("Penn World Table");
@@ -241,16 +145,13 @@ export async function buildLaborShare(): Promise<LaborShareData> {
       return [] as LongPoint[];
     }),
   ]);
-  const [annual, quarterly] = await Promise.all([
-    plans.annual ? series(plans.annual).catch(() => (errors.push("IBGE anual"), [] as SharePoint[])) : Promise.resolve([] as SharePoint[]),
-    plans.quarterly ? series(plans.quarterly).catch(() => (errors.push("IBGE trimestral"), [] as SharePoint[])) : Promise.resolve([] as SharePoint[]),
-  ]);
+  const quarterly: SharePoint[] = [];
   if (!annual.length && !long.length) throw new Error("sem dados"); // mantém o cache anterior
   return {
     annual,
     quarterly,
-    annualSource: plans.annual && annual.length ? `IBGE, Contas Nacionais (tabela ${plans.annual.table}: ${plans.annual.name})` : null,
-    quarterlySource: plans.quarterly && quarterly.length ? `IBGE (tabela ${plans.quarterly.table}: ${plans.quarterly.name})` : null,
+    annualSource: annual.length ? "IBGE, Sistema de Contas Nacionais (conta de geração da renda), publicado pela OCDE" : null,
+    quarterlySource: null,
     longRun: long,
     errors,
     fetchedAt: new Date().toISOString(),
@@ -259,5 +160,5 @@ export async function buildLaborShare(): Promise<LaborShareData> {
 
 /** Dados de salários e lucros do Brasil (cache de 7 dias: as contas nacionais saem uma vez por ano, as trimestrais a cada 3 meses). */
 export async function getLaborShare(opts: { force?: boolean } = {}): Promise<LaborShareData | null> {
-  return cached("labor-share:v3", 7, buildLaborShare, opts.force);
+  return cached("labor-share:v4", 7, buildLaborShare, opts.force);
 }

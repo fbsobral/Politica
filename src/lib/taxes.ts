@@ -55,7 +55,11 @@ function parseCsv(text: string, scale: boolean): Row[] {
 
 async function oecd(unit: "PT_B1GQ" | "USD"): Promise<Row[]> {
   const cats = CATEGORIES.map((c) => c.code).join("+");
-  const res = await fetch(`${OECD}/.TAX_REV.S13.${cats}._T.${unit}.A?startPeriod=${START}&format=csvfile`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)" }, signal: AbortSignal.timeout(90000) });
+  const res = await fetch(`${OECD}/.TAX_REV.S13.${cats}._T.${unit}.A?startPeriod=${START}&format=csvfile`, {
+    // a API da OCDE devolve erro 500 com "Accept-Language: *", que o fetch do Node envia por padrão
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; PoliticaBot/1.0)", Accept: "text/csv", "Accept-Language": "en" },
+    signal: AbortSignal.timeout(90000),
+  });
   if (!res.ok) throw new Error(`OCDE ${res.status}`);
   return parseCsv(await res.text(), unit === "USD");
 }
