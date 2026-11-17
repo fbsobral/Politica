@@ -12,7 +12,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/impostos", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -26,6 +26,7 @@ const MENU: Entry[] = [
       { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
       { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
       { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic, juro real e expectativas do mercado", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
+      { href: "/impostos", label: "Impostos", hint: "Carga tributária por tipo de imposto, Brasil × países desenvolvidos e em desenvolvimento", icon: <IconCoins />, match: (p) => p.startsWith("/impostos") },
       { href: "/salarios", label: "Salários e lucros", hint: "Participação dos salários, exploração e lucro, em até 50 anos", icon: <IconChart />, match: (p) => p.startsWith("/salarios") },
       { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa em 5 anos e o motivo das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
       { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, de 5 a 30 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },

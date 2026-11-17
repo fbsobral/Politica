@@ -428,6 +428,19 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <p className="text-[8.5px] leading-snug text-muted">• Quando o dólar sobe, o Ibovespa tende a cair (correlação −0,58).</p>
     </Frame>
   ),
+  taxes: () => (
+    <Frame title="Impostos" scope="F">
+      <Hl className="flex gap-1 p-0.5"><Chip on>% do PIB</Chip><Chip>US$ por habitante</Chip><Chip>US$ total</Chip></Hl>
+      <div className="rounded-lg border border-line bg-surface p-1">
+        <svg viewBox="0 0 260 58" className="w-full" aria-hidden>
+          <polyline points="4,30 60,26 120,20 180,18 256,14" fill="none" stroke="var(--brand)" strokeWidth="2.5" />
+          <polyline points="4,22 60,22 120,21 180,20 256,20" fill="none" stroke="var(--estadual)" strokeWidth="2" strokeDasharray="6 3" />
+          <polyline points="4,46 60,44 120,42 180,40 256,38" fill="none" stroke="var(--municipal)" strokeWidth="2" strokeDasharray="2 3" />
+        </svg>
+      </div>
+      <p className="text-[8.5px] text-muted">Carga 2024: <b className="text-ink">Brasil 33,7%</b> · desenv. 31,3% · em desenv. 18,5%</p>
+    </Frame>
+  ),
   "labor-share": () => (
     <Frame title="Salários e lucros" scope="F">
       <div className="flex gap-1"><Chip on>Participação dos salários</Chip><Chip>Taxa de exploração</Chip></div>

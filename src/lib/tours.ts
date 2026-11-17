@@ -54,7 +54,7 @@ export function generalTour(city: string): Tour {
         title: "Os números do governo",
         text: "Veja para onde vai o dinheiro público, se o orçamento do ano está sendo cumprido, como está a inflação e se os indicadores melhoraram.",
         tips: ["Orçamento e Expectativa fiscal: receitas, gastos e a LOA", "Inflação e Ibovespa: preços, expectativas e a bolsa com o motivo das altas e quedas", "Indicadores, Score e ROI: resultados em até 30 anos"],
-        links: [{ href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
+        links: [{ href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/impostos", label: "Impostos" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
       },
       {
         screen: "chat", art: "ask",
@@ -188,6 +188,14 @@ export const MODULE_TOURS: Tour[] = [
       { screen: "ibov-chart", art: "chart", title: "A bolsa em até 5 anos", text: "O gráfico mostra o Ibovespa dia a dia. Escolha o período, de 1 mês a 5 anos, e passe o dedo ou o mouse para ver cada fechamento.", tips: ["As linhas douradas marcam as decisões do Copom que mudaram a Selic"] },
       { screen: "ibov-move", art: "list", title: "Por que subiu ou caiu?", text: "Os triângulos marcam os dias de alta ou queda de 1,5% ou mais. Toque num deles para ver as matérias publicadas naquele dia e o provável motivo.", tips: ["O motivo é uma inferência a partir das notícias, do dólar e do Copom, com grau de confiança", "Explicar com IA resume o que as manchetes sugerem"] },
       { screen: "ibov-infer", art: "target", title: "O que move a bolsa", text: "As inferências do período mostram quais temas mais aparecem nas quedas e nas altas, como a bolsa anda junto com o dólar e o que aconteceu depois das decisões da Selic.", tips: ["Associação não é causa: use como ponto de partida"] },
+    ],
+  },
+  {
+    id: "impostos",
+    name: "Impostos",
+    match: at("/impostos"),
+    steps: [
+      { screen: "taxes", art: "coins", title: "O Brasil e o mundo", text: "Cada gráfico mostra um tipo de imposto no Brasil comparado com a média dos países desenvolvidos e dos países em desenvolvimento.", tips: ["Troque a unidade: % do PIB, US$ por habitante ou US$ total", "Escolha o período: de 1 a 30 anos", "Toque num ponto para ver o valor em todas as unidades e quantos países entram na média"] },
     ],
   },
   {
