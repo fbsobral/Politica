@@ -3,6 +3,7 @@ import type { Prisma, Scope, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { brlShort, getBudget, type BudgetScope } from "@/lib/budget";
 import { collapseClusters, scopeWhere } from "@/lib/feed";
+import { annotateBills, billLabels } from "@/lib/bills";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes } from "@/lib/open-data";
 import { partyBySigla, politicianPartyValues } from "@/lib/parties";
 import { PILLARS, SEAL_LABEL, type Pillar } from "@/lib/quiz/data";
@@ -135,7 +136,12 @@ async function agendaCongresso(): Promise<string> {
   const [ca, sa, cv, sv] = await Promise.allSettled([camaraAgenda(7), senadoAgenda(7), camaraVotes(7), senadoVotes(7)]);
   const events = [...ok(ca), ...ok(sa)].filter((e) => /delibera/i.test(e.type) && !/n[ãa]o delibera/i.test(e.type)).sort((a, b) => a.start.localeCompare(b.start)).slice(0, 5);
   const votes = [...ok(cv), ...ok(sv)].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  const cut = (t: string) => (t.length > 160 ? `${t.slice(0, 159)}…` : t);
+  // nomes legíveis das proposições, só os já guardados (o assistente não espera a IA gerar novos)
+  const labels = await billLabels(votes.map((v) => v.description)).catch(() => new Map<string, string>());
+  const cut = (t: string) => {
+    const a = annotateBills(t, labels);
+    return a.length > 220 ? `${a.slice(0, 219)}…` : a;
+  };
   return [
     events.length ? `Próximas sessões deliberativas:\n${events.map((e) => `- ${e.start.slice(8, 10)}/${e.start.slice(5, 7)} ${e.start.slice(11, 16)} ${e.house}: ${e.type}`).join("\n")}` : "Sem sessões deliberativas marcadas nos próximos dias.",
     votes.length ? `Votações recentes:\n${votes.map((v) => `- ${v.house}: ${cut(v.description)}${v.approved === true ? " (aprovada)" : v.approved === false ? " (rejeitada)" : ""}`).join("\n")}` : "Sem votações de plenário recentes.",

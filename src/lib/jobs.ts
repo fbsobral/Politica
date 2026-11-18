@@ -7,13 +7,24 @@ import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
 import { getBudget, getBudgetHistory } from "@/lib/budget";
 import { refreshIndicators } from "@/lib/indicators/job";
+import { billLabels } from "@/lib/bills";
+import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes } from "@/lib/open-data";
+
+/** Gera os rótulos das proposições citadas na agenda e nas votações recentes. */
+async function warmBillLabels(): Promise<number> {
+  const all = await Promise.allSettled([camaraAgenda(10), senadoAgenda(10), camaraVotes(45), senadoVotes(45)]);
+  const texts = all.flatMap((r) => (r.status === "fulfilled" ? r.value.map((x) => x.description) : []));
+  return (await billLabels(texts, { generate: true, max: 40 })).size;
+}
 
 export const JOBS = {
   /** coleta de notícias + classificação + alertas (a cada hora) */
   async ingest() {
     const r = await runIngest();
     const alerts = await processAlerts(r.newArticleIds);
-    return { ...r, newArticleIds: r.newArticleIds.length, alerts };
+    // prepara os nomes legíveis das proposições da agenda e das votações (a página só usa o que já está pronto ou sai rápido)
+    const bills = await warmBillLabels().catch((err) => (console.warn("[ingest] proposições", (err as Error).message), 0));
+    return { ...r, newArticleIds: r.newArticleIds.length, alerts, bills };
   },
   /** resumo diário por e-mail */
   digest: () => sendDigests("daily"),

@@ -7,6 +7,7 @@ import { IconPin } from "@/components/icons";
 import { EmptyState, Notice, PageHeader, ScopeTabs } from "@/components/ui";
 import { db } from "@/lib/db";
 import { collapseClusters, scopeWhere } from "@/lib/feed";
+import { annotateBills, billLabels, labelsIn } from "@/lib/bills";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
 import { SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
@@ -48,6 +49,9 @@ async function Federal({ casa }: { casa: string }) {
   const wanted = (h: string) => !casa || casa === h.toLowerCase().replace("â", "a");
   const events = [...ok(cAg), ...ok(sAg)].filter((e) => wanted(e.house)).sort((a, b) => a.start.localeCompare(b.start));
   const votes: PlenaryVote[] = [...ok(cVo), ...ok(sVo)].filter((v) => wanted(v.house)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
+  // nomes legíveis das proposições citadas (PL 1087/2025 → "Isenção do IR até R$ 5 mil"); o que faltar é gerado em até 2,5 s
+  const labels = await billLabels([...events.map((e) => e.description), ...votes.map((v) => v.description)], { generate: true, budgetMs: 2500 });
+  const ann = (t: string) => annotateBills(t, labels);
 
   const byDay = new Map<string, AgendaEvent[]>();
   for (const e of events) byDay.set(e.start.slice(0, 10), [...(byDay.get(e.start.slice(0, 10)) ?? []), e]);
@@ -75,10 +79,10 @@ async function Federal({ casa }: { casa: string }) {
                       {e.organ && <span className="chip !bg-brand-soft !text-brand">{e.organ}</span>}
                       <span className="text-xs text-faint">{e.situation}</span>
                     </div>
-                    <p className="mt-1.5 text-[0.9375rem] leading-snug">{e.link ? <a href={e.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{e.description}</a> : e.description}</p>
+                    <p className="mt-1.5 text-[0.9375rem] leading-snug">{e.link ? <a href={e.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{ann(e.description)}</a> : ann(e.description)}</p>
                     {e.place && <p className="mt-1 flex items-center gap-1 text-xs text-muted"><IconPin /> {e.place}</p>}
-                    <Explain kind="event" text={`${e.house} — ${e.type}${e.organ ? ` (${e.organ})` : ""}: ${e.description}`} />
-                    <AskButton className="mt-2" focus={{ title: `${e.house}: ${e.type}`, text: `Evento da agenda do Congresso. Casa: ${e.house}. Tipo: ${e.type}${e.organ ? ` (${e.organ})` : ""}. Início: ${e.start}. Situação: ${e.situation}. Pauta: ${e.description}`, suggestions: ["O que vai ser discutido?", "Por que isso importa para mim?", "Como cada partido costuma votar nisso?"] }} />
+                    <Explain kind="event" text={`${e.house} — ${e.type}${e.organ ? ` (${e.organ})` : ""}: ${ann(e.description)}`} />
+                    <AskButton className="mt-2" focus={{ title: `${e.house}: ${e.type}`, text: `Evento da agenda do Congresso. Casa: ${e.house}. Tipo: ${e.type}${e.organ ? ` (${e.organ})` : ""}. Início: ${e.start}. Situação: ${e.situation}. Pauta: ${ann(e.description)}`, suggestions: ["O que vai ser discutido?", "Por que isso importa para mim?", "Como cada partido costuma votar nisso?"] }} />
                   </div>
                 </li>
               ))}
@@ -97,9 +101,10 @@ async function Federal({ casa }: { casa: string }) {
                 <span className="text-muted">{v.house} · {SHORT.format(new Date(v.date.length === 16 ? `${v.date}:00-03:00` : `${v.date}-03:00`))}</span>
                 {v.approved !== null && <span className={`rounded-full px-2 py-0.5 font-semibold ${v.approved ? "bg-municipal-soft text-municipal" : "bg-danger/10 text-danger"}`}>{v.approved ? "Aprovada" : "Rejeitada"}</span>}
               </div>
-              <p className="line-clamp-4 text-sm leading-snug text-muted">{v.description}</p>
-              <Explain kind="vote" text={`${v.house}: ${v.description}${v.approved === true ? " (resultado: aprovada)" : v.approved === false ? " (resultado: rejeitada)" : ""}`} />
-              <AskButton className="mt-2" focus={{ title: `Votação no ${v.house}`, text: `Votação de plenário. Casa: ${v.house}. Data: ${v.date}. Resultado: ${v.approved === true ? "aprovada" : v.approved === false ? "rejeitada" : "não informado"}. Descrição: ${v.description}`, suggestions: ["O que foi votado, em linguagem simples?", "O que isso muda na minha vida?", "Quais partidos votaram a favor e contra?"] }} />
+              {labelsIn(v.description, labels)[0] && <p className="mb-0.5 text-[0.9375rem] font-semibold leading-snug">{labelsIn(v.description, labels)[0].label}</p>}
+              <p className="line-clamp-4 text-sm leading-snug text-muted">{ann(v.description)}</p>
+              <Explain kind="vote" text={`${v.house}: ${ann(v.description)}${v.approved === true ? " (resultado: aprovada)" : v.approved === false ? " (resultado: rejeitada)" : ""}`} />
+              <AskButton className="mt-2" focus={{ title: `Votação no ${v.house}`, text: `Votação de plenário. Casa: ${v.house}. Data: ${v.date}. Resultado: ${v.approved === true ? "aprovada" : v.approved === false ? "rejeitada" : "não informado"}. Descrição: ${ann(v.description)}`, suggestions: ["O que foi votado, em linguagem simples?", "O que isso muda na minha vida?", "Quais partidos votaram a favor e contra?"] }} />
             </li>
           ))}
         </ul>

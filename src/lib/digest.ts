@@ -5,6 +5,7 @@ import * as email from "@/lib/email";
 import { appUrl, escapeHtml, layout, sendEmail } from "@/lib/email";
 import { followedNeedles } from "@/lib/feed";
 import { partyBySigla } from "@/lib/parties";
+import { annotateBills, billLabels, labelsIn } from "@/lib/bills";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes, type AgendaEvent, type PlenaryVote } from "@/lib/open-data";
 import { NEWS_CATEGORY_LABEL, SCOPE_LABEL, UFS } from "@/lib/taxonomy";
 
@@ -85,7 +86,7 @@ const newsBlock = (kind: DigestKind, cache: Cache, key: string, label: string, w
   });
 
 /* ───────── Congresso: votações + próximas sessões ───────── */
-type Congress = { votes: PlenaryVote[]; upcoming: AgendaEvent[]; summary: string | null };
+type Congress = { votes: PlenaryVote[]; upcoming: AgendaEvent[]; summary: string | null; /** nome legível da proposição de cada votação */ heads?: (string | null)[] };
 
 const congressBlock = (kind: DigestKind, cache: Map<string, Promise<Congress>>): Promise<Congress> => {
   const key = `${kind}:congress`;
@@ -105,8 +106,12 @@ const congressBlock = (kind: DigestKind, cache: Map<string, Promise<Congress>>):
           .filter((e) => /delibera/i.test(e.type) && !/n[ãa]o delibera/i.test(e.type))
           .sort((a, b) => a.start.localeCompare(b.start))
           .slice(0, 5);
-        const summary = await summarize(kind, "Votações no Congresso Nacional", votes.map((v) => `${v.house}: ${v.description}${v.approved === true ? " (aprovada)" : v.approved === false ? " (rejeitada)" : ""}`));
-        return { votes, upcoming, summary };
+        // nomes legíveis das proposições (PL 1087/2025 → "Isenção do IR até R$ 5 mil"): aqui dá para esperar a IA
+        const labels = await billLabels(votes.map((v) => v.description), { generate: true, max: 30 }).catch(() => new Map<string, string>());
+        const heads = votes.map((v) => labelsIn(v.description, labels)[0]?.label ?? null);
+        const named = votes.map((v) => ({ ...v, description: annotateBills(v.description, labels) }));
+        const summary = await summarize(kind, "Votações no Congresso Nacional", named.map((v) => `${v.house}: ${v.description}${v.approved === true ? " (aprovada)" : v.approved === false ? " (rejeitada)" : ""}`));
+        return { votes: named, heads, upcoming, summary };
       })(),
     );
   }
@@ -128,7 +133,7 @@ function congressSection(c: Congress, kind: DigestKind): string {
   const badge = (v: PlenaryVote) =>
     v.approved === null ? "" : `<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:${v.approved ? "#dcfce7;color:#166534" : "#fee2e2;color:#991b1b"}">${v.approved ? "Aprovada" : "Rejeitada"}</span> `;
   const votes = c.votes
-    .map((v) => `<li style="margin:0 0 9px;line-height:1.45">${badge(v)}<span style="font-size:12px;color:#71717a">${escapeHtml(v.house)} · ${escapeHtml(fmt({ day: "2-digit", month: "short" }, new Date(v.date.length === 16 ? `${v.date}:00-03:00` : v.date)))}</span><br>${escapeHtml(v.description.length > 200 ? v.description.slice(0, 199) + "…" : v.description)}</li>`)
+    .map((v, i) => `<li style="margin:0 0 9px;line-height:1.45">${badge(v)}<span style="font-size:12px;color:#71717a">${escapeHtml(v.house)} · ${escapeHtml(fmt({ day: "2-digit", month: "short" }, new Date(v.date.length === 16 ? `${v.date}:00-03:00` : v.date)))}</span><br>${c.heads?.[i] ? `<b>${escapeHtml(c.heads[i]!)}</b><br>` : ""}${escapeHtml(v.description.length > 200 ? v.description.slice(0, 199) + "…" : v.description)}</li>`)
     .join("");
   const upcoming = c.upcoming
     .map((e) => `<li style="margin:0 0 7px"><b>${escapeHtml(fmt({ weekday: "short", day: "2-digit", month: "short" }, new Date(`${e.start.slice(0, 10)}T12:00:00-03:00`)))} ${escapeHtml(e.start.slice(11, 16))}</b> · ${escapeHtml(e.house)} — ${escapeHtml(e.type)}</li>`)

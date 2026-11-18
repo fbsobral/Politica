@@ -84,7 +84,15 @@ export async function camaraVotes(days = 45): Promise<PlenaryVote[]> {
   return j.dados
     .filter((v) => v.siglaOrgao === "PLEN" && v.descricao)
     .slice(0, 25)
-    .map((v) => ({ id: `c${v.id}`, house: "Câmara" as const, date: v.dataHoraRegistro, description: v.descricao, approved: v.aprovacao === 1 ? true : v.aprovacao === 0 ? false : null, organ: v.siglaOrgao }));
+    .map((v) => ({
+      id: `c${v.id}`,
+      house: "Câmara" as const,
+      date: v.dataHoraRegistro,
+      // a proposição votada vem num campo à parte; entra no texto quando a descrição não a cita
+      description: v.proposicaoObjeto && !String(v.descricao).includes(String(v.proposicaoObjeto)) ? `${v.proposicaoObjeto} — ${v.descricao}` : v.descricao,
+      approved: v.aprovacao === 1 ? true : v.aprovacao === 0 ? false : null,
+      organ: v.siglaOrgao,
+    }));
 }
 
 /* ───────── Senado ───────── */
