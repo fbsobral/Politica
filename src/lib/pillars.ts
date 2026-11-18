@@ -14,9 +14,9 @@ import { UFS } from "@/lib/taxonomy";
  * (o melhor estado do país, uma "vitória isolada" que mostra o que é possível, ou o melhor resultado já alcançado aqui).
  */
 
-import { BASIS, type Basis } from "@/lib/pillar-basis";
+import { BASIS, statusOf, type Basis } from "@/lib/pillar-basis";
 
-export { BASIS, type Basis };
+export { BASIS, statusOf, type Basis };
 
 /** De onde vem cada meta do arquivo de metas (TARGETS): classificação explícita, conferida à mão. */
 const TARGET_BASIS: Record<string, Basis> = {
@@ -232,15 +232,6 @@ export type PillarsReport = { scope: BudgetScope; place: string; pillars: Pillar
 const fmtYear = (s: YearSeries) => Object.keys(s).map(Number).sort((a, b) => a - b);
 const lastOf = (s: YearSeries) => { const y = fmtYear(s).at(-1); return y == null ? null : { year: y, value: s[y] }; };
 
-/** Situação em relação à meta: atingida, perto (até 20% do caminho) ou longe. Metas zero usam tolerância absoluta. */
-export function statusOf(value: number, target: number, better: "up" | "down", unit: Unit): Exclude<Status, "sem-meta" | "contexto"> {
-  const good = better === "down" ? value <= target : value >= target;
-  if (good) return "ok";
-  if (target === 0) return Math.abs(value) <= (unit === "pct" ? 1 : 0.5) ? "perto" : "longe";
-  const gap = Math.abs(value - target) / Math.abs(target);
-  return gap <= 0.2 ? "perto" : "longe";
-}
-
 /** Tendência: o último valor contra o de ~5 anos antes (o mais próximo disponível entre 3 e 7 anos). */
 export function trendOf(s: YearSeries, better?: "up" | "down"): MetricResult["trend"] {
   const ys = fmtYear(s);
@@ -452,7 +443,9 @@ export async function getPillars(scope: BudgetScope, user: { uf: string; municip
   const [states, h] = await Promise.all([stateValues(ids), getBudgetHistory(scope, user).catch(() => null)]);
   const pillars = PILLARS.map(({ tree, ...p }) => {
     const metrics = buildTree(tree, scope, data, states, user.uf);
-    const nationalOnly = scope !== "FEDERAL" && !metrics.length && tree.some((x) => byId.get(x.id)?.fetch.FEDERAL);
+    const ind = (x: Node) => byId.get(x.id);
+    const local = (x: Node) => !!ind(x)?.fetch[scope] || (scope === "MUNICIPAL" && !!ind(x)?.fetch.ESTADUAL);
+    const nationalOnly = scope !== "FEDERAL" && !metrics.length && tree.length > 0 && !tree.some(local) && tree.some((x) => !!ind(x)?.fetch.FEDERAL);
     return { ...p, metrics, counts: countsOf(metrics), spend: spendOf(h, p.areas), nationalOnly };
   });
   const place = scope === "MUNICIPAL" ? user.municipality ?? "" : scope === "ESTADUAL" ? UFS[user.uf] ?? user.uf : "Brasil";

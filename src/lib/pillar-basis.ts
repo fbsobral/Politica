@@ -1,3 +1,5 @@
+import type { Unit } from "@/lib/indicators/format";
+
 /** Origem das metas do módulo Pilares (separado para poder ser usado em componentes sem levar o acesso ao banco). */
 export type Basis = "internacional" | "brasil" | "ideal" | "estados" | "historico";
 
@@ -8,3 +10,12 @@ export const BASIS: Record<Basis, { label: string; short: string; desc: string }
   estados: { label: "Projeção: melhor estado", short: "Melhor estado", desc: "Sem meta oficial: o melhor resultado entre os 27 estados no mesmo ano, uma vitória que já aconteceu no Brasil e mostra o que é alcançável." },
   historico: { label: "Projeção: melhor da própria série", short: "Melhor histórico", desc: "Sem meta oficial nem comparação entre estados: o melhor resultado que este lugar já teve nos últimos 20 anos." },
 };
+
+/** Situação em relação à meta: atingida, perto (até 20% do caminho) ou longe. Metas zero usam tolerância absoluta. */
+export function statusOf(value: number, target: number, better: "up" | "down", unit: Unit): "ok" | "perto" | "longe" {
+  const good = better === "down" ? value <= target : value >= target;
+  if (good) return "ok";
+  if (target === 0) return Math.abs(value) <= (unit === "pct" ? 1 : 0.5) ? "perto" : "longe";
+  const gap = Math.abs(value - target) / Math.abs(target);
+  return gap <= 0.2 ? "perto" : "longe";
+}
