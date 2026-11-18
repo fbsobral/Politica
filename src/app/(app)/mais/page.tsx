@@ -13,6 +13,7 @@ export default async function MaisPage() {
     { href: "/partidos", t: "Partidos", d: "Notícias, perfil e eleitos de cada partido", i: <IconFlag /> },
     { href: "/perfil", t: "Você", d: "Seu perfil político e os partidos mais próximos", i: <IconCompass /> },
     { href: "/eleicoes", t: "Eleições", d: "Candidatos, pesquisas e notícias por cargo", i: <IconVote /> },
+    { href: "/diagnostico", t: "Diagnóstico", d: "Lacunas e gargalos do gasto público", i: <IconShield /> },
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
     { href: "/expectativa-fiscal", t: "Expectativa fiscal", d: "Previsto x realizado: a LOA está sendo cumprida?", i: <IconCoins /> },
     { href: "/inflacao", t: "Inflação e juros", d: "IPCA, Selic, juro real e expectativas do mercado", i: <IconChart /> },

@@ -12,7 +12,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/impostos", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/diagnostico", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/impostos", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -23,6 +23,7 @@ const MENU: Entry[] = [
   {
     label: "Números",
     children: [
+      { href: "/diagnostico", label: "Diagnóstico", hint: "Onde estão as lacunas e os gargalos do gasto público", icon: <IconShield />, match: (p) => p.startsWith("/diagnostico") },
       { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
       { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
       { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic, juro real e expectativas do mercado", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },

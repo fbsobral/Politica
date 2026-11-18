@@ -428,6 +428,31 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <p className="text-[8.5px] leading-snug text-muted">• Quando o dólar sobe, o Ibovespa tende a cair (correlação −0,58).</p>
     </Frame>
   ),
+  diagnosis: () => (
+    <Frame title="Diagnóstico">
+      <span className="inline-block rounded-full bg-brand px-1.5 py-px text-[7.5px] font-bold uppercase text-white">Lente: foco na base da pirâmide</span>
+      <Hl className="rounded-lg border border-line bg-surface p-1.5">
+        <div className="flex gap-1"><span className="rounded-full bg-danger/15 px-1.5 text-[7.5px] font-bold text-danger">●●● Grave</span><span className="rounded-full bg-brand-soft px-1.5 text-[7.5px] font-semibold text-brand">Dinheiro aprovado que não chega</span></div>
+        <p className="mt-1 text-[9.5px] font-semibold leading-tight">Saúde: 33% do previsto na LOA não deve ser gasto</p>
+        <p className="mt-0.5 text-[8px] text-muted">Para quem tem menos: o SUS é o único acesso à saúde para 7 em cada 10…</p>
+      </Hl>
+      <div className="rounded-lg border border-line bg-surface p-1.5"><p className="text-[9.5px] font-semibold leading-tight">Juros e dívida: 2,5× o gasto com assistência social</p></div>
+    </Frame>
+  ),
+  "money-map": () => (
+    <Frame title="Mapa do dinheiro">
+      <Hl className="rounded-lg border border-line bg-surface p-1">
+        <svg viewBox="0 0 260 70" className="w-full" aria-hidden>
+          <rect x="40" y="6" width="5" height="40" fill="#0e8a5f" /><rect x="40" y="48" width="5" height="16" fill="#2b8a3e" />
+          <path d="M45,6 C90,6 90,8 125,8 L125,48 C90,48 90,46 45,46Z" fill="#0e8a5f" opacity="0.3" /><path d="M45,48 C90,48 90,48 125,48 L125,64 C90,64 90,64 45,64Z" fill="#2b8a3e" opacity="0.3" />
+          <rect x="125" y="8" width="6" height="56" fill="var(--ink)" />
+          <path d="M131,8 C170,8 170,4 210,4 L210,26 C170,26 170,30 131,30Z" fill="#b86e00" opacity="0.3" /><path d="M131,30 C170,30 170,30 210,30 L210,50 C170,50 170,52 131,52Z" fill="#d9480f" opacity="0.3" /><path d="M131,52 C170,52 170,56 210,56 L210,66 C170,66 170,64 131,64Z" fill="#c0352b" opacity="0.4" />
+          <rect x="210" y="4" width="5" height="22" fill="#b86e00" /><rect x="210" y="30" width="5" height="20" fill="#d9480f" /><rect x="210" y="56" width="5" height="10" fill="#c0352b" />
+        </svg>
+      </Hl>
+      <p className="text-[8.5px] text-muted">Impostos e repasses → caixa → <b className="text-ink">educação, saúde</b>… <b className="text-danger">juros</b></p>
+    </Frame>
+  ),
   taxes: () => (
     <Frame title="Impostos" scope="F">
       <Hl className="flex gap-1 p-0.5"><Chip on>% do PIB</Chip><Chip>US$ por habitante</Chip><Chip>US$ total</Chip></Hl>

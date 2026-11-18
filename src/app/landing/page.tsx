@@ -73,6 +73,7 @@ const GROUPS: { id: string; eyebrow: string; title: string; text: string; items:
     title: "O dinheiro público, às claras",
     text: "Dados do Tesouro Nacional, do IBGE e do Banco Central, para a cidade, o estado e o país.",
     items: [
+      { icon: <IconTarget />, title: "Diagnóstico", text: "Onde estão as lacunas e os gargalos: dinheiro aprovado que não chega, problemas sem orçamento, peso dos juros e quem paga a conta, com o mapa do dinheiro." },
       { icon: <IconCoins />, title: "Orçamento", text: "De onde vem e para onde vai o dinheiro, por área e subárea, em 10 anos." },
       { icon: <IconTarget />, title: "Expectativa fiscal", text: "Previsto x realizado: a lei orçamentária (LOA) está sendo cumprida? Onde o ano deve fechar." },
       { icon: <IconTrend />, title: "Inflação e juros", text: "IPCA frente à meta, Selic, juro real, expectativas do mercado e os pilares que puxam os preços." },

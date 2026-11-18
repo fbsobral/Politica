@@ -54,7 +54,7 @@ export function generalTour(city: string): Tour {
         title: "Os números do governo",
         text: "Veja para onde vai o dinheiro público, se o orçamento do ano está sendo cumprido, como está a inflação e se os indicadores melhoraram.",
         tips: ["Orçamento e Expectativa fiscal: receitas, gastos e a LOA", "Inflação e Ibovespa: preços, expectativas e a bolsa com o motivo das altas e quedas", "Indicadores, Score e ROI: resultados em até 30 anos"],
-        links: [{ href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/impostos", label: "Impostos" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
+        links: [{ href: "/diagnostico", label: "Diagnóstico" }, { href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/impostos", label: "Impostos" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
       },
       {
         screen: "chat", art: "ask",
@@ -149,6 +149,15 @@ export const MODULE_TOURS: Tour[] = [
     name: "Favoritos",
     match: at("/favoritos"),
     steps: [{ screen: "favorites", art: "star", title: "Leia depois", text: "As notícias que você marca com a estrela ficam guardadas aqui." }],
+  },
+  {
+    id: "diagnostico",
+    name: "Diagnóstico",
+    match: at("/diagnostico"),
+    steps: [
+      { screen: "diagnosis", art: "target", title: "Onde estão os gargalos", text: "O Diagnóstico cruza orçamento, execução, indicadores e impostos e aponta achados: dinheiro aprovado que não chega, problemas sem orçamento, prioridades, quem paga a conta e falta de investimento.", tips: ["Cada achado mostra os números, quem é mais afetado e caminhos possíveis", "A lente 'foco na base da pirâmide' explica o critério usado para ordenar os achados"] },
+      { screen: "money-map", art: "coins", title: "O mapa do dinheiro", text: "Siga as faixas: de onde vem o dinheiro (impostos e repasses), o caixa do governo e para onde vai, com os juros da dívida separados das demais despesas." },
+    ],
   },
   {
     id: "orcamento",
