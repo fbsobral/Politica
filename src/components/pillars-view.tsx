@@ -84,7 +84,7 @@ function Metric({ m, scope, sub }: { m: MetricResult; scope: BudgetScope; sub?: 
             {m.level !== scope && <span className="rounded bg-estadual-soft px-1.5 font-semibold text-estadual">dado do {LEVEL[m.level]}</span>}
             {trend && change && (
               <span className={trend.dir === "melhor" ? "text-ok" : trend.dir === "pior" ? "text-danger" : ""}>
-                {m.value > trend.value ? "↗" : m.value < trend.value ? "↘" : "→"} {trend.dir === "melhor" ? "melhorou" : trend.dir === "pior" ? "piorou" : "estável"} {change} desde {trend.year}
+                {trend.dir === "estavel" ? "→" : m.value > trend.value ? "↗" : "↘"} {trend.dir === "melhor" ? "melhorou" : trend.dir === "pior" ? "piorou" : "estável"} {change} desde {trend.year}
               </span>
             )}
           </span>
@@ -151,7 +151,7 @@ function Pillar({ p, scope, place }: { p: PillarResult; scope: BudgetScope; plac
   const flat = p.metrics.flatMap((m) => [m, ...m.children]);
   return (
     <section id={p.id} className="card scroll-mt-24 p-4 sm:p-6" aria-labelledby={`${p.id}-t`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="eyebrow">Pilar</p>
           <h2 id={`${p.id}-t`} className="display flex items-center gap-2 text-2xl font-semibold"><span aria-hidden>{p.icon}</span>{p.name}</h2>

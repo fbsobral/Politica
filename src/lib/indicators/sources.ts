@@ -75,6 +75,18 @@ export const censo2022 = (scope: Scope, table: number, variable: number, classes
   return complement ? Object.fromEntries(Object.entries(s).map(([y, v]) => [Number(y), Math.round((100 - v) * 100) / 100])) : s;
 };
 
+/** Soma, ano a ano, várias categorias de uma classificação do SIDRA (ex.: deslocamento "mais de 1 hora" = três faixas). */
+export const sidraSum = (scope: Scope, table: number, variable: number, classes: string): Fetcher => async (geo) => {
+  const rows = await sidra(`t/${table}/${terr(scope, geo)}/v/${variable}${classes}/p/all`);
+  const col = ["D3C", "D4C", "D5C", "D6C", "D7C"].find((c) => /^(19|20)\d{2}$/.test(String((rows[0] as Record<string, unknown> | undefined)?.[c] ?? ""))) ?? "D3C";
+  const out: YearSeries = {};
+  for (const r of rows) {
+    const y = Number(String(r[col]).slice(0, 4));
+    if (r.v !== null && Number.isFinite(y)) out[y] = Math.round(((out[y] ?? 0) + r.v) * 100) / 100;
+  }
+  return toRange(out);
+};
+
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
 /**

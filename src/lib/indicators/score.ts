@@ -13,7 +13,8 @@ export function candidates(scope: Scope): { ind: Indicator; side: Side }[] {
 }
 
 /** Indicadores que, com a meta de referência, ficam sempre em 100 e não distinguem um ano do outro: continuam disponíveis, mas fora do padrão. */
-const NO_DEFAULT = new Set(["reservas", "endividamento", "endividamento-sem-habitacao"]);
+// os do Censo 2022 têm um único ano e o de moradia precária só dois: entram no score só se o usuário escolher
+const NO_DEFAULT = new Set(["reservas", "endividamento", "endividamento-sem-habitacao", "analfabetismo-censo", "agua-rede", "esgoto-rede", "lixo-coletado", "creche", "escola-15-17", "deslocamento-1h", "moradia-precaria"]);
 
 /** Conjunto padrão: os indicadores principais que têm meta de referência (as sub-métricas ficam como opção). */
 export const defaultSelection = (scope: Scope): string[] => candidates(scope).filter((c) => !c.ind.parent && !NO_DEFAULT.has(c.ind.id) && TARGETS[c.ind.id] && (TARGETS[c.ind.id].value != null || TARGETS[c.ind.id].base || TARGETS[c.ind.id].ratioOf || TARGETS[c.ind.id].byScope?.[scope] != null)).map((c) => c.ind.id);

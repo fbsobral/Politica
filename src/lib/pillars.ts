@@ -27,6 +27,8 @@ const TARGET_BASIS: Record<string, Basis> = {
   "nem-nem": "internacional", inadimplencia: "internacional", "inadimplencia-total": "internacional", previdencia: "ideal", "dcl-rcl": "brasil", "pessoal-rcl": "brasil", reservas: "internacional",
   comprometimento: "internacional", endividamento: "internacional", "endividamento-sem-habitacao": "internacional", "renda-trabalho": "brasil", desalento: "ideal",
   "agua-rede": "brasil", "esgoto-rede": "brasil", "sem-banheiro": "internacional", "lixo-coletado": "ideal",
+  creche: "brasil", "pre-escola": "brasil", "escola-15-17": "brasil", "mortalidade-cronicas": "internacional", "agua-segura": "brasil", energia: "internacional",
+  "moradia-precaria": "internacional", "inseguranca-grave": "internacional", "inseguranca-alimentar": "internacional", "trabalho-infantil": "internacional",
 };
 
 /** Metas próprias do pilar para indicadores que não têm meta no score. */
@@ -65,7 +67,7 @@ export const PILLARS: PillarDef[] = [
     id: "saude", name: "Saúde", icon: "🩺", areas: ["saude"],
     question: "As pessoas estão vivendo mais e morrendo menos de causas evitáveis?",
     lens: "Cerca de 7 em cada 10 brasileiros dependem só do SUS; mortes de bebês e de mães se concentram nas famílias pobres.",
-    tree: [n("mortalidade-5", "mortalidade-neonatal"), n("mortalidade-infantil", "mortalidade-neonatal"), n("mortalidade-materna"), n("suicidio")],
+    tree: [n("mortalidade-5", "mortalidade-neonatal"), n("mortalidade-infantil", "mortalidade-neonatal"), n("mortalidade-materna"), n("gravidez-adolescente"), n("mortalidade-cronicas"), n("suicidio")],
     gaps: [
       { name: "Cobertura vacinal infantil", target: "95% das crianças", basis: "internacional", why: "Abaixo disso doenças eliminadas, como o sarampo, voltam.", source: "Ministério da Saúde (PNI) e OMS", url: "https://sipni.datasus.gov.br" },
       { name: "Cobertura da atenção primária", target: "100% da população", basis: "ideal", why: "A porta de entrada do SUS resolve a maior parte dos problemas de saúde perto de casa.", source: "Ministério da Saúde (e-Gestor AB)", url: "https://egestorab.saude.gov.br" },
@@ -77,23 +79,22 @@ export const PILLARS: PillarDef[] = [
     id: "educacao", name: "Educação", icon: "📚", areas: ["educacao"],
     question: "Todo mundo aprende a ler e os jovens estão estudando ou trabalhando?",
     lens: "8 em cada 10 alunos estão na escola pública; creche e ensino básico pesam mais para as famílias pobres.",
-    tree: [n("analfabetismo"), n("analfabetismo-censo"), n("nem-nem")],
+    tree: [n("creche"), n("pre-escola"), n("escola-15-17"), n("conclusao-medio", "conclusao-fund"), n("analfabetismo"), n("analfabetismo-censo"), n("nem-nem")],
     gaps: [
       { name: "IDEB dos anos iniciais", target: "6,0", basis: "brasil", why: "Mede aprendizagem e aprovação juntas; o número é a meta do Plano Nacional de Educação.", source: "INEP (IDEB) e PNE 2014–2024, meta 7", url: "https://www.gov.br/inep/pt-br/areas-de-atuacao/pesquisas-estatisticas-e-indicadores/ideb" },
-      { name: "Crianças de 0 a 3 anos na creche", target: "50%", basis: "brasil", why: "Creche permite que as mães trabalhem e é onde a desigualdade de aprendizagem começa a ser combatida.", source: "PNE 2014–2024, meta 1 (INEP, Censo Escolar)", url: "https://pne.mec.gov.br" },
       { name: "Alunos em tempo integral", target: "25% dos alunos (50% das escolas)", basis: "brasil", why: "Mais tempo na escola, com alimentação e proteção.", source: "PNE 2014–2024, meta 6", url: "https://pne.mec.gov.br" },
-      { name: "Jovens de 19 anos com ensino médio completo", target: "Sem número único", basis: null, why: "Quem não conclui o ensino médio ganha menos a vida toda.", source: "IBGE (PNAD Contínua) e Todos Pela Educação" },
+      { name: "Alunos com aprendizagem adequada em português e matemática", target: "Sem número único no PNE (o IDEB é a meta)", basis: null, why: "Estar na escola não basta: mede se o aluno está aprendendo.", source: "INEP (SAEB)" },
     ],
   },
   {
     id: "saneamento", name: "Saneamento básico", icon: "🚰", areas: ["saneamento"],
     question: "As casas têm água encanada, esgoto e coleta de lixo?",
     lens: "A falta de água e de esgoto se concentra nos bairros pobres e causa doenças e mortes de crianças.",
-    tree: [n("agua-rede"), n("esgoto-rede", "sem-banheiro"), n("lixo-coletado")],
+    tree: [n("agua-rede", "agua-segura"), n("esgoto-rede", "sem-banheiro"), n("lixo-coletado"), n("mortes-saneamento")],
     gaps: [
       { name: "Esgoto coletado que é tratado", target: "90% coletado e tratado até 2033", basis: "brasil", why: "Esgoto coletado e jogado sem tratamento no rio continua causando doença.", source: "Marco Legal do Saneamento (Lei 14.026/2020) e SINISA", url: "https://www.gov.br/cidades/pt-br/acesso-a-informacao/acoes-e-programas/saneamento/sinisa" },
       { name: "Perdas de água na distribuição", target: "Redução progressiva (sem número único)", basis: "brasil", why: "Cerca de um terço da água tratada se perde em vazamentos e ligações irregulares.", source: "SINISA (antigo SNIS)" },
-      { name: "Internações por doenças ligadas à falta de saneamento", target: "Sem número fixado", basis: null, why: "Diarreia, hepatite A e outras doenças evitáveis com água e esgoto.", source: "Ministério da Saúde (SIH/DATASUS)" },
+      { name: "Internações por doenças ligadas à falta de saneamento", target: "Sem número fixado", basis: null, why: "Diarreia, hepatite A e outras doenças evitáveis com água e esgoto (as mortes já estão acima).", source: "Ministério da Saúde (SIH/DATASUS)" },
     ],
   },
   {
@@ -111,9 +112,8 @@ export const PILLARS: PillarDef[] = [
     id: "mobilidade", name: "Mobilidade e trânsito", icon: "🚌", areas: ["transporte", "urbanismo"],
     question: "Dá para se deslocar com segurança e sem perder horas no caminho?",
     lens: "O transporte público é o meio de quem tem menos renda e mora mais longe do trabalho.",
-    tree: [n("transito")],
+    tree: [n("transito"), n("deslocamento-1h")],
     gaps: [
-      { name: "Tempo de deslocamento casa–trabalho", target: "Sem número fixado", basis: null, why: "Horas no ônibus são horas a menos de descanso, estudo e família.", source: "IBGE (Censo 2022, deslocamento para trabalho)" },
       { name: "População perto de transporte de média e alta capacidade", target: "Sem número fixado", basis: null, why: "Metrô, trem e corredores de ônibus encurtam a distância até as oportunidades.", source: "ITDP Brasil (indicador PNT)" },
       { name: "Mortes no trânsito pela metade até 2030", target: "−50% em relação a 2020", basis: "internacional", why: "Meta da Década de Ação pela Segurança no Trânsito (ONU) e do Pnatrans brasileiro.", source: "ONU (Resolução A/RES/74/299) e Lei 13.614/2018" },
     ],
@@ -122,9 +122,9 @@ export const PILLARS: PillarDef[] = [
     id: "social", name: "Pobreza e desigualdade", icon: "🤝", areas: ["assistencia social", "direitos da cidadania"],
     question: "Menos gente vive na pobreza e a renda está menos concentrada?",
     lens: "É o pilar que mede diretamente a vida de quem está na base da pirâmide.",
-    tree: [n("pobreza", "pobreza-int"), n("gini")],
+    tree: [n("pobreza", "pobreza-int"), n("inseguranca-grave", "inseguranca-alimentar"), n("gini")],
     gaps: [
-      { name: "Insegurança alimentar grave (fome)", target: "Zero até 2030 (Fome Zero)", basis: "internacional", why: "Medida direta da fome, que voltou a crescer no país entre 2018 e 2022.", source: "IBGE (PNAD, Escala Brasileira de Insegurança Alimentar) e ODS 2.1" },
+      { name: "Insegurança alimentar por estado e cidade", target: "Zero até 2030 (Fome Zero)", basis: "internacional", why: "O IBGE publica a fome por estado só em tabelas avulsas; aqui ela aparece para o país.", source: "IBGE (PNAD, Escala Brasileira de Insegurança Alimentar) e ODS 2.1" },
       { name: "Crianças na pobreza", target: "Metade de 2015 até 2030", basis: "internacional", why: "A pobreza na infância deixa marcas para a vida toda.", source: "IBGE (Síntese de Indicadores Sociais) e ODS 1.2" },
       { name: "Famílias pobres do CadÚnico atendidas", target: "100% das elegíveis", basis: "ideal", why: "Mostra se a rede de proteção chega a quem tem direito.", source: "Ministério do Desenvolvimento Social (CadÚnico)" },
     ],
@@ -133,7 +133,7 @@ export const PILLARS: PillarDef[] = [
     id: "trabalho", name: "Trabalho e renda", icon: "💼", areas: ["trabalho"],
     question: "Há trabalho, com direitos, e a renda dá para viver?",
     lens: "Para quem não tem patrimônio, o trabalho é a única fonte de renda.",
-    tree: [n("desemprego", "subutilizacao", "desalento"), n("informalidade", "previdencia"), n("renda-trabalho", "pobreza-ocupados"), n("salario-minimo"), n("salario-medio", "pessoal-ocupado")],
+    tree: [n("desemprego", "subutilizacao", "desalento"), n("informalidade", "previdencia"), n("renda-trabalho", "pobreza-ocupados"), n("salario-minimo"), n("salario-medio", "pessoal-ocupado"), n("trabalho-infantil")],
     gaps: [
       { name: "Diferença de renda entre homens e mulheres, negros e brancos", target: "Igualdade (ideal)", basis: "ideal", why: "Mostra quem fica para trás pelo mesmo trabalho.", source: "IBGE (PNAD Contínua) e Lei 14.611/2023 (igualdade salarial)" },
       { name: "Acidentes de trabalho graves e mortes", target: "Sem número fixado", basis: null, why: "Quem mais se acidenta são os trabalhadores com menos proteção.", source: "Observatório de Segurança e Saúde no Trabalho (MPT/OIT)" },
@@ -143,11 +143,11 @@ export const PILLARS: PillarDef[] = [
     id: "moradia", name: "Moradia", icon: "🏠", areas: ["habitacao"],
     question: "As famílias moram em casas adequadas e que cabem no bolso?",
     lens: "Moradia precária e o peso do aluguel atingem sobretudo as famílias de baixa renda.",
-    tree: [],
+    tree: [n("moradia-precaria"), n("energia")],
     gaps: [
       { name: "Déficit habitacional", target: "Redução contínua (sem número oficial atual)", basis: null, why: "Famílias em moradia precária, coabitação forçada ou aluguel que come a renda.", source: "Fundação João Pinheiro (Déficit Habitacional no Brasil)", url: "https://fjp.mg.gov.br/deficit-habitacional-no-brasil/" },
       { name: "Famílias que gastam mais de 30% da renda com aluguel", target: "Até 30% da renda é a régua de acessibilidade", basis: "internacional", why: "Acima disso falta dinheiro para comida, transporte e saúde.", source: "ONU-Habitat e Fundação João Pinheiro (ônus excessivo com aluguel)" },
-      { name: "Moradores em favelas e comunidades urbanas", target: "Garantir moradia adequada a todos até 2030", basis: "internacional", why: "Concentram falta de saneamento, de título da casa e de serviços.", source: "IBGE (Censo 2022) e ODS 11.1" },
+      { name: "Moradia precária na cidade", target: "Moradia adequada a todos até 2030", basis: "internacional", why: "O indicador de moradia precária (ODS 11.1) só sai para país e estados; nas cidades, o Censo publica as favelas em tabelas por comunidade.", source: "IBGE (Censo 2022) e ODS 11.1" },
     ],
   },
   {
@@ -437,7 +437,7 @@ export async function getPillars(scope: BudgetScope, user: { uf: string; municip
     if (!level || (level === "MUNICIPAL" && !geo.ibge)) return;
     const s = await getSeries(ind, level, geo, { lazy: true }).catch(() => null);
     if (s && Object.keys(s).length) data.set(id, { level, series: s });
-    else pending++;
+    else if (!ind.fed) pending++;
   }));
   // métricas calculadas (razão entre duas séries da mesma esfera)
   for (const [id, d] of Object.entries(DERIVED)) {
