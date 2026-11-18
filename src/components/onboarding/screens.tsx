@@ -439,6 +439,32 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <div className="rounded-lg border border-line bg-surface p-1.5"><p className="text-[9.5px] font-semibold leading-tight">Juros e dívida: 2,5× o gasto com assistência social</p></div>
     </Frame>
   ),
+  pillars: () => (
+    <Frame title="Pilares">
+      <div className="grid grid-cols-2 gap-1">
+        {[["🩺 Saúde", 3, 1, 1], ["🚰 Saneamento", 1, 1, 1], ["📚 Educação", 1, 0, 2], ["🛡 Segurança", 0, 0, 1]].map(([n, a, b, c]) => (
+          <div key={String(n)} className="rounded-lg border border-line bg-surface p-1">
+            <p className="text-[8.5px] font-semibold">{n}</p>
+            <div className="mt-0.5 flex h-1 overflow-hidden rounded-full">{[[a, "var(--ok)"], [b, "var(--estadual)"], [c, "var(--danger)"]].map(([w, col], i) => <span key={i} style={{ flex: Number(w), background: String(col) }} />)}</div>
+          </div>
+        ))}
+      </div>
+      <Hl className="flex items-center justify-between rounded-lg border border-line bg-surface p-1.5">
+        <span className="text-[9px] font-semibold leading-tight">Domicílios ligados ao esgoto</span>
+        <span className="flex items-center gap-1"><b className="text-[10px]">62,5%</b><span className="rounded-full bg-danger/10 px-1 text-[7.5px] font-bold text-danger">Longe</span></span>
+      </Hl>
+    </Frame>
+  ),
+  "pillar-basis": () => (
+    <Frame title="De onde vem a meta">
+      <Hl className="space-y-1 rounded-lg border border-line bg-surface p-1.5">
+        {[["Internacional", "#1c64b8", "ODS 3.2: até 12 por mil"], ["Meta do Brasil", "#0b7a5c", "Marco do Saneamento: 90%"], ["Melhor estado", "#8a4fd1", "São Paulo já chegou a 92%"]].map(([t, c, d]) => (
+          <div key={t} className="flex items-center gap-1.5 text-[8.5px]"><span className="rounded-full border px-1 font-semibold" style={{ borderColor: c, color: c }}>{t}</span><span className="truncate text-muted">{d}</span></div>
+        ))}
+      </Hl>
+      <p className="text-[8.5px] text-muted">Sem meta oficial, projetamos pelo que já foi alcançado no Brasil.</p>
+    </Frame>
+  ),
   "money-map": () => (
     <Frame title="Mapa do dinheiro">
       <Hl className="rounded-lg border border-line bg-surface p-1">

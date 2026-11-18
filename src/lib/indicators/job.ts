@@ -61,5 +61,21 @@ export async function refreshIndicators(): Promise<{ places: number; ipeaKeys: n
       }
     }
   }
+  // Pilares: séries de todos os estados para a comparação "melhor estado" (respeita o cache, só busca o que venceu)
+  try {
+    const { benchmarkIndicators } = await import("@/lib/pillars");
+    for (const ind of benchmarkIndicators()) {
+      for (const uf of Object.keys(UF_CODE)) {
+        if (doneStates.has(`${ind.id}:${uf}`)) continue;
+        try {
+          if (await getSeries(ind, "ESTADUAL", { uf, ufCode: UF_CODE[uf], ibge: "", municipalityKey: "" })) series++;
+        } catch {
+          /* fica para a próxima rodada */
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[indicators:job] pilares", (err as Error).message);
+  }
   return { places: geos.length, ipeaKeys: ipea.written, series, failed: failed.slice(0, 20) };
 }

@@ -59,5 +59,10 @@ export const TARGETS: Record<string, Target> = {
   endividamento: { value: 130, ref: "Média da OCDE de dívida das famílias de ~130% da renda anual (base de cálculo mais ampla que a do Banco Central)", url: "https://www.oecd.org/en/data/indicators/household-debt.html", approx: true },
   "endividamento-sem-habitacao": { value: 130, ref: "Mesma referência da OCDE do endividamento total (não há média internacional sem crédito imobiliário)", url: "https://www.oecd.org/en/data/indicators/household-debt.html", approx: true },
   "renda-trabalho": { value: 7107, ref: "Salário mínimo necessário calculado pelo DIEESE (R$ 7.107 em dez/2025, para uma família de 4 pessoas), a preços de 2025", url: "https://www.dieese.org.br/analisecestabasica/salarioMinimo.html", approx: true },
+  "analfabetismo-censo": { value: 2, ref: "Mesma aproximação do analfabetismo pela PNAD: patamar dos países de alta alfabetização (ODS 4.6 e PNE falam em erradicação, sem número)", approx: true },
+  "agua-rede": { value: 99, ref: "Marco Legal do Saneamento (Lei 14.026/2020): 99% da população com água potável até 2033", url: "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2020/lei/l14026.htm" },
+  "esgoto-rede": { value: 90, ref: "Marco Legal do Saneamento (Lei 14.026/2020): 90% da população com coleta e tratamento de esgoto até 2033", url: "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2020/lei/l14026.htm" },
+  "sem-banheiro": { value: 0, ref: "ODS 6.2 (ONU): acesso a saneamento para todos e fim da defecação a céu aberto até 2030", url: "https://brasil.un.org/pt-br/sdgs/6" },
+  "lixo-coletado": { value: 100, ref: "Política Nacional de Resíduos Sólidos (Lei 12.305/2010) e ODS 11.6: coleta universal; a lei não fixa um número, então usamos 100%", url: "https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2010/lei/l12305.htm", approx: true },
   desalento: { value: 0, ref: "Ideal teórico: nenhum trabalhador desalentado (não achei média internacional comparável)", approx: true },
 };

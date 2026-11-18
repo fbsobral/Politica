@@ -54,7 +54,7 @@ export function generalTour(city: string): Tour {
         title: "Os números do governo",
         text: "Veja para onde vai o dinheiro público, se o orçamento do ano está sendo cumprido, como está a inflação e se os indicadores melhoraram.",
         tips: ["Orçamento e Expectativa fiscal: receitas, gastos e a LOA", "Inflação e Ibovespa: preços, expectativas e a bolsa com o motivo das altas e quedas", "Indicadores, Score e ROI: resultados em até 30 anos"],
-        links: [{ href: "/diagnostico", label: "Diagnóstico" }, { href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/impostos", label: "Impostos" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
+        links: [{ href: "/diagnostico", label: "Diagnóstico" }, { href: "/pilares", label: "Pilares" }, { href: "/orcamento", label: "Orçamento" }, { href: "/expectativa-fiscal", label: "Expectativa fiscal" }, { href: "/inflacao", label: "Inflação e juros" }, { href: "/ibovespa", label: "Ibovespa" }, { href: "/impostos", label: "Impostos" }, { href: "/salarios", label: "Salários e lucros" }, { href: "/indicadores", label: "Indicadores" }, { href: "/score", label: "Score" }, { href: "/roi", label: "ROI" }],
       },
       {
         screen: "chat", art: "ask",
@@ -157,6 +157,15 @@ export const MODULE_TOURS: Tour[] = [
     steps: [
       { screen: "diagnosis", art: "target", title: "Onde estão os gargalos", text: "O Diagnóstico cruza orçamento, execução, indicadores e impostos e aponta achados: dinheiro aprovado que não chega, problemas sem orçamento, prioridades, quem paga a conta e falta de investimento.", tips: ["Cada achado mostra os números, quem é mais afetado e caminhos possíveis", "A lente 'foco na base da pirâmide' explica o critério usado para ordenar os achados"] },
       { screen: "money-map", art: "coins", title: "O mapa do dinheiro", text: "Siga as faixas: de onde vem o dinheiro (impostos e repasses), o caixa do governo e para onde vai, com os juros da dívida separados das demais despesas." },
+    ],
+  },
+  {
+    id: "pilares",
+    name: "Pilares",
+    match: at("/pilares"),
+    steps: [
+      { screen: "pillars", art: "target", title: "O resultado de cada área", text: "Pilares divide o governo em áreas (saúde, educação, saneamento, segurança, trabalho…) e mostra, para cada uma, as métricas e submétricas, o nosso resultado, a meta e quanto a área custa.", tips: ["Toque numa métrica para ver a explicação, a meta e a fonte", "Use as abas para ver a cidade, o estado e o país"] },
+      { screen: "pillar-basis", art: "compass", title: "Toda meta diz de onde veio", text: "A etiqueta mostra a origem da meta: referência internacional, meta brasileira em lei ou plano, ideal declarado ou, quando não há meta, uma projeção pelo melhor estado do país ou pelo melhor resultado já alcançado aqui.", tips: ["“Métricas que ainda não medimos” lista o que deveria ser acompanhado e ainda não tem dado aberto"] },
     ],
   },
   {

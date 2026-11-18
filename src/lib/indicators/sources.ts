@@ -69,6 +69,12 @@ export const sidraAnnual = (scope: Scope, table: number, variable: number, class
   return toRange(sidraYears(rows, col));
 };
 
+/** Censo 2022 (IBGE): um único ano, para Brasil, estados e municípios. `complement` devolve 100 − valor (ex.: alfabetização → analfabetismo). */
+export const censo2022 = (scope: Scope, table: number, variable: number, classes: string, complement = false): Fetcher => async (geo) => {
+  const s = await sidraAnnual(scope, table, variable, classes)(geo);
+  return complement ? Object.fromEntries(Object.entries(s).map(([y, v]) => [Number(y), Math.round((100 - v) * 100) / 100])) : s;
+};
+
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
 /**
