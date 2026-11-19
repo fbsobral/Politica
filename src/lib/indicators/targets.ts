@@ -74,5 +74,12 @@ export const TARGETS: Record<string, Target> = {
   "inseguranca-grave": { value: 0, ref: "ODS 2.1 (ONU): acabar com a fome até 2030", url: "https://brasil.un.org/pt-br/sdgs/2" },
   "inseguranca-alimentar": { value: 0, ref: "ODS 2.1 (ONU): garantir a todos o acesso a alimentos seguros, nutritivos e suficientes até 2030", url: "https://brasil.un.org/pt-br/sdgs/2" },
   "trabalho-infantil": { value: 0, ref: "ODS 8.7 (ONU): acabar com todas as formas de trabalho infantil até 2025", url: "https://brasil.un.org/pt-br/sdgs/8" },
+  "vacinacao-dtp": { value: 90, ref: "Agenda de Imunização 2030 da OMS: 90% das crianças com as três doses da tríplice bacteriana (DTP3)", url: "https://www.who.int/teams/immunization-vaccines-and-biologicals/strategies/ia2030" },
+  "vacinacao-sarampo": { value: 95, ref: "OMS: 95% de cobertura com as duas doses é o necessário para manter o sarampo eliminado (imunidade coletiva)", url: "https://www.who.int/news-room/fact-sheets/detail/measles" },
+  pm25: { value: 5, ref: "Diretrizes de Qualidade do Ar da OMS (2021): média anual de no máximo 5 µg/m³ de partículas finas (PM2,5)", url: "https://www.who.int/publications/i/item/9789240034228" },
+  "pobreza-criancas": { value: 3, ref: "Banco Mundial e ODS 1.1: reduzir a pobreza extrema a no máximo 3% até 2030 (vale também para as crianças)", url: "https://www.worldbank.org/en/topic/poverty" },
+  "esgoto-tratado": { value: 90, ref: "Marco Legal do Saneamento (Lei 14.026/2020): 90% de coleta e tratamento de esgoto até 2033", url: "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2020/lei/l14026.htm" },
+  "gasto-educacao-pib": { value: 10, ref: "Plano Nacional de Educação (Lei 13.005/2014), meta 20: investimento público em educação de 10% do PIB", url: "https://pne.mec.gov.br" },
+  "renda-negros": { value: 100, ref: "Igualdade de renda entre negros e brancos (Estatuto da Igualdade Racial, Lei 12.288/2010, e ODS 10.2)", url: "https://brasil.un.org/pt-br/sdgs/10" },
   desalento: { value: 0, ref: "Ideal teórico: nenhum trabalhador desalentado (não achei média internacional comparável)", approx: true },
 };

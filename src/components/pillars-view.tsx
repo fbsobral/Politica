@@ -15,7 +15,7 @@ import type { MetricResult, PillarResult, PillarsReport, Ref, Status } from "@/l
  * cabeçalho que ordena, linhas que abrem as submétricas e balão ⓘ com explicação, meta e fonte.
  */
 
-type RefMode = "meta" | "estados" | "historico";
+type RefMode = "meta" | "media" | "estados" | "historico";
 type Show = "todas" | "fora" | "ok";
 type SCol = "name" | "n" | "ok" | "perto" | "longe" | "sem" | "pc" | "share";
 type MCol = "name" | "status" | "trend";
@@ -35,14 +35,20 @@ const BASIS_CLS: Record<Basis, string> = {
   historico: "border-[#a66300]/40 text-[#a66300] dark:border-[#e0a64a]/40 dark:text-[#e0a64a]",
 };
 const LEVEL: Record<string, string> = { FEDERAL: "país", ESTADUAL: "estado", MUNICIPAL: "cidade" };
-const REF_LABEL: Record<RefMode, string> = { meta: "Meta de referência", estados: "Melhor estado", historico: "Melhor histórico" };
+const REF_LABEL: Record<RefMode, string> = { meta: "Meta de referência", media: "Internacional", estados: "Melhor estado", historico: "Melhor histórico" };
 
 const fmt = (m: { unit: MetricResult["unit"]; decimals: number }, v: number) => formatValue(v, m.unit, m.decimals);
 const brlPc = (v: number) => `R$ ${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
 const pct = (v: number) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 /** Referência usada para comparar: a meta principal, ou a projeção escolhida na barra de ajustes. */
-const refOf = (m: MetricResult, mode: RefMode): Ref | null => (mode === "meta" ? m.target : [m.target, ...m.refs].find((r) => r?.basis === mode) ?? null);
+const refOf = (m: MetricResult, mode: RefMode): Ref | null => {
+  const all = [m.target, ...m.refs].filter((r): r is Ref => !!r);
+  if (mode === "meta") return m.target;
+  // internacional: a média de outros países (OCDE/mundo) e, na falta dela, a meta internacional oficial (ODS, OMS, OIT…)
+  if (mode === "media") return all.find((r) => r.avg) ?? all.find((r) => r.basis === "internacional") ?? null;
+  return all.find((r) => r.basis === mode) ?? null;
+};
 const statusIn = (m: MetricResult, mode: RefMode): Status => {
   if (!m.better) return "contexto";
   const r = refOf(m, mode);
@@ -62,8 +68,11 @@ const countIn = (ms: MetricResult[], mode: RefMode) => {
   return c;
 };
 
-function BasisChip({ basis }: { basis: Basis }) {
-  return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-px text-[10.5px] font-semibold ${BASIS_CLS[basis]}`} title={BASIS[basis].desc}>{BASIS[basis].short}</span>;
+function BasisChip({ basis, r }: { basis: Basis; r?: Ref }) {
+  // médias de outros países: "OCDE 2024" ou "Mundo 2023", em vez do genérico "Internacional"
+  const m = r?.avg ? r.label.match(/(OCDE|mundial)\D*(\d{4})/) : null;
+  const avg = m ? `${m[1] === "OCDE" ? "OCDE" : "Mundo"} ${m[2]}` : null;
+  return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-px text-[10.5px] font-semibold ${BASIS_CLS[basis]}`} title={avg ? r!.label : BASIS[basis].desc}>{avg ?? BASIS[basis].short}</span>;
 }
 
 function StatusText({ s, title }: { s: Status; title?: string }) {
@@ -232,9 +241,9 @@ function MetricsTable({ p, scope, place, mode, show }: { p: PillarResult; scope:
               {m.level !== scope && <span className="rounded bg-estadual-soft px-1 font-semibold text-estadual">dado do {LEVEL[m.level]}</span>}
             </div>
           </td>
-          <td className="px-2.5 py-2 text-right font-semibold tabular-nums">{fmt(m, m.value)}</td>
-          <td className="px-2.5 py-2 text-right tabular-nums">{ref ? fmt(m, ref.value) : <span className="text-faint">—</span>}</td>
-          <td className="px-2.5 py-2 text-right">{ref ? <BasisChip basis={ref.basis} /> : <span className="text-faint">—</span>}</td>
+          <td className="whitespace-nowrap px-2.5 py-2 text-right font-semibold tabular-nums">{fmt(m, m.value)}</td>
+          <td className="whitespace-nowrap px-2.5 py-2 text-right tabular-nums">{ref ? fmt(m, ref.value) : <span className="text-faint">—</span>}</td>
+          <td className="px-2.5 py-2 text-right">{ref ? <BasisChip basis={ref.basis} r={ref} /> : <span className="text-faint">—</span>}</td>
           <td className="px-2.5 py-2 text-right"><StatusText s={s} title={ref ? `${STATUS[s].label}: ${fmt(m, m.value)} contra ${fmt(m, ref.value)}` : undefined} /></td>
           <td className="px-2.5 py-2">
             <div className="flex items-center justify-end gap-2">
@@ -355,12 +364,12 @@ export function PillarsDetail({ r }: { r: PillarsReport }) {
       <section aria-label="Resumo por pilar">
         <ControlBar
           summary={`${REF_LABEL[mode]} · ${show === "todas" ? "todas as métricas" : show === "fora" ? "fora da meta" : "na meta"}`}
-          primary={<Segmented label="Comparar com" value={mode} onChange={setMode} options={(["meta", "estados", "historico"] as RefMode[]).map((v) => ({ v, l: REF_LABEL[v], title: v === "meta" ? "A meta usada em cada métrica (internacional, brasileira, ideal ou projeção)" : BASIS[v].desc, disabled: v !== "meta" && !avail(v) }))} />}
+          primary={<Segmented label="Comparar com" value={mode} onChange={setMode} options={(["meta", "media", "estados", "historico"] as RefMode[]).map((v) => ({ v, l: REF_LABEL[v], title: v === "meta" ? "A meta usada em cada métrica (internacional, brasileira, ideal ou projeção)" : v === "media" ? "Média dos países da OCDE (ou do mundo, quando a OCDE não tem o dado) e, na falta dela, a meta internacional oficial (ODS, OMS, OIT)" : BASIS[v].desc, disabled: v !== "meta" && !avail(v) }))} />}
         >
           <Segmented label="Mostrar" value={show} onChange={setShow} options={[{ v: "todas", l: "Todas" }, { v: "fora", l: "Fora da meta" }, { v: "ok", l: "Na meta" }]} />
         </ControlBar>
         <p className="mb-3 text-xs text-muted">
-          Comparando com <b className="text-ink">{mode === "meta" ? "a meta de cada métrica" : REF_LABEL[mode].toLowerCase()}</b>: <span className="text-ok">✓ {c.ok} na meta</span> · <span className="text-estadual">≈ {c.perto} perto</span> · <span className="text-danger">✗ {c.longe} longe</span>{c.sem ? ` · ${c.sem} sem referência` : ""}
+          Comparando com <b className="text-ink">{mode === "meta" ? "a meta de cada métrica" : mode === "media" ? "a referência internacional (média da OCDE ou meta da ONU)" : REF_LABEL[mode].toLowerCase()}</b>: <span className="text-ok">✓ {c.ok} na meta</span> · <span className="text-estadual">≈ {c.perto} perto</span> · <span className="text-danger">✗ {c.longe} longe</span>{c.sem ? ` · ${c.sem} sem referência` : ""}
         </p>
         <SummaryTable r={r} mode={mode} />
       </section>

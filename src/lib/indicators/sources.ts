@@ -1,6 +1,6 @@
 import { siconfi, getBudgetHistory, type BudgetScope } from "@/lib/budget";
 import { db } from "@/lib/db";
-import { clip, lastClosedYear, perYear, sgs, sidra, sidraYears, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
+import { clip, getJson, lastClosedYear, perYear, sgs, sidra, sidraYears, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
 
 export type Fetcher = (geo: Geo) => Promise<YearSeries>;
 
@@ -84,6 +84,32 @@ export const sidraSum = (scope: Scope, table: number, variable: number, classes:
     const y = Number(String(r[col]).slice(0, 4));
     if (r.v !== null && Number.isFinite(y)) out[y] = Math.round(((out[y] ?? 0) + r.v) * 100) / 100;
   }
+  return toRange(out);
+};
+
+/** Razão entre duas categorias de uma classificação do SIDRA, em % (ex.: renda das mulheres ÷ renda dos homens × 100). */
+export const sidraRatio = (scope: Scope, table: number, variable: number, cls: number, num: number, den: number): Fetcher => async (geo) => {
+  const rows = await sidra(`t/${table}/${terr(scope, geo)}/v/${variable}/p/all/c${cls}/${num},${den}`);
+  const col = ["D3C", "D4C", "D5C"].find((c) => /^(19|20)\d{2}$/.test(String((rows[0] as Record<string, unknown> | undefined)?.[c] ?? ""))) ?? "D3C";
+  const catCol = ["D3C", "D4C", "D5C"].find((c) => c !== col && rows.some((r) => String(r[c]) === String(num))) ?? "D4C";
+  const by: Record<number, { n?: number; d?: number }> = {};
+  for (const r of rows) {
+    if (r.v === null) continue;
+    const y = Number(String(r[col]).slice(0, 4));
+    const o = (by[y] ??= {});
+    if (String(r[catCol]) === String(num)) o.n = r.v; else o.d = r.v;
+  }
+  const out: YearSeries = {};
+  for (const [y, o] of Object.entries(by)) if (o.n != null && o.d) out[Number(y)] = Math.round((o.n / o.d) * 1000) / 10;
+  return toRange(out);
+};
+
+/** Série anual do Brasil no Banco Mundial (indicadores que o IBGE não publica, como vacinação e poluição do ar). */
+export const worldBank = (code: string): Fetcher => async () => {
+  const j = await getJson<[unknown, { date: string; value: number | null }[] | null]>(`https://api.worldbank.org/v2/country/BRA/indicator/${code}?format=json&per_page=100`, 90000);
+  const out: YearSeries = {};
+  for (const r of j[1] ?? []) if (r.value != null) out[Number(r.date)] = Math.round(r.value * 100) / 100;
+  if (!Object.keys(out).length) throw new Error(`Banco Mundial sem dados para ${code}`);
   return toRange(out);
 };
 

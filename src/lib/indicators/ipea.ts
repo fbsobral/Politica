@@ -6,6 +6,7 @@ import { clip, lastClosedYear, YEARS_BACK, type YearSeries } from "./core";
 export const IPEA_SERIES = [
   { id: "homicidios", code: "AVIOL12_THOMIC" },
   { id: "homicidios-n", code: "AVIOL12_HOMIC" },
+  { id: "homicidios-mulheres-n", code: "AVIOL12_HOMICF" },
   { id: "pobreza", code: "PNADCA_TXPNUF" },
   { id: "pobreza-int", code: "PNADCA_TXPIUF" },
   { id: "analfabetismo", code: "PNADCA_TXA15MUF" },
