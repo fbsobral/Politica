@@ -73,6 +73,7 @@ const GROUPS: { id: string; eyebrow: string; title: string; text: string; items:
     title: "O dinheiro público, às claras",
     text: "Dados do Tesouro Nacional, do IBGE e do Banco Central, para a cidade, o estado e o país.",
     items: [
+      { icon: <IconChart />, title: "PIB por setor", text: "Agropecuária, indústria e serviços (e seus subsetores) trimestre a trimestre: quem puxou e quem segurou o crescimento." },
       { icon: <IconChart />, title: "Pilares", text: "Saúde, educação, saneamento, segurança, trabalho e outras áreas, cada uma com métricas e submétricas, o nosso resultado e a meta, dizendo se ela é internacional, brasileira ou projetada pelo melhor estado." },
       { icon: <IconTarget />, title: "Diagnóstico", text: "Onde estão as lacunas e os gargalos: dinheiro aprovado que não chega, problemas sem orçamento, peso dos juros e quem paga a conta, com o mapa do dinheiro." },
       { icon: <IconCoins />, title: "Orçamento", text: "De onde vem e para onde vai o dinheiro, por área e subárea, em 10 anos." },

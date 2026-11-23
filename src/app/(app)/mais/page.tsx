@@ -18,6 +18,7 @@ export default async function MaisPage() {
     { href: "/pilares", t: "Pilares", d: "Resultado de cada área do governo, com metas", i: <IconChart /> },
     { href: "/orcamento", t: "Orçamento", d: "Para onde vai o dinheiro público", i: <IconCoins /> },
     { href: "/expectativa-fiscal", t: "Expectativa fiscal", d: "Previsto x realizado: a LOA está sendo cumprida?", i: <IconCoins /> },
+    { href: "/pib", t: "PIB por setor", d: "Agro, indústria, serviços e seus subsetores", i: <IconChart /> },
     { href: "/inflacao", t: "Inflação e juros", d: "IPCA, Selic, juro real e expectativas do mercado", i: <IconChart /> },
     { href: "/impostos", t: "Impostos", d: "Carga tributária: Brasil × desenvolvidos × em desenvolvimento", i: <IconCoins /> },
     { href: "/salarios", t: "Salários e lucros", d: "Participação dos salários, taxa de exploração e de lucro", i: <IconChart /> },

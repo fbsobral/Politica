@@ -11,6 +11,7 @@ import { dueJobs } from "@/lib/data-schedule";
 import { getInflation } from "@/lib/inflation";
 import { getIbovespa } from "@/lib/ibovespa";
 import { getTaxes } from "@/lib/taxes";
+import { getGdp } from "@/lib/gdp";
 import { getLaborShare } from "@/lib/labor-share";
 import { billLabels } from "@/lib/bills";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes } from "@/lib/open-data";
@@ -100,8 +101,8 @@ export const JOBS = {
   },
   /** inflação, juros, Focus e Ibovespa (mudam todo dia útil) */
   async marketData() {
-    const [inflation, ibovespa] = await Promise.all([getInflation({ force: true }).then((d) => Boolean(d)).catch(() => false), getIbovespa({ force: true }).then((d) => Boolean(d)).catch(() => false)]);
-    return { inflation, ibovespa };
+    const [inflation, ibovespa, gdp] = await Promise.all([getInflation({ force: true }).then((d) => Boolean(d)).catch(() => false), getIbovespa({ force: true }).then((d) => Boolean(d)).catch(() => false), getGdp({ force: true }).then((d) => Boolean(d)).catch(() => false)]);
+    return { inflation, ibovespa, gdp };
   },
   /** estudos com fonte internacional anual: impostos (OCDE) e salários e lucros */
   async studies() {

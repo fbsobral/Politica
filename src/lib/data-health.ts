@@ -31,6 +31,7 @@ export const DATASETS: Dataset[] = [
   { id: "ipea", name: "Atlas da Violência e PNAD (via IPEA)", href: "/pilares", source: "IPEA (Ipeadata)", cadence: "anual", maxAgeDays: 35, prefixes: ["ind:v1:"], job: "indicators" },
   { id: "orcamento", name: "Orçamento e execução (Siconfi)", href: "/orcamento", source: "Tesouro Nacional (Siconfi: DCA, RREO, RGF)", cadence: "mensal", maxAgeDays: 35, prefixes: ["budget:"], job: "budget" },
   { id: "inflacao", name: "Inflação, juros e Focus", href: "/inflacao", source: "IBGE (IPCA) e Banco Central (Focus, Selic)", cadence: "mensal", maxAgeDays: 35, prefixes: ["inflation:"], job: "marketData" },
+  { id: "pib", name: "PIB por setor (Contas Trimestrais)", href: "/pib", source: "IBGE (Contas Nacionais Trimestrais)", cadence: "trimestral", maxAgeDays: 35, prefixes: ["gdp:"], job: "marketData" },
   { id: "ibovespa", name: "Ibovespa", href: "/ibovespa", source: "B3 (via Yahoo Finance) e Banco Central", cadence: "diária", maxAgeDays: 35, prefixes: ["ibovespa:"], job: "marketData" },
   { id: "impostos", name: "Impostos (Brasil × OCDE)", href: "/impostos", source: "OCDE (Global Revenue Statistics) e Banco Mundial", cadence: "anual", maxAgeDays: 35, prefixes: ["taxes:"], job: "studies" },
   { id: "salarios", name: "Salários e lucros", href: "/salarios", source: "OCDE (contas nacionais) e Penn World Table", cadence: "anual", maxAgeDays: 35, prefixes: ["labor-share:"], job: "studies" },

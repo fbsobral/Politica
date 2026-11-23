@@ -19,7 +19,7 @@ export const DEFAULT_FREQ: Freq = "mensal";
 export const DATA_JOBS: { job: string; label: string; desc: string }[] = [
   { job: "indicators", label: "Indicadores e IPEA", desc: "Séries do IBGE, Banco Central, Tesouro, Banco Mundial e Atlas da Violência (Indicadores, Pilares, Score, Diagnóstico)" },
   { job: "budget", label: "Orçamento", desc: "Siconfi: balanços e relatórios do município, do estado e da União (Orçamento, Expectativa fiscal, Diagnóstico)" },
-  { job: "marketData", label: "Inflação, juros e Ibovespa", desc: "IPCA, Selic, Focus e a bolsa" },
+  { job: "marketData", label: "Inflação, juros, Ibovespa e PIB por setor", desc: "IPCA, Selic, Focus, a bolsa e as Contas Trimestrais" },
   { job: "studies", label: "Impostos e salários", desc: "OCDE e Penn World Table (Impostos, Salários e lucros)" },
   { job: "politicians", label: "Representantes", desc: "Deputados, senadores e eleitos" },
   { job: "candidates", label: "Candidatos", desc: "Candidatos do TSE" },

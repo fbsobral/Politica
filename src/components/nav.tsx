@@ -13,7 +13,7 @@ const MOBILE: Item[] = [
   { href: "/representantes", label: "Representantes", short: "Pessoas", icon: <IconPeople />, match: (p) => p.startsWith("/representantes") },
   { href: "/agenda", label: "Agenda", icon: <IconCalendar />, match: (p) => p.startsWith("/agenda") },
   { href: "/alertas", label: "Alertas", icon: <IconBell />, match: (p) => p.startsWith("/alertas") },
-  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/diagnostico", "/pilares", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/impostos", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
+  { href: "/mais", label: "Mais", icon: <IconMore />, match: (p) => ["/mais", "/partidos", "/perfil", "/eleicoes", "/diagnostico", "/pilares", "/pib", "/orcamento", "/expectativa-fiscal", "/inflacao", "/ibovespa", "/salarios", "/impostos", "/indicadores", "/score", "/roi", "/favoritos", "/configuracoes", "/checagens", "/diario-oficial", "/admin"].some((x) => p.startsWith(x)) },
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -29,6 +29,7 @@ const MENU: Entry[] = [
       { href: "/pilares", label: "Pilares", hint: "Saúde, educação, saneamento… com metas", icon: <IconChart />, match: (p) => p.startsWith("/pilares") },
       { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
       { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "A LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
+      { href: "/pib", label: "PIB por setor", hint: "Agro, indústria e serviços, trimestre a trimestre", icon: <IconChart />, match: (p) => p.startsWith("/pib") },
       { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic e expectativas", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
       { href: "/impostos", label: "Impostos", hint: "Carga tributária × outros países", icon: <IconCoins />, match: (p) => p.startsWith("/impostos") },
       { href: "/salarios", label: "Salários e lucros", hint: "Salários, exploração e lucro", icon: <IconChart />, match: (p) => p.startsWith("/salarios") },

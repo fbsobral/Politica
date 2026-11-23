@@ -439,6 +439,16 @@ export const SCREENS: Record<string, () => React.ReactNode> = {
       <div className="rounded-lg border border-line bg-surface p-1.5"><p className="text-[9.5px] font-semibold leading-tight">Juros e dívida: 2,5× o gasto com assistência social</p></div>
     </Frame>
   ),
+  gdp: () => (
+    <Frame title="PIB por setor" scope="F">
+      <Hl className="space-y-1 rounded-lg border border-line bg-surface p-1.5">
+        {[["Agropecuária", "+3,6%", "text-ok"], ["Indústria", "+1,6%", "text-ok"], ["  Transformação", "−0,9%", "text-danger"], ["Serviços", "+1,8%", "text-ok"]].map(([n, v, c]) => (
+          <div key={n} className="flex items-center justify-between text-[9px]"><span className="whitespace-pre">{n}</span><b className={c}>{v}</b></div>
+        ))}
+      </Hl>
+      <p className="text-[8.5px] text-muted">2026 até o 2º tri, contra o mesmo período de 2025</p>
+    </Frame>
+  ),
   pillars: () => (
     <Frame title="Pilares">
       <div className="grid grid-cols-2 gap-1">
