@@ -1,18 +1,21 @@
 import { siconfi, getBudgetHistory, type BudgetScope } from "@/lib/budget";
 import { db } from "@/lib/db";
-import { clip, getJson, lastClosedYear, perYear, sgs, sidra, sidraYears, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
+import { clip, getJson, lastClosedYear, perYear, perYearPartial, sgs, sidra, sidraYears, withPartial, YEARS_BACK, type Geo, type Scope, type YearSeries } from "./core";
 
 export type Fetcher = (geo: Geo) => Promise<YearSeries>;
 
-const span = () => ({ from: lastClosedYear() - YEARS_BACK + 1, to: lastClosedYear() });
+/** De 30 anos atrás até o ano corrente: o valor do ano corrente é parcial (o mais recente publicado no ano). */
+const span = () => ({ from: lastClosedYear() - YEARS_BACK + 1, to: lastClosedYear() + 1 });
 
 /* ───────── Banco Central ───────── */
 
 /** Série do Banco Central (SGS) agregada por ano. */
 export const bcb = (code: number, mode: "avg" | "last" | "sum" | "compound", scale = 1): Fetcher => async () => {
   const { from, to } = span();
-  const s = clip(perYear(await sgs(code, from, to), mode), from, to);
-  return scale === 1 ? s : Object.fromEntries(Object.entries(s).map(([y, v]) => [y, v * scale]));
+  const { series, partial } = perYearPartial(await sgs(code, from, to), mode);
+  const s = clip(series, from, to);
+  const scaled = scale === 1 ? s : Object.fromEntries(Object.entries(s).map(([y, v]) => [y, v * scale]));
+  return withPartial(scaled, partial && { ...partial, prev: partial.prev === null ? null : partial.prev * scale });
 };
 
 /* ───────── IBGE (SIDRA) ───────── */
@@ -28,7 +31,21 @@ export const sidraPib = (scope: Scope): Fetcher => async (geo) => {
     const { from, to } = span();
     const recent = perYear(await sgs(1207, from, to), "last");
     for (const [y, v] of Object.entries(recent)) if (official[Number(y)] === undefined) official[Number(y)] = v;
-    return toRange(official);
+    // ano corrente: parcial, a soma dos trimestres já divulgados nas Contas Trimestrais (IBGE, tabela 1846)
+    const cur = lastClosedYear() + 1;
+    let partial = null;
+    if (official[cur] === undefined) {
+      const q = (await sidra(`t/1846/n1/all/v/585/p/last%208/c11255/90707`).catch(() => [])).filter((r) => r.v !== null);
+      const quarters = q.filter((r) => String(r.D3C).startsWith(String(cur))).map((r) => Number(String(r.D3C).slice(4)));
+      const sumOf = (y: number) => q.filter((r) => String(r.D3C).startsWith(String(y)) && quarters.includes(Number(String(r.D3C).slice(4)))).reduce((a, r) => a + (r.v as number), 0);
+      if (quarters.length && quarters.length < 4) {
+        official[cur] = sumOf(cur) * 1e6;
+        const n = Math.max(...quarters);
+        const prev = sumOf(cur - 1);
+        partial = { year: cur, label: n === 1 ? "1º tri" : `1º–${n}º tri`, prev: prev ? prev * 1e6 : null };
+      }
+    }
+    return withPartial(toRange(official), partial);
   }
   const rows = await sidra(`t/5938/${terr(scope, geo)}/v/37/p/all`); // R$ mil
   return toRange(Object.fromEntries(Object.entries(sidraYears(rows, "D3C")).map(([y, v]) => [y, v * 1e3])));
@@ -55,7 +72,17 @@ export const unemploymentQ4 = (scope: Scope, variable = 4099): Fetcher => async 
     const code = String(r.D3C);
     if (r.v !== null && code.endsWith("04")) out[Number(code.slice(0, 4))] = r.v;
   }
-  return toRange(out);
+  // ano corrente (parcial): o trimestre mais recente já divulgado, comparado com o mesmo trimestre do ano anterior
+  const cur = lastClosedYear() + 1;
+  const latest = rows.filter((r) => r.v !== null && String(r.D3C).startsWith(String(cur))).sort((a, b) => String(b.D3C).localeCompare(String(a.D3C)))[0];
+  let partial = null;
+  if (latest && out[cur] === undefined) {
+    out[cur] = latest.v as number;
+    const q = String(latest.D3C).slice(4);
+    const prev = rows.find((r) => String(r.D3C) === `${cur - 1}${q}` && r.v !== null);
+    partial = { year: cur, label: `${Number(q)}º tri`, prev: prev ? (prev.v as number) : null };
+  }
+  return withPartial(toRange(out), partial);
 };
 
 /** Rendimento médio mensal REAL do trabalho (PNAD Contínua anual, tabela 7444): o IBGE já publica a preços do último ano, então nada é corrigido aqui. */

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { IconBell, IconChart, IconCoins, IconCompass, IconFlag, IconShield, IconStar, IconUser, IconVote } from "@/components/icons";
+import { NUMBERS_SECTIONS } from "@/lib/menu";
 import { PageHeader } from "@/components/ui";
 import { GeneralTourButton } from "@/components/onboarding/tour";
 import { requireUser } from "@/lib/user";
@@ -31,19 +32,37 @@ export default async function MaisPage() {
     { href: "/configuracoes", t: "Conta", d: "E-mails e localização", i: <IconUser /> },
     ...(user.role === "ADMIN" ? [{ href: "/admin", t: "Administração", d: "Visão geral, usuários, fontes e robô", i: <IconShield /> }] : []),
   ];
+  // mesmos grupos do menu do computador: política, números (resultados, dinheiro público, economia) e conta
+  const byHref = new Map(items.map((it) => [it.href, it]));
+  const groups = [
+    { title: "Política", hrefs: ["/conversar", "/partidos", "/perfil", "/eleicoes", "/checagens", "/diario-oficial"] },
+    ...NUMBERS_SECTIONS.map((s) => ({ title: `Números · ${s.title}`, hrefs: s.hrefs })),
+    { title: "Sua conta", hrefs: ["/favoritos", "/alertas", "/configuracoes", "/admin"] },
+  ];
   return (
     <div>
       <PageHeader eyebrow="Menu" title="Mais" />
-      <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {items.map((it) => (
-          <li key={it.href}>
-            <Link href={it.href} className="card-flat flex items-center gap-4 p-4 transition-shadow hover:shadow-card">
-              <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-soft text-brand">{it.i}</span>
-              <span><b className="block">{it.t}</b><span className="text-sm text-muted">{it.d}</span></span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="space-y-6">
+        {groups.map((g) => {
+          const list = g.hrefs.map((h) => byHref.get(h)).filter((x): x is (typeof items)[number] => !!x);
+          if (!list.length) return null;
+          return (
+            <section key={g.title}>
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-faint">{g.title}</h2>
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {list.map((it) => (
+                  <li key={it.href}>
+                    <Link href={it.href} className="card-flat flex items-center gap-3.5 p-3.5 transition-shadow hover:shadow-card">
+                      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-brand-soft text-brand">{it.i}</span>
+                      <span className="min-w-0"><b className="block">{it.t}</b><span className="block text-sm text-muted">{it.d}</span></span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
       <GeneralTourButton className="card-flat mt-2.5 flex w-full items-center gap-4 p-4 text-left transition-shadow hover:shadow-card">
         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-gold/25 text-lg font-bold text-ink" aria-hidden>?</span>
         <span><b className="block">Tour de boas-vindas</b><span className="text-sm text-muted">Reveja como o app funciona; o ? no topo explica cada tela</span></span>

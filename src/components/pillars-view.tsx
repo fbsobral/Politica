@@ -237,7 +237,8 @@ function MetricsTable({ p, scope, place, mode, show }: { p: PillarResult; scope:
               </InfoTip>
             </div>
             <div className={`mt-0.5 flex items-center gap-1.5 text-[11px] text-faint ${kids.length ? "pl-[1.1rem]" : ""}`}>
-              <span>{m.year}</span>
+              <span className={m.partial ? "font-semibold text-estadual" : ""}>{m.year}{m.partial ? ` (${m.partial.label})` : ""}</span>
+              {m.partial?.prev != null && <span title="Ano parcial comparado com o mesmo período do ano anterior">{formatChange(m.partial.prev, m.value, m.unit)} vs {m.partial.label}/{String(m.year - 1).slice(2)}</span>}
               {m.level !== scope && <span className="rounded bg-estadual-soft px-1 font-semibold text-estadual">dado do {LEVEL[m.level]}</span>}
             </div>
           </td>

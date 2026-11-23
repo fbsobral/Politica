@@ -107,6 +107,15 @@ export async function runJobNow(job: string) {
   redirect("/admin/robo?iniciado=" + encodeURIComponent(job));
 }
 
+/** Mesmo que `runJobNow`, voltando para Admin → Dados. */
+export async function runDataJob(job: string) {
+  await requireAdmin();
+  if (!(job in JOBS)) return;
+  runJobDetached(job as JobName).catch(() => undefined);
+  revalidatePath("/admin/dados");
+  redirect("/admin/dados?iniciado=" + encodeURIComponent(job));
+}
+
 // ───────── Configuração do robô ─────────
 import { saveSettings, SETTING_DEFAULTS, SETTING_GROUPS, type SettingGroup, type Settings } from "@/lib/settings";
 import { probeFeed } from "@/lib/news/ingest";

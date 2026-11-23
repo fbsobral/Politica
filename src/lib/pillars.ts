@@ -2,7 +2,7 @@ import { getBudgetHistory, UF_CODE, type BudgetHistory, type BudgetScope } from 
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
 import { getSeries, INDICATORS, type Indicator } from "@/lib/indicators/catalog";
-import type { Geo, Scope, YearSeries } from "@/lib/indicators/core";
+import { partialOf, type Geo, type PartialInfo, type Scope, type YearSeries } from "@/lib/indicators/core";
 import type { Unit } from "@/lib/indicators/format";
 import { TARGETS } from "@/lib/indicators/targets";
 import { UFS } from "@/lib/taxonomy";
@@ -242,6 +242,8 @@ export type MetricResult = {
   /** referências adicionais (melhor estado, melhor histórico) quando a meta principal é outra */
   refs: Ref[];
   status: Status;
+  /** ano corrente incompleto: período coberto e valor do mesmo período do ano anterior */
+  partial: PartialInfo | null;
   /** comparação com ~5 anos antes */
   trend: { year: number; value: number; dir: "melhor" | "pior" | "estavel" } | null;
   children: MetricResult[];
@@ -326,9 +328,11 @@ function levelFor(ind: Indicator, scope: Scope): Scope | null {
 async function stateValues(ids: string[]): Promise<Map<string, Record<string, YearSeries>>> {
   const keys: string[] = [];
   const want = ids.map((id) => byId.get(id)).filter((i): i is Indicator => !!i && !!i.fetch.ESTADUAL && projectable(i));
-  for (const ind of want) for (const uf of Object.keys(UF_CODE)) keys.push(ind.fed ? `ind:v1:${ind.id}:ESTADUAL:${uf}` : `ind:v7:${ind.id}:ESTADUAL:${uf}`);
+  for (const ind of want) for (const uf of Object.keys(UF_CODE)) keys.push(...(ind.fed ? [`ind:v1:${ind.id}:ESTADUAL:${uf}`] : [`ind:v8:${ind.id}:ESTADUAL:${uf}`, `ind:v7:${ind.id}:ESTADUAL:${uf}`]));
   const rows = keys.length ? await db.budgetCache.findMany({ where: { key: { in: keys } }, select: { key: true, data: true } }).catch(() => []) : [];
   const out = new Map<string, Record<string, YearSeries>>();
+  // a versão nova do cache (v8) vem antes da anterior
+  rows.sort((a, b) => (a.key < b.key ? -1 : 1));
   for (const r of rows) {
     const [, , id, , uf] = r.key.split(":");
     const m = out.get(id) ?? {};
@@ -384,6 +388,7 @@ function buildMetric(node: Node, scope: Scope, data: Loaded, states: Map<string,
   const last = lastOf(got.series);
   if (!last) return null;
   const level = got.level;
+  const partial = partialOf(got.series);
   const refs: Ref[] = [];
   let target: Ref | null = null;
   const t = TARGETS[node.id];
@@ -391,7 +396,13 @@ function buildMetric(node: Node, scope: Scope, data: Loaded, states: Map<string,
   if (t) {
     let value: number | null = t.byScope?.[level] ?? t.value ?? null;
     if (value == null && t.base) { const b = got.series[t.base.year]; value = b != null ? b * t.base.factor : null; }
-    if (value == null && t.ratioOf) { const other = data.get(t.ratioOf.id)?.series[last.year]; value = other != null ? other * t.ratioOf.factor : null; }
+    if (value == null && t.ratioOf) {
+      // a série de comparação (ex.: importações do ano) só vale para ano fechado: no ano corrente, usa o último fechado
+      const os = data.get(t.ratioOf.id)?.series ?? {};
+      const y = last.year === new Date().getFullYear() ? Math.max(...Object.keys(os).map(Number).filter((k) => k < last.year)) : last.year;
+      const other = os[y];
+      value = other != null ? other * t.ratioOf.factor : null;
+    }
     // limites legais por esfera não valem para a União
     if (value != null && !(t.byScope && !t.byScope[level] && t.value == null)) target = { label: BASIS[TARGET_BASIS[node.id] ?? "internacional"].label, value, basis: TARGET_BASIS[node.id] ?? "internacional", text: t.ref, url: t.url, approx: t.approx };
   } else if (extra) target = { label: BASIS[extra.basis].label, value: extra.value, basis: extra.basis, text: extra.ref, url: extra.url, approx: extra.approx };
@@ -428,7 +439,10 @@ function buildMetric(node: Node, scope: Scope, data: Loaded, states: Map<string,
   return {
     id: node.id, name: meta.name, unit: meta.unit, decimals: meta.decimals, desc: meta.desc, source: meta.source, sourceUrl: meta.sourceUrl, better: meta.better,
     level, year: last.year, value: last.value, series: Object.fromEntries(fmtYear(got.series).filter((y) => y >= last.year - 20).map((y) => [y, got.series[y]])),
-    target, refs, status, trend: trendOf(got.series, meta.better), children: children.filter((c) => c.id !== node.id),
+    target, refs, status, partial,
+    // tendência de 5 anos só com anos fechados (o parcial tem a sua comparação com o mesmo período do ano anterior)
+    trend: trendOf(partial ? Object.fromEntries(Object.entries(got.series).filter(([y]) => Number(y) !== partial.year)) : got.series, meta.better),
+    children: children.filter((c) => c.id !== node.id),
   };
 }
 

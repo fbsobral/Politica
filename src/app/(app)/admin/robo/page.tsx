@@ -33,6 +33,7 @@ const GROUPS: { title: string; hint: string; jobs: { job: string; label: string;
       { job: "politicians", label: "Atualizar representantes", desc: "Deputados, senadores e eleitos do TSE." },
       { job: "candidates", label: "Atualizar candidatos (TSE)", desc: "Presidente, governador e senado." },
       { job: "budget", label: "Atualizar orçamento", desc: "Siconfi: município, estado e União." },
+      { job: "dataMonthly", label: "Atualizar todos os dados", desc: "Indicadores, IPEA, orçamento, mercado e estudos (roda sozinho todo dia 2). Situação em Admin → Dados." },
     ],
   },
   {

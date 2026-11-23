@@ -3,6 +3,31 @@ import { db } from "@/lib/db";
 export type Scope = "FEDERAL" | "ESTADUAL" | "MUNICIPAL";
 export type YearSeries = Record<number, number>;
 
+/**
+ * Ano corrente ainda incompleto: qual período o valor cobre (ex.: "jan–out", "2º tri") e o valor do MESMO período
+ * do ano anterior, para comparar parcial com parcial (jan–out/2026 × jan–out/2025) e não com o ano fechado.
+ */
+export type PartialInfo = { year: number; label: string; prev: number | null };
+/** chave onde o buscador guarda a informação do parcial junto da série (não é um ano) */
+export const PARTIAL_KEY = "_partial";
+const partials = new WeakMap<object, PartialInfo>();
+
+/** Separa a informação do parcial da série (para que só sobrem anos) e a deixa disponível em `partialOf`. */
+export function splitPartial(data: YearSeries | null | undefined): YearSeries | null {
+  if (!data) return null;
+  const { [PARTIAL_KEY]: p, ...rest } = data as YearSeries & { [PARTIAL_KEY]?: PartialInfo };
+  const clean = rest as YearSeries;
+  if (p && clean[p.year] !== undefined) partials.set(clean, p);
+  return clean;
+}
+export const partialOf = (s: YearSeries | null | undefined): PartialInfo | null => (s ? partials.get(s) ?? null : null);
+/** Junta a informação do parcial à série que vai para o banco. */
+export const withPartial = (s: YearSeries, p: PartialInfo | null): YearSeries => (p && s[p.year] !== undefined ? ({ ...s, [PARTIAL_KEY]: p } as YearSeries) : s);
+/** Mantém a informação do parcial depois de recortar uma série. */
+export const keepPartial = (from: YearSeries, to: YearSeries): YearSeries => { const p = partialOf(from); if (p && to[p.year] !== undefined) partials.set(to, p); return to; };
+
+const MES = ["", "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
 /** Onde o usuário mora; os buscadores de cada indicador escolhem o que precisam. */
 export type Geo = { uf: string; ufCode: number; ibge: string; municipalityKey: string };
 
@@ -67,6 +92,22 @@ export async function sgs(code: number, fromYear: number, toYear: number): Promi
     }
   }
   return out;
+}
+
+/**
+ * Como `perYear`, mas também descreve o ano corrente incompleto: até que mês vai e o valor do mesmo período do ano anterior.
+ */
+export function perYearPartial(points: { year: number; month: number; value: number }[], mode: "avg" | "last" | "sum" | "compound"): { series: YearSeries; partial: PartialInfo | null } {
+  const series = perYear(points, mode);
+  const cur = lastClosedYear() + 1;
+  const now = points.filter((p) => p.year === cur);
+  if (!now.length) return { series, partial: null };
+  const upTo = Math.max(...now.map((p) => p.month));
+  if (upTo >= 12) return { series, partial: null };
+  const prevPts = points.filter((p) => p.year === cur - 1 && p.month <= upTo);
+  const prev = prevPts.length ? perYear(prevPts, mode)[cur - 1] ?? null : null;
+  const label = mode === "last" ? MES[upTo] : upTo === 1 ? "jan" : `jan–${MES[upTo]}`;
+  return { series, partial: { year: cur, label, prev } };
 }
 
 /** Agrega pontos mensais/diários em um valor por ano. */

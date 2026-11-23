@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AskButton, type AskFocus } from "@/components/agent/ask-button";
-import { delta, IndicatorChart, type ChartSeries } from "@/components/indicator-chart";
+import { delta, IndicatorChart, partialChange, type ChartSeries } from "@/components/indicator-chart";
 import { formatValue, type Unit } from "@/lib/indicators/format";
 
 export type CardData = {
@@ -38,15 +38,16 @@ function tone(better: "up" | "down" | undefined, first: number | undefined, last
 function Row({ title, unit, decimals, series, better, onOpen, open }: { title: string; unit: Unit; decimals?: number; series: ChartSeries[]; better?: "up" | "down"; onOpen?: () => void; open?: boolean }) {
   const main = series[0];
   const l = main ? latest(main.values) : null;
-  const d = main ? delta(main.values, unit) : null;
+  const d = main ? delta(main.values, unit, main.partial) : null;
+  const pc = main ? partialChange(main.values, unit, main.partial) : null;
   const first = main ? main.values[Number(Object.keys(main.values).sort()[0])] : undefined;
   return (
     <button type="button" onClick={onOpen} aria-expanded={open} className="flex w-full items-baseline justify-between gap-3 text-left">
       <span className="min-w-0 truncate font-medium">{title}</span>
       <span className="flex flex-none items-baseline gap-2">
-        {d && <span className={`text-xs ${tone(better, first, l?.value)}`} title={`${d.from} a ${d.to}`}>{d.text}</span>}
+        {pc ? <span className={`text-xs ${tone(better, main?.partial?.prev ?? undefined, l?.value)}`} title="Ano parcial comparado com o mesmo período do ano anterior">{pc}</span> : d && <span className={`text-xs ${tone(better, first, l?.value)}`} title={`${d.from} a ${d.to}`}>{d.text}</span>}
         <b className="tabular-nums">{l ? formatValue(l.value, unit, decimals) : "—"}</b>
-        {l && <span className="text-[11px] text-faint">{l.year}</span>}
+        {l && <span className={`text-[11px] ${l.year === main?.partial?.year ? "font-semibold text-estadual" : "text-faint"}`} title={pc ?? undefined}>{l.year}{l.year === main?.partial?.year ? ` (${main.partial.label})` : ""}</span>}
       </span>
     </button>
   );
@@ -70,7 +71,12 @@ function focusOf(d: CardData): AskFocus {
 }
 
 function deflate(series: ChartSeries[], f: Record<number, number>): ChartSeries[] {
-  return series.map((s) => ({ ...s, values: Object.fromEntries(Object.entries(s.values).filter(([y]) => f[Number(y)]).map(([y, v]) => [Number(y), v * f[Number(y)]])) }));
+  return series.map((s) => {
+    const p = s.partial;
+    // o mesmo período do ano anterior é corrigido com o fator daquele ano
+    const partial = p && f[p.year] && f[p.year - 1] ? { ...p, prev: p.prev == null ? null : p.prev * f[p.year - 1] } : null;
+    return { ...s, partial, values: Object.fromEntries(Object.entries(s.values).filter(([y]) => f[Number(y)]).map(([y, v]) => [Number(y), v * f[Number(y)]])) };
+  });
 }
 
 export function IndicatorCard({ d: base }: { d: CardData }) {

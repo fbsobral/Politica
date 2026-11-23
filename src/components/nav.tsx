@@ -3,6 +3,7 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { NUMBERS_SECTIONS } from "@/lib/menu";
 import { IconBell, IconFeed, IconMore, IconPeople, IconShield, IconCalendar, IconVote, IconCoins, IconCompass, IconFlag, IconChart } from "./icons";
 
 type Item = { href: string; label: string; short?: string; icon: React.ReactNode; match: (p: string) => boolean };
@@ -16,24 +17,25 @@ const MOBILE: Item[] = [
 ];
 
 type Leaf = { href: string; label: string; hint: string; icon: React.ReactNode; match: (p: string) => boolean };
-type Entry = { label: string; href?: string; match?: (p: string) => boolean; children?: Leaf[] };
+type Entry = { label: string; href?: string; match?: (p: string) => boolean; children?: Leaf[]; /** menu largo em colunas (os itens de `children` agrupados) */ sections?: { title: string; hrefs: string[] }[] };
 
 const MENU: Entry[] = [
   { label: "Feed", href: "/", match: (p) => p === "/" },
   {
     label: "Números",
+    sections: NUMBERS_SECTIONS,
     children: [
-      { href: "/diagnostico", label: "Diagnóstico", hint: "Onde estão as lacunas e os gargalos do gasto público", icon: <IconShield />, match: (p) => p.startsWith("/diagnostico") },
-      { href: "/pilares", label: "Pilares", hint: "Resultado de cada área do governo: saúde, educação, saneamento… com metas e de onde elas vêm", icon: <IconChart />, match: (p) => p.startsWith("/pilares") },
-      { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro público", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
-      { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "Previsto x realizado: a LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
-      { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic, juro real e expectativas do mercado", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
-      { href: "/impostos", label: "Impostos", hint: "Carga tributária por tipo de imposto, Brasil × países desenvolvidos e em desenvolvimento", icon: <IconCoins />, match: (p) => p.startsWith("/impostos") },
-      { href: "/salarios", label: "Salários e lucros", hint: "Participação dos salários, exploração e lucro, em até 50 anos", icon: <IconChart />, match: (p) => p.startsWith("/salarios") },
-      { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa em 5 anos e o motivo das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
-      { href: "/indicadores", label: "Indicadores", hint: "Economia, dívida, segurança, pobreza e mais, de 5 a 30 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
-      { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano, 50% economia e 50% social", icon: <IconChart />, match: (p) => p.startsWith("/score") },
-      { href: "/roi", label: "ROI do orçamento", hint: "Quanto o gasto público mudou os indicadores", icon: <IconCoins />, match: (p) => p.startsWith("/roi") },
+      { href: "/diagnostico", label: "Diagnóstico", hint: "Lacunas e gargalos do gasto", icon: <IconShield />, match: (p) => p.startsWith("/diagnostico") },
+      { href: "/pilares", label: "Pilares", hint: "Saúde, educação, saneamento… com metas", icon: <IconChart />, match: (p) => p.startsWith("/pilares") },
+      { href: "/orcamento", label: "Orçamento", hint: "Para onde vai o dinheiro", icon: <IconCoins />, match: (p) => p.startsWith("/orcamento") },
+      { href: "/expectativa-fiscal", label: "Expectativa fiscal", hint: "A LOA está sendo cumprida?", icon: <IconCoins />, match: (p) => p.startsWith("/expectativa-fiscal") },
+      { href: "/inflacao", label: "Inflação e juros", hint: "IPCA, Selic e expectativas", icon: <IconChart />, match: (p) => p.startsWith("/inflacao") },
+      { href: "/impostos", label: "Impostos", hint: "Carga tributária × outros países", icon: <IconCoins />, match: (p) => p.startsWith("/impostos") },
+      { href: "/salarios", label: "Salários e lucros", hint: "Salários, exploração e lucro", icon: <IconChart />, match: (p) => p.startsWith("/salarios") },
+      { href: "/ibovespa", label: "Ibovespa", hint: "A bolsa e o porquê das altas e quedas", icon: <IconChart />, match: (p) => p.startsWith("/ibovespa") },
+      { href: "/indicadores", label: "Indicadores", hint: "Séries de 5 a 30 anos", icon: <IconChart />, match: (p) => p.startsWith("/indicadores") },
+      { href: "/score", label: "Score dos governos", hint: "Nota de 0 a 100 por ano", icon: <IconChart />, match: (p) => p.startsWith("/score") },
+      { href: "/roi", label: "ROI do orçamento", hint: "O gasto mudou os indicadores?", icon: <IconCoins />, match: (p) => p.startsWith("/roi") },
     ],
   },
   {
@@ -90,7 +92,27 @@ function Dropdown({ entry, path, onGo }: { entry: Entry; path: string; onGo: (hr
         {entry.label}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6" /></svg>
       </button>
-      {open && (
+      {open && entry.sections && (
+        <div role="menu" className="absolute left-0 top-full z-40 w-[46rem] max-w-[calc(100vw-2rem)] pt-2">
+          <div className="grid grid-cols-3 gap-1 rounded-2xl border border-line bg-surface p-2 shadow-pop">
+            {entry.sections.map((sec) => (
+              <div key={sec.title} className="min-w-0">
+                <p className="px-3 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wide text-faint">{sec.title}</p>
+                {sec.hrefs.map((h) => entry.children!.find((c) => c.href === h)).filter((c): c is Leaf => !!c).map((c) => {
+                  const on = c.match(path);
+                  return (
+                    <Link key={c.href} href={c.href} role="menuitem" aria-current={on ? "page" : undefined} onClick={() => onGo(c.href)} className={`flex items-start gap-2.5 rounded-xl px-3 py-2 transition-colors ${on ? "bg-brand-soft" : "hover:bg-ink/5"}`}>
+                      <span className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-brand-soft text-brand [&>svg]:h-4 [&>svg]:w-4">{c.icon}</span>
+                      <span className="min-w-0 flex-1"><b className="block text-sm leading-tight">{c.label}<Pending /></b><span className="block text-xs leading-snug text-muted">{c.hint}</span></span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {open && !entry.sections && (
         <div role="menu" className="absolute left-0 top-full z-40 w-72 pt-2">
           <div className="rounded-2xl border border-line bg-surface p-1.5 shadow-pop">
             {entry.children!.map((c) => {

@@ -6,7 +6,7 @@ import { EmptyState, PageHeader, RangeTabs, ScopeTabs, rangeOf } from "@/compone
 import { ipcaByYear, UF_CODE } from "@/lib/budget";
 import { ibgeIdFor } from "@/lib/ibge";
 import { BUNDLES, GROUPS, INDICATORS, SIDES, SECTOR_INDICATORS, getSeries, type Indicator } from "@/lib/indicators/catalog";
-import { clip, lastClosedYear, type Geo, type Scope, type YearSeries } from "@/lib/indicators/core";
+import { clip, keepPartial, lastClosedYear, partialOf, type Geo, type Scope, type YearSeries } from "@/lib/indicators/core";
 import { SCOPE_LABEL, SCOPE_SLUG, UFS } from "@/lib/taxonomy";
 import { requireUser } from "@/lib/user";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 async function getWin(from: number, ind: Indicator, scope: Scope, geo: Geo): Promise<YearSeries | null> {
   const v = await getSeries(ind, scope, geo);
   if (!v) return null;
-  const c = clip(v, from, lastClosedYear() + 1);
+  const c = keepPartial(v, clip(v, from, lastClosedYear() + 1));
   return Object.keys(c).length ? c : null;
 }
 
@@ -46,14 +46,14 @@ async function cardFor(from: number, ind: Indicator, scopes: Scope[], geo: Geo, 
   const subSeries: CardData["subs"] = [];
   for (const s of scopes) {
     const v = await getWin(from, ind, s, geo);
-    if (v) series.push({ name: placeName(s, user), color: scopes.length > 1 ? SCOPE_COLOR[s] : "#17407f", values: v });
+    if (v) series.push({ name: placeName(s, user), color: scopes.length > 1 ? SCOPE_COLOR[s] : "#17407f", values: v, partial: partialOf(v) });
   }
   if (!series.length) return null;
   for (const sub of INDICATORS.filter((i) => i.parent === ind.id)) {
     const ss: ChartSeries[] = [];
     for (const s of scopes) {
       const v = await getWin(from, sub, s, geo);
-      if (v) ss.push({ name: placeName(s, user), color: scopes.length > 1 ? SCOPE_COLOR[s] : "#17407f", values: v });
+      if (v) ss.push({ name: placeName(s, user), color: scopes.length > 1 ? SCOPE_COLOR[s] : "#17407f", values: v, partial: partialOf(v) });
     }
     if (ss.length) subSeries.push({ inflation: Boolean(sub.inflation), id: sub.id, title: sub.name, unit: sub.unit, decimals: sub.decimals, desc: sub.desc, source: sub.source, better: sub.better, series: ss });
   }
@@ -70,7 +70,7 @@ async function bundleCard(from: number, b: (typeof BUNDLES)[number], scope: Scop
   const series: ChartSeries[] = [];
   for (const m of members) {
     const v = await getWin(from, m, scope, geo);
-    if (v) series.push({ name: m.name, color: BUNDLE_COLORS[series.length % BUNDLE_COLORS.length], values: v });
+    if (v) series.push({ name: m.name, color: BUNDLE_COLORS[series.length % BUNDLE_COLORS.length], values: v, partial: partialOf(v) });
   }
   if (!series.length) return null;
   return { id: b.id, title: b.title, unit: b.unit, decimals: b.decimals, desc: b.desc, source: b.source, sourceUrl: b.sourceUrl, series, subs: [], deflator: b.inflation && deflator ? deflator : undefined, deflatorYear: new Date().getFullYear() - 1 };

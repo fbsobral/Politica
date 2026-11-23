@@ -7,6 +7,10 @@ import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
 import { getBudget, getBudgetHistory } from "@/lib/budget";
 import { refreshIndicators } from "@/lib/indicators/job";
+import { getInflation } from "@/lib/inflation";
+import { getIbovespa } from "@/lib/ibovespa";
+import { getTaxes } from "@/lib/taxes";
+import { getLaborShare } from "@/lib/labor-share";
 import { billLabels } from "@/lib/bills";
 import { camaraAgenda, camaraVotes, senadoAgenda, senadoVotes } from "@/lib/open-data";
 
@@ -92,6 +96,30 @@ export const JOBS = {
   /** indicadores (Banco Central, IBGE, IPEA, Tesouro): baixa e guarda as séries de 10 anos de cada local */
   async indicators() {
     return refreshIndicators();
+  },
+  /** inflação, juros, Focus e Ibovespa (mudam todo dia útil) */
+  async marketData() {
+    const [inflation, ibovespa] = await Promise.all([getInflation({ force: true }).then((d) => Boolean(d)).catch(() => false), getIbovespa({ force: true }).then((d) => Boolean(d)).catch(() => false)]);
+    return { inflation, ibovespa };
+  },
+  /** estudos com fonte internacional anual: impostos (OCDE) e salários e lucros */
+  async studies() {
+    const [taxes, laborShare] = await Promise.all([getTaxes({ force: true }).then((d) => Boolean(d)).catch(() => false), getLaborShare({ force: true }).then((d) => Boolean(d)).catch(() => false)]);
+    return { taxes, laborShare };
+  },
+  /** atualização mensal de TODAS as bases (dia 2): indicadores, IPEA, orçamento, mercado e estudos; resultado em Admin → Dados */
+  async dataMonthly() {
+    const out: Record<string, unknown> = {};
+    for (const [name, fn] of [["indicators", () => refreshIndicators()], ["budget", () => JOBS.budget()], ["marketData", () => JOBS.marketData()], ["studies", () => JOBS.studies()]] as const) {
+      const t0 = Date.now();
+      try {
+        const result = await fn();
+        out[name] = { ok: true, seconds: Math.round((Date.now() - t0) / 1000), result };
+      } catch (err) {
+        out[name] = { ok: false, error: (err as Error).message };
+      }
+    }
+    return out;
   },
   /** candidatos das eleições 2026 (presidente, governador, senado) */
   async candidates() {

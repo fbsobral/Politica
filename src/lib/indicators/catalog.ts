@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { cached, type Geo, type Scope, type YearSeries } from "./core";
+import { cached, splitPartial, type Geo, type Scope, type YearSeries } from "./core";
 import { bcb, budgetTotal, censo2022, cempre, sidraRatio, sidraSum, worldBank, sectorFor, dclRcl, expenseValue, giniSidra, incomeReal, pessoalRcl, pibPerCapitaOficial, sidraAnnual, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
 import type { Unit } from "./format";
 
@@ -219,9 +219,10 @@ export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { 
     return Object.keys(v).length ? v : null;
   }
   const place = scope === "FEDERAL" ? "br" : scope === "ESTADUAL" ? geo.uf : geo.ibge;
-  const key = `ind:v7:${ind.id}:${scope}:${place}`;
+  const key = `ind:v8:${ind.id}:${scope}:${place}`; // v8: inclui o ano corrente (parcial)
   const ttl = ind.ttlDays ?? 7;
-  const nonEmpty = (v: YearSeries | null | undefined) => (v && Object.keys(v).length ? v : null);
+  // separa a informação do ano parcial (ver `partialOf`) e devolve só os anos
+  const nonEmpty = (v: YearSeries | null | undefined) => { const c = splitPartial(v); return c && Object.keys(c).length ? c : null; };
   if (opts.lazy && !opts.force) {
     const hit = await db.budgetCache.findUnique({ where: { key } });
     if (hit) {
@@ -229,13 +230,13 @@ export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { 
       return nonEmpty(hit.data as unknown as YearSeries);
     }
     // ainda não há a versão nova: usa a anterior enquanto a nova é preparada
-    const old = await db.budgetCache.findUnique({ where: { key: `ind:v6:${ind.id}:${scope}:${place}` } });
+    const old = await db.budgetCache.findUnique({ where: { key: `ind:v7:${ind.id}:${scope}:${place}` } });
     refreshInBackground(key, ttl, () => f(geo));
     return nonEmpty(old?.data as unknown as YearSeries | undefined);
   }
   if (!opts.force && !(await db.budgetCache.findUnique({ where: { key }, select: { key: true } }))) {
     // versão nova do cache ainda vazia: mostra a anterior na hora e prepara a nova em segundo plano
-    const old = await db.budgetCache.findUnique({ where: { key: `ind:v6:${ind.id}:${scope}:${place}` } });
+    const old = await db.budgetCache.findUnique({ where: { key: `ind:v7:${ind.id}:${scope}:${place}` } });
     if (old && nonEmpty(old.data as unknown as YearSeries)) {
       refreshInBackground(key, ttl, () => f(geo));
       return nonEmpty(old.data as unknown as YearSeries);

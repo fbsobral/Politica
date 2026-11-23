@@ -17,7 +17,7 @@ const GROUPS: { title: string; items: { href: string; label: string; hint: strin
       { href: "/admin/buscas", label: "Buscas", hint: "Google News por esfera e poder" },
     ],
   },
-  { title: "Operação", items: [{ href: "/admin/robo", label: "Robô", hint: "Parâmetros, execuções e ações" }] },
+  { title: "Operação", items: [{ href: "/admin/robo", label: "Robô", hint: "Parâmetros, execuções e ações" }, { href: "/admin/dados", label: "Dados", hint: "Atualização de cada base e indicador" }] },
 ];
 
 export function AdminNav({ badges }: { badges: AdminBadges }) {

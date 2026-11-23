@@ -62,6 +62,9 @@ export function startScheduler(opts: { bootDelayMs?: number } = {}) {
   schedule("30 3 * * *", "cleanup");
   schedule("0 5 * * 1", "budget");
   schedule("30 5 * * 1", "indicators");
+  // dados: mercado todo dia; atualização completa de todas as bases no dia 2 de cada mês (Admin → Dados)
+  schedule("10 6 * * *", "marketData");
+  schedule("0 3 2 * *", "dataMonthly");
   schedule("15 */6 * * *", "candidates");
 
   // fila de classificação: se sobrou notícia sem classificar, termina o serviço sem esperar a próxima coleta
