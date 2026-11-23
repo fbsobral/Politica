@@ -5,8 +5,8 @@ import { lastClosedYear, PARTIAL_KEY } from "@/lib/indicators/core";
 /*
  * Gestão da atualização dos dados: o inventário de todas as bases que o app guarda, com que frequência a fonte
  * publica, em quanto tempo a gente precisa atualizar, e a situação de cada uma (em dia, atrasada, sem dado).
- * O job "dataMonthly" força a atualização de tudo uma vez por mês; os jobs semanais e o cache de cada página
- * cuidam do resto. A página Admin → Dados mostra esta situação.
+ * Tudo é atualizado uma vez por mês, pelo job "dataMonthly" (dia 2); entre uma atualização e outra, as páginas
+ * usam o que está guardado (só buscam na hora o que ainda não existe). A página Admin → Dados mostra esta situação.
  */
 
 export type Cadence = "diária" | "mensal" | "trimestral" | "anual" | "decenal";
@@ -30,8 +30,8 @@ export const DATASETS: Dataset[] = [
   { id: "indicadores", name: "Indicadores (séries anuais)", href: "/indicadores", source: "IBGE, Banco Central, Tesouro, Banco Mundial", cadence: "mensal", maxAgeDays: 35, prefixes: ["ind:v8:"], job: "indicators" },
   { id: "ipea", name: "Atlas da Violência e PNAD (via IPEA)", href: "/pilares", source: "IPEA (Ipeadata)", cadence: "anual", maxAgeDays: 35, prefixes: ["ind:v1:"], job: "indicators" },
   { id: "orcamento", name: "Orçamento e execução (Siconfi)", href: "/orcamento", source: "Tesouro Nacional (Siconfi: DCA, RREO, RGF)", cadence: "mensal", maxAgeDays: 35, prefixes: ["budget:"], job: "budget" },
-  { id: "inflacao", name: "Inflação, juros e Focus", href: "/inflacao", source: "IBGE (IPCA) e Banco Central (Focus, Selic)", cadence: "mensal", maxAgeDays: 7, prefixes: ["inflation:"], job: "marketData" },
-  { id: "ibovespa", name: "Ibovespa", href: "/ibovespa", source: "B3 (via Yahoo Finance) e Banco Central", cadence: "diária", maxAgeDays: 3, prefixes: ["ibovespa:"], job: "marketData" },
+  { id: "inflacao", name: "Inflação, juros e Focus", href: "/inflacao", source: "IBGE (IPCA) e Banco Central (Focus, Selic)", cadence: "mensal", maxAgeDays: 35, prefixes: ["inflation:"], job: "marketData" },
+  { id: "ibovespa", name: "Ibovespa", href: "/ibovespa", source: "B3 (via Yahoo Finance) e Banco Central", cadence: "diária", maxAgeDays: 35, prefixes: ["ibovespa:"], job: "marketData" },
   { id: "impostos", name: "Impostos (Brasil × OCDE)", href: "/impostos", source: "OCDE (Global Revenue Statistics) e Banco Mundial", cadence: "anual", maxAgeDays: 35, prefixes: ["taxes:"], job: "studies" },
   { id: "salarios", name: "Salários e lucros", href: "/salarios", source: "OCDE (contas nacionais) e Penn World Table", cadence: "anual", maxAgeDays: 35, prefixes: ["labor-share:"], job: "studies" },
 ];

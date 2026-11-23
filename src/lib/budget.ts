@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
+import { DATA_TTL_DAYS } from "@/lib/indicators/core";
 
 const API = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt";
 const DAY = 24 * 3600 * 1000;
@@ -307,7 +308,7 @@ async function rreoCached(id: number, year: number, period: number, ttlDays: num
   const key = `budget:rreo:v1:${id}:${year}:${period}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as (Cum & { empty?: boolean }) | undefined;
-  if (hit && d && Date.now() - hit.fetchedAt.getTime() < (d.empty ? 1 : ttlDays) * DAY) return d.empty ? null : d;
+  if (hit && d && Date.now() - hit.fetchedAt.getTime() < (d.empty ? 1 : Math.max(ttlDays, DATA_TTL_DAYS)) * DAY) return d.empty ? null : d;
   try {
     const fresh = await fetchRreoCum(id, year, period);
     const data = fresh ?? { empty: true };
@@ -444,7 +445,7 @@ export async function dcaCached(id: number, year: number, ttlDays: number, force
   const key = `budget:dca:v6:${id}:${year}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as DcaYear | undefined;
-  const ttl = (d?.empty ? 7 : ttlDays) * DAY;
+  const ttl = (d?.empty ? 7 : Math.max(ttlDays, DATA_TTL_DAYS)) * DAY;
   if (hit && d && !force && Date.now() - hit.fetchedAt.getTime() < ttl) return d;
   try {
     const fresh = await fetchDca(id, year);

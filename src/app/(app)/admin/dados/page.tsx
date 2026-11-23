@@ -1,11 +1,12 @@
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
-import { runDataJob } from "@/app/admin-actions";
+import { runDataJob, saveDataFrequencies } from "@/app/admin-actions";
 import { IconRobot } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { Notice, PageHeader, StatTile } from "@/components/ui";
 import { datasetHealth, indicatorHealth, type Cadence } from "@/lib/data-health";
+import { DATA_JOBS, FREQS, getFrequencies, nextSlot } from "@/lib/data-schedule";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/user";
 
@@ -21,17 +22,11 @@ const STATUS = {
 } as const;
 const CADENCE_ORDER: Cadence[] = ["diária", "mensal", "trimestral", "anual", "decenal"];
 
-/** Próximo dia 2 às 3h (horário de Brasília), quando roda a atualização mensal completa. */
-function nextMonthly(): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + (now.getDate() >= 2 ? 1 : 0), 2);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
-}
-
-export default async function DadosPage({ searchParams }: { searchParams: Promise<{ iniciado?: string }> }) {
+export default async function DadosPage({ searchParams }: { searchParams: Promise<{ iniciado?: string; salvo?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const [sets, inds, runs] = await Promise.all([datasetHealth(), indicatorHealth(), db.jobRun.findMany({ where: { job: { in: ["dataMonthly", "indicators", "budget", "marketData", "studies"] } }, orderBy: { startedAt: "desc" }, take: 40 })]);
+  const [sets, inds, runs, freqs] = await Promise.all([datasetHealth(), indicatorHealth(), db.jobRun.findMany({ where: { job: { in: ["dataMonthly", "dataScheduled", ...DATA_JOBS.map((j) => j.job)] } }, orderBy: { startedAt: "desc" }, take: 80 }), getFrequencies()]);
+  const next = DATA_JOBS.map((j) => nextSlot(freqs[j.job])).sort((a, b) => a.getTime() - b.getTime())[0];
   const lastBy = new Map<string, (typeof runs)[number]>();
   for (const r of runs) if (!lastBy.has(r.job)) lastBy.set(r.job, r);
   const monthly = lastBy.get("dataMonthly");
@@ -41,26 +36,61 @@ export default async function DadosPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Operação" title="Dados" />
+      {sp.salvo && <Notice kind="ok">Frequências salvas. Valem a partir da próxima conferência (todo dia, às 3h).</Notice>}
       {sp.iniciado && <Notice kind="info">“{sp.iniciado}” iniciado em segundo plano. Atualize a página em alguns minutos para ver o resultado.</Notice>}
 
       <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile label="Bases em dia" value={`${sets.filter((s) => s.status === "ok").length} de ${sets.length}`} tone={sets.every((s) => s.status === "ok") ? "up" : "down"} />
         <StatTile label="Indicadores em dia" value={`${inds.length - late.length} de ${inds.length}`} tone={late.length ? "down" : "up"} hint={late.length ? `${late.length} atrasados ou sem dado` : undefined} />
         <StatTile label="Atualização completa" value={monthly ? rel(monthly.startedAt) : "nunca"} hint={monthly ? (monthly.finishedAt ? (monthly.ok ? "terminou bem" : "terminou com erro") : "rodando agora") : undefined} />
-        <StatTile label="Próxima completa" value={nextMonthly()} hint="todo dia 2, às 3h" />
+        <StatTile label="Próxima atualização" value={next ? next.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" }) : "—"} hint="às 3h, pela frequência de cada grupo" />
       </section>
 
       <section className="card-flat space-y-2 p-4 text-sm leading-relaxed text-muted sm:p-5">
         <p className="font-semibold text-ink">Como os dados se atualizam</p>
         <ul className="space-y-1">
-          <li>• <b className="text-ink">Todo dia, 6h10:</b> inflação, juros, expectativas do Focus e Ibovespa.</li>
-          <li>• <b className="text-ink">Toda segunda:</b> orçamento (5h) e indicadores dos locais dos usuários (5h30), incluindo o IPEA.</li>
-          <li>• <b className="text-ink">Todo dia 2, às 3h:</b> atualização completa de todas as bases (indicadores, IPEA, orçamento, mercado, impostos e salários), mesmo as que ainda não venceram.</li>
-          <li>• <b className="text-ink">Ao abrir uma página:</b> a série vencida é atualizada em segundo plano; a que falta é buscada na hora.</li>
-          <li>• <b className="text-ink">Ano corrente:</b> entra como parcial (até o último mês ou trimestre publicado) e é comparado com o mesmo período do ano anterior.</li>
+          <li>• <b className="text-ink">Padrão: uma vez por mês, todo dia 2, às 3h:</b> atualização de todas as bases (indicadores, IPEA, orçamento, inflação e juros, Ibovespa, impostos, salários e lucros, representantes e candidatos). A frequência de cada grupo pode ser mudada abaixo.</li>
+          <li>• <b className="text-ink">Entre uma atualização e outra:</b> as páginas usam o que está guardado. Só o que ainda não existe é buscado na hora, na primeira visita.</li>
+          <li>• <b className="text-ink">Ano corrente:</b> entra como parcial (até o último mês ou trimestre publicado na data da atualização) e é comparado com o mesmo período do ano anterior.</li>
+          <li>• <b className="text-ink">Fora do mensal:</b> só a coleta de notícias, os resumos por e-mail e a limpeza, que não são dados estatísticos.</li>
         </ul>
         <form action={runDataJob.bind(null, "dataMonthly")} className="pt-2">
           <SubmitButton className="btn btn-primary btn-sm" pendingText="Iniciando…"><IconRobot width={16} height={16} /> Atualizar tudo agora</SubmitButton>
+        </form>
+      </section>
+
+      <section aria-label="Frequência">
+        <h2 className="display text-xl font-semibold">Frequência de atualização</h2>
+        <p className="mb-3 mt-1 text-sm text-muted">Padrão: tudo mensal, no dia 2. O robô confere todo dia às 3h e só busca os grupos cujo prazo venceu; com tudo no mensal, nos outros dias ele não busca nada.</p>
+        <form action={saveDataFrequencies} className="overflow-x-auto rounded-2xl border border-line bg-surface">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th className="px-2.5 py-2 text-left font-medium">Grupo de dados</th>
+                <th className="px-2.5 py-2 text-left font-medium">Frequência</th>
+                <th className="px-2.5 py-2 text-right font-medium">Próxima</th>
+                <th className="px-2.5 py-2 text-right font-medium">Última</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DATA_JOBS.map((j) => {
+                const run = lastBy.get(j.job);
+                return (
+                  <tr key={j.job} className="border-t border-line">
+                    <td className="px-2.5 py-2"><b className="font-medium">{j.label}</b><span className="block text-[11px] text-faint">{j.desc}</span></td>
+                    <td className="px-2.5 py-2">
+                      <select name={`freq_${j.job}`} defaultValue={freqs[j.job]} className="input py-1.5 text-sm" aria-label={`Frequência: ${j.label}`}>
+                        {FREQS.map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2.5 py-2 text-right tabular-nums">{nextSlot(freqs[j.job]).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</td>
+                    <td className="px-2.5 py-2 text-right text-muted">{run ? `${!run.finishedAt ? "⏳" : run.ok ? "✅" : "❌"} ${rel(run.startedAt)}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="border-t border-line p-2.5"><SubmitButton className="btn btn-primary btn-sm" pendingText="Salvando…">Salvar frequências</SubmitButton></div>
         </form>
       </section>
 

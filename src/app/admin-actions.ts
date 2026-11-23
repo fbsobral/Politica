@@ -107,6 +107,18 @@ export async function runJobNow(job: string) {
   redirect("/admin/robo?iniciado=" + encodeURIComponent(job));
 }
 
+/** Frequência de atualização de cada grupo de dados (Admin → Dados). */
+export async function saveDataFrequencies(formData: FormData) {
+  await requireAdmin();
+  const { DATA_JOBS, setFrequency } = await import("@/lib/data-schedule");
+  for (const j of DATA_JOBS) {
+    const v = formData.get(`freq_${j.job}`);
+    if (typeof v === "string") await setFrequency(j.job, v);
+  }
+  revalidatePath("/admin/dados");
+  redirect("/admin/dados?salvo=1");
+}
+
 /** Mesmo que `runJobNow`, voltando para Admin → Dados. */
 export async function runDataJob(job: string) {
   await requireAdmin();

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
-import { sgs } from "@/lib/indicators/core";
+import { DATA_TTL_DAYS, sgs } from "@/lib/indicators/core";
 import { siconfi, UF_CODE, type BudgetScope, type Item } from "@/lib/budget";
 
 const DAY = 24 * 3600 * 1000;
@@ -172,7 +172,7 @@ async function snapshot(id: number, year: number, period: number, opts: { primar
   const key = `fiscal:rreo:v1:${id}:${year}:${period}${opts.primary ? ":p" : ""}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
   const d = hit?.data as unknown as (Snapshot & { empty?: boolean }) | undefined;
-  const ttl = year >= new Date().getFullYear() ? 1 : 90;
+  const ttl = year >= new Date().getFullYear() ? DATA_TTL_DAYS : 90; // atualização mensal
   if (!opts.force && hit && d && Date.now() - hit.fetchedAt.getTime() < (d.empty ? 1 : ttl) * DAY) return d.empty ? null : d;
   try {
     const fresh = await fetchSnapshot(id, year, period, !!opts.primary);

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { ibgeIdFor } from "@/lib/ibge";
 import { dcaCached, ipcaByYear, UF_CODE, type BudgetScope, type DcaYear } from "@/lib/budget";
-import { perYear, sgs } from "@/lib/indicators/core";
+import { DATA_TTL_DAYS, perYear, sgs } from "@/lib/indicators/core";
 
 /*
  * Resultado primário por ano, calculado com os balanços anuais (DCA/Siconfi), pela regra "acima da linha":
@@ -157,7 +157,7 @@ export async function getPrimaryHistory(scope: BudgetScope, user: { uf: string; 
   if (!id) return null;
   const key = `primary:v1:${id}`;
   const hit = await db.budgetCache.findUnique({ where: { key } });
-  if (hit && Date.now() - hit.fetchedAt.getTime() < DAY) return hit.data as unknown as PrimaryHistory;
+  if (hit && Date.now() - hit.fetchedAt.getTime() < DATA_TTL_DAYS * DAY) return hit.data as unknown as PrimaryHistory;
   try {
     const fresh = await build(scope, id);
     if (fresh) await db.budgetCache.upsert({ where: { key }, create: { key, data: fresh as never }, update: { data: fresh as never, fetchedAt: new Date() } });

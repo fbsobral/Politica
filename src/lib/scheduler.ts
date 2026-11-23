@@ -58,14 +58,10 @@ export function startScheduler(opts: { bootDelayMs?: number } = {}) {
   schedule(process.env.DIGEST_CRON || "0 7 * * *", "digest");
   schedule(process.env.WEEKLY_DIGEST_CRON || "0 7 * * 1", "digestWeekly");
   schedule(process.env.MONTHLY_DIGEST_CRON || "0 7 1 * *", "digestMonthly");
-  schedule("0 4 * * 0", "politicians");
   schedule("30 3 * * *", "cleanup");
-  schedule("0 5 * * 1", "budget");
-  schedule("30 5 * * 1", "indicators");
-  // dados: mercado todo dia; atualização completa de todas as bases no dia 2 de cada mês (Admin → Dados)
-  schedule("10 6 * * *", "marketData");
-  schedule("0 3 2 * *", "dataMonthly");
-  schedule("15 */6 * * *", "candidates");
+  // dados: confere às 3h e atualiza só os grupos vencidos, pela frequência escolhida em Admin → Dados
+  // (padrão: mensal, no dia 2 — nos outros dias a conferência não busca nada)
+  schedule("0 3 * * *", "dataScheduled");
 
   // fila de classificação: se sobrou notícia sem classificar, termina o serviço sem esperar a próxima coleta
   cron.schedule(

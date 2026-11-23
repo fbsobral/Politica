@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { cached, splitPartial, type Geo, type Scope, type YearSeries } from "./core";
+import { cached, DATA_TTL_DAYS, splitPartial, type Geo, type Scope, type YearSeries } from "./core";
 import { bcb, budgetTotal, censo2022, cempre, sidraRatio, sidraSum, worldBank, sectorFor, dclRcl, expenseValue, giniSidra, incomeReal, pessoalRcl, pibPerCapitaOficial, sidraAnnual, revenueValue, sidraPib, sidraPop, stored, unemploymentQ4, type Fetcher } from "./sources";
 import type { Unit } from "./format";
 
@@ -220,7 +220,7 @@ export async function getSeries(ind: Indicator, scope: Scope, geo: Geo, opts: { 
   }
   const place = scope === "FEDERAL" ? "br" : scope === "ESTADUAL" ? geo.uf : geo.ibge;
   const key = `ind:v8:${ind.id}:${scope}:${place}`; // v8: inclui o ano corrente (parcial)
-  const ttl = ind.ttlDays ?? 7;
+  const ttl = Math.max(ind.ttlDays ?? DATA_TTL_DAYS, DATA_TTL_DAYS);
   // separa a informação do ano parcial (ver `partialOf`) e devolve só os anos
   const nonEmpty = (v: YearSeries | null | undefined) => { const c = splitPartial(v); return c && Object.keys(c).length ? c : null; };
   if (opts.lazy && !opts.force) {

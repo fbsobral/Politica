@@ -7,6 +7,7 @@ import { syncAll, syncMissing } from "@/lib/politicians/sync";
 import { syncCandidates } from "@/lib/politicians/tse";
 import { getBudget, getBudgetHistory } from "@/lib/budget";
 import { refreshIndicators } from "@/lib/indicators/job";
+import { dueJobs } from "@/lib/data-schedule";
 import { getInflation } from "@/lib/inflation";
 import { getIbovespa } from "@/lib/ibovespa";
 import { getTaxes } from "@/lib/taxes";
@@ -107,10 +108,10 @@ export const JOBS = {
     const [taxes, laborShare] = await Promise.all([getTaxes({ force: true }).then((d) => Boolean(d)).catch(() => false), getLaborShare({ force: true }).then((d) => Boolean(d)).catch(() => false)]);
     return { taxes, laborShare };
   },
-  /** atualização mensal de TODAS as bases (dia 2): indicadores, IPEA, orçamento, mercado e estudos; resultado em Admin → Dados */
+  /** atualização mensal de TODAS as bases (dia 2): indicadores, IPEA, orçamento, mercado, estudos, representantes e candidatos; resultado em Admin → Dados */
   async dataMonthly() {
     const out: Record<string, unknown> = {};
-    for (const [name, fn] of [["indicators", () => refreshIndicators()], ["budget", () => JOBS.budget()], ["marketData", () => JOBS.marketData()], ["studies", () => JOBS.studies()]] as const) {
+    for (const [name, fn] of [["indicators", () => refreshIndicators()], ["budget", () => JOBS.budget()], ["marketData", () => JOBS.marketData()], ["studies", () => JOBS.studies()], ["politicians", () => JOBS.politicians()], ["candidates", () => JOBS.candidates()]] as const) {
       const t0 = Date.now();
       try {
         const result = await fn();
@@ -120,6 +121,20 @@ export const JOBS = {
       }
     }
     return out;
+  },
+  /** conferência diária (3h): roda só os grupos de dados cuja frequência (Admin → Dados, padrão mensal) já venceu */
+  async dataScheduled() {
+    const due = await dueJobs();
+    const out: Record<string, unknown> = {};
+    for (const job of due) {
+      try {
+        await runJob(job as JobName);
+        out[job] = "ok";
+      } catch (err) {
+        out[job] = (err as Error).message;
+      }
+    }
+    return due.length ? out : { nada: "nenhum grupo vencido" };
   },
   /** candidatos das eleições 2026 (presidente, governador, senado) */
   async candidates() {

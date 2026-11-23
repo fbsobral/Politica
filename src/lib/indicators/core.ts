@@ -33,6 +33,12 @@ export type Geo = { uf: string; ufCode: number; ibge: string; municipalityKey: s
 
 const DAY = 24 * 3600 * 1000;
 
+/**
+ * Validade mínima de qualquer dado guardado: um mês. Os dados só são atualizados pela atualização mensal
+ * (dia 2, job "dataMonthly") ou quando ainda não existem; nada é renovado todo dia.
+ */
+export const DATA_TTL_DAYS = 32;
+
 /** quantos anos a gente guarda; a tela mostra 5, 10, 20 ou 30 */
 export const YEARS_BACK = 30;
 export const lastClosedYear = () => new Date().getFullYear() - 1;
@@ -44,7 +50,7 @@ export const yearRange = () => {
 /** Cache no banco (tabela BudgetCache, usada também pelo orçamento). Em falha da fonte, devolve o último valor guardado. */
 export async function cached<T>(key: string, ttlDays: number, fn: () => Promise<T>, force = false): Promise<T | null> {
   const hit = await db.budgetCache.findUnique({ where: { key } });
-  if (!force && hit && Date.now() - hit.fetchedAt.getTime() < ttlDays * DAY) return hit.data as unknown as T;
+  if (!force && hit && Date.now() - hit.fetchedAt.getTime() < Math.max(ttlDays, DATA_TTL_DAYS) * DAY) return hit.data as unknown as T;
   try {
     const fresh = await fn();
     await db.budgetCache.upsert({ where: { key }, create: { key, data: fresh as never }, update: { data: fresh as never, fetchedAt: new Date() } });
