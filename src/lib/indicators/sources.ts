@@ -157,6 +157,21 @@ export const pibGrowth: Fetcher = async (geo) => {
   return withPartial({ ...base, [cur]: last.v as number }, { year: cur, label: q === 1 ? "1º tri" : `1º–${q}º tri`, prev: null });
 };
 
+/** Proporção dos nascidos vivos de mães com menos de 20 anos (Registro Civil, IBGE tabela 2609): vai até cidade. */
+export const teenBirths = (scope: Scope): Fetcher => async (geo) => {
+  const rows = await sidra(`t/2609/${terr(scope, geo)}/v/217/p/all/c232/0/c240/0,5370,5414/c2/0`);
+  const by: Record<number, { total?: number; teen: number }> = {};
+  for (const r of rows) {
+    if (r.v === null) continue;
+    const y = Number(r.D3C);
+    const o = (by[y] ??= { teen: 0 });
+    if (String(r.D5C) === "0") o.total = r.v; else o.teen += r.v;
+  }
+  const out: YearSeries = {};
+  for (const [y, o] of Object.entries(by)) if (o.total) out[Number(y)] = Math.round((o.teen / o.total) * 1000) / 10;
+  return toRange(out);
+};
+
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
 /**

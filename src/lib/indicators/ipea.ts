@@ -10,7 +10,6 @@ export const IPEA_SERIES = [
   { id: "pobreza", code: "PNADCA_TXPNUF" },
   { id: "pobreza-int", code: "PNADCA_TXPIUF" },
   { id: "analfabetismo", code: "PNADCA_TXA15MUF" },
-  { id: "mortalidade-infantil", code: "DEPIS_TMI" },
 ] as const;
 
 type Row = { VALDATA: string; VALVALOR: number | null; NIVNOME: string; TERCODIGO: string };

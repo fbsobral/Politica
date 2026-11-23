@@ -62,7 +62,7 @@ export async function datasetHealth(): Promise<DatasetHealth[]> {
 /** Frequência com que a fonte publica cada indicador, pela origem do dado. */
 export function cadenceOf(ind: Indicator): Cadence {
   const s = `${ind.source} ${ind.desc}`;
-  if (/Censo 2022/.test(s) && !/PNAD/.test(s)) return "decenal";
+  if (/Censo 2022/.test(ind.source) && !/PNAD/.test(ind.source)) return "decenal";
   if (/Banco Central|SGS|BCB/.test(s)) return "mensal";
   if (/trimestre|4099/.test(`${ind.name} ${s}`)) return "trimestral";
   return "anual";

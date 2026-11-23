@@ -115,7 +115,7 @@ export const PILLARS: PillarDef[] = [
     id: "saude", name: "Saúde", icon: "🩺", areas: ["saude"],
     question: "As pessoas estão vivendo mais e morrendo menos de causas evitáveis?",
     lens: "Cerca de 7 em cada 10 brasileiros dependem só do SUS; mortes de bebês e de mães se concentram nas famílias pobres.",
-    tree: [n("mortalidade-5", "mortalidade-neonatal"), n("mortalidade-infantil", "mortalidade-neonatal"), n("mortalidade-materna"), n("expectativa-vida"), n("vacinacao-dtp", "vacinacao-sarampo"), n("gravidez-adolescente"), n("mortalidade-cronicas"), n("suicidio"), n("gasto-saude-pib")],
+    tree: [n("mortalidade-5", "mortalidade-neonatal"), n("mortalidade-infantil", "mortalidade-neonatal"), n("mortalidade-materna"), n("expectativa-vida"), n("vacinacao-dtp", "vacinacao-sarampo"), n("gravidez-adolescente", "nascimentos-adolescentes"), n("mortalidade-cronicas"), n("suicidio"), n("gasto-saude-pib")],
     gaps: [
       { name: "Cobertura da atenção primária", target: "100% da população", basis: "ideal", why: "A porta de entrada do SUS resolve a maior parte dos problemas de saúde perto de casa.", source: "Ministério da Saúde (e-Gestor AB)", url: "https://egestorab.saude.gov.br" },
     ],
@@ -135,8 +135,9 @@ export const PILLARS: PillarDef[] = [
     id: "saneamento", name: "Saneamento básico", icon: "🚰", areas: ["saneamento"],
     question: "As casas têm água encanada, esgoto e coleta de lixo?",
     lens: "A falta de água e de esgoto se concentra nos bairros pobres e causa doenças e mortes de crianças.",
-    tree: [n("agua-rede", "agua-segura"), n("esgoto-rede", "sem-banheiro"), n("esgoto-tratado"), n("lixo-coletado"), n("mortes-saneamento")],
+    tree: [n("agua-rede", "agua-segura"), n("esgoto-rede", "sem-banheiro"), n("lixo-coletado"), n("mortes-saneamento")],
     gaps: [
+      { name: "Esgoto coletado que é tratado", target: "90% até 2033 (Marco Legal) e metade do não tratado até 2030 (ODS 6.3)", basis: "brasil", why: "A série oficial (ANA/SNIS) parou em 2019 e o novo sistema (SINISA) ainda não publica série aberta; em 2019, 58% do esgoto do país era tratado.", source: "ANA e Ministério das Cidades (SINISA)", url: "https://www.gov.br/cidades/pt-br/acesso-a-informacao/acoes-e-programas/saneamento/sinisa" },
     ],
   },
   {
