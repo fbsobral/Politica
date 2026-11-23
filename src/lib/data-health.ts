@@ -42,13 +42,18 @@ export type DatasetHealth = Dataset & { count: number; newest: Date | null; olde
 export async function datasetHealth(): Promise<DatasetHealth[]> {
   const now = Date.now();
   return Promise.all(DATASETS.map(async (d) => {
-    const rows = await db.budgetCache.findMany({ where: { OR: d.prefixes.map((p) => ({ key: { startsWith: p } })) }, select: { fetchedAt: true } }).catch(() => []);
-    const times = rows.map((r) => r.fetchedAt.getTime());
-    const stale = times.filter((t) => now - t > d.maxAgeDays * 86400000).length;
-    const newest = times.length ? new Date(Math.max(...times)) : null;
-    const oldest = times.length ? new Date(Math.min(...times)) : null;
-    const status = !times.length ? "sem-dado" : newest && now - newest.getTime() > d.maxAgeDays * 86400000 ? "atrasada" : "ok";
-    return { ...d, count: times.length, newest, oldest, stale, status };
+    // contagens e datas calculadas no banco (sem trazer as linhas)
+    const where = { OR: d.prefixes.map((p) => ({ key: { startsWith: p } })) };
+    const limit = new Date(now - d.maxAgeDays * 86400000);
+    const [agg, stale] = await Promise.all([
+      db.budgetCache.aggregate({ where, _count: { _all: true }, _min: { fetchedAt: true }, _max: { fetchedAt: true } }),
+      db.budgetCache.count({ where: { ...where, fetchedAt: { lt: limit } } }),
+    ]);
+    const count = agg._count._all;
+    const newest = agg._max.fetchedAt ?? null;
+    const oldest = agg._min.fetchedAt ?? null;
+    const status = !count ? "sem-dado" : newest && newest < limit ? "atrasada" : "ok";
+    return { ...d, count, newest, oldest, stale, status };
   }));
 }
 
@@ -78,14 +83,18 @@ export async function indicatorHealth(): Promise<IndicatorHealth[]> {
   const keys = INDICATORS.map((i) => (i.fed ? `ind:v1:${i.id}:FEDERAL:br` : `ind:v8:${i.id}:FEDERAL:br`));
   // sem dado do Brasil: olha os estados (ou, se só existe por cidade, os municípios)
   const stateKeys = INDICATORS.filter((i) => !i.fetch.FEDERAL).map((i) => `${i.fed ? "ind:v1" : "ind:v8"}:${i.id}:${i.fetch.ESTADUAL ? "ESTADUAL" : "MUNICIPAL"}:`);
-  const rows = await db.budgetCache.findMany({ where: { OR: [{ key: { in: keys } }, ...stateKeys.map((k) => ({ key: { startsWith: k } }))] }, select: { key: true, data: true, fetchedAt: true } }).catch(() => []);
+  // sem dado nacional: só uma chave por indicador (a buscada mais recentemente), para não trazer todos os estados
+  const extra = stateKeys.length ? await db.budgetCache.findMany({ where: { OR: stateKeys.map((k) => ({ key: { startsWith: k } })) }, select: { key: true }, orderBy: { fetchedAt: "desc" } }) : [];
+  const pick = new Map<string, string>();
+  for (const r of extra) { const id = r.key.split(":")[2]; if (!pick.has(id)) pick.set(id, r.key); }
+  const rows = await db.budgetCache.findMany({ where: { key: { in: [...keys, ...pick.values()] } }, select: { key: true, data: true, fetchedAt: true } });
   return INDICATORS.map((ind) => {
     const mine = rows.filter((r) => r.key.split(":")[2] === ind.id);
     let lastYear: number | null = null;
     let partial: string | null = null;
     let fetchedAt: Date | null = null;
     for (const r of mine) {
-      const data = r.data as Record<string, unknown>;
+      const data = (r.data && typeof r.data === "object" ? r.data : {}) as Record<string, unknown>;
       const ys = Object.keys(data).filter((k) => k !== PARTIAL_KEY).map(Number).filter(Number.isFinite);
       const y = ys.length ? Math.max(...ys) : null;
       if (y !== null && (lastYear === null || y > lastYear)) {

@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
+import { Suspense } from "react";
 import { runDataJob, saveDataFrequencies } from "@/app/admin-actions";
 import { IconRobot } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
@@ -25,23 +26,20 @@ const CADENCE_ORDER: Cadence[] = ["diária", "mensal", "trimestral", "anual", "d
 export default async function DadosPage({ searchParams }: { searchParams: Promise<{ iniciado?: string; salvo?: string }> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const [sets, inds, runs, freqs] = await Promise.all([datasetHealth(), indicatorHealth(), db.jobRun.findMany({ where: { job: { in: ["dataMonthly", "dataScheduled", ...DATA_JOBS.map((j) => j.job)] } }, orderBy: { startedAt: "desc" }, take: 80 }), getFrequencies()]);
+  // só o que é rápido aqui em cima; as tabelas de situação carregam em seções separadas (Suspense)
+  const [runs, freqs] = await Promise.all([db.jobRun.findMany({ where: { job: { in: ["dataMonthly", "dataScheduled", ...DATA_JOBS.map((j) => j.job)] } }, orderBy: { startedAt: "desc" }, take: 80 }).catch(() => []), getFrequencies()]);
   const next = DATA_JOBS.map((j) => nextSlot(freqs[j.job])).sort((a, b) => a.getTime() - b.getTime())[0];
   const lastBy = new Map<string, (typeof runs)[number]>();
   for (const r of runs) if (!lastBy.has(r.job)) lastBy.set(r.job, r);
   const monthly = lastBy.get("dataMonthly");
-  const late = inds.filter((i) => i.status !== "ok");
-  const sorted = [...inds].sort((a, b) => (a.status === b.status ? CADENCE_ORDER.indexOf(a.cadence) - CADENCE_ORDER.indexOf(b.cadence) || a.name.localeCompare(b.name, "pt-BR") : a.status === "ok" ? 1 : b.status === "ok" ? -1 : a.status.localeCompare(b.status)));
 
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Operação" title="Dados" />
       {sp.salvo && <Notice kind="ok">Frequências salvas. Valem a partir da próxima conferência (todo dia, às 3h).</Notice>}
-      {sp.iniciado && <Notice kind="info">“{sp.iniciado}” iniciado em segundo plano. Atualize a página em alguns minutos para ver o resultado.</Notice>}
+      {sp.iniciado && <Notice kind="info">“{sp.iniciado === "dataMonthly" ? "Atualizar tudo" : sp.iniciado}” iniciado em segundo plano. A atualização completa leva de 10 a 30 minutos; atualize esta página depois para ver o resultado.</Notice>}
 
-      <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Bases em dia" value={`${sets.filter((s) => s.status === "ok").length} de ${sets.length}`} tone={sets.every((s) => s.status === "ok") ? "up" : "down"} />
-        <StatTile label="Indicadores em dia" value={`${inds.length - late.length} de ${inds.length}`} tone={late.length ? "down" : "up"} hint={late.length ? `${late.length} atrasados ou sem dado` : undefined} />
+      <section aria-label="Resumo" className="grid grid-cols-2 gap-3">
         <StatTile label="Atualização completa" value={monthly ? rel(monthly.startedAt) : "nunca"} hint={monthly ? (monthly.finishedAt ? (monthly.ok ? "terminou bem" : "terminou com erro") : "rodando agora") : undefined} />
         <StatTile label="Próxima atualização" value={next ? next.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" }) : "—"} hint="às 3h, pela frequência de cada grupo" />
       </section>
@@ -94,8 +92,24 @@ export default async function DadosPage({ searchParams }: { searchParams: Promis
         </form>
       </section>
 
+      <Suspense fallback={<div className="skeleton h-72" aria-label="Carregando a situação das bases" />}>
+        <Bases lastBy={lastBy} />
+      </Suspense>
+      <Suspense fallback={<div className="skeleton h-96" aria-label="Carregando a situação dos indicadores" />}>
+        <Indicators />
+      </Suspense>
+    </div>
+  );
+}
+
+type Run = { job: string; startedAt: Date; finishedAt: Date | null; ok: boolean | null };
+
+async function Bases({ lastBy }: { lastBy: Map<string, Run> }) {
+  const sets = await datasetHealth().catch((err) => (console.error("[admin:dados] bases", err), null));
+  if (!sets) return <Notice kind="erro">Não consegui ler a situação das bases agora (o banco pode estar ocupado com a atualização). Tente de novo em alguns minutos.</Notice>;
+  return (
       <section aria-label="Bases">
-        <h2 className="display mb-3 text-xl font-semibold">Bases</h2>
+        <h2 className="display mb-3 text-xl font-semibold">Bases <span className="text-base font-normal text-muted">· {sets.filter((s) => s.status === "ok").length} de {sets.length} em dia</span></h2>
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
           <table className="w-full min-w-[820px] border-collapse text-sm">
             <thead>
@@ -136,9 +150,17 @@ export default async function DadosPage({ searchParams }: { searchParams: Promis
           </table>
         </div>
       </section>
+  );
+}
 
+async function Indicators() {
+  const inds = await indicatorHealth().catch((err) => (console.error("[admin:dados] indicadores", err), null));
+  if (!inds) return <Notice kind="erro">Não consegui ler a situação dos indicadores agora. Tente de novo em alguns minutos.</Notice>;
+  const late = inds.filter((i) => i.status !== "ok");
+  const sorted = [...inds].sort((a, b) => (a.status === b.status ? CADENCE_ORDER.indexOf(a.cadence) - CADENCE_ORDER.indexOf(b.cadence) || a.name.localeCompare(b.name, "pt-BR") : a.status === "ok" ? 1 : b.status === "ok" ? -1 : a.status.localeCompare(b.status)));
+  return (
       <section aria-label="Indicadores">
-        <h2 className="display text-xl font-semibold">Indicadores</h2>
+        <h2 className="display text-xl font-semibold">Indicadores <span className="text-base font-normal text-muted">· {inds.length - late.length} de {inds.length} em dia</span></h2>
         <p className="mb-3 mt-1 text-sm text-muted">Último ano guardado de cada indicador (do Brasil; ou dos estados e cidades, quando não há dado nacional). “Em dia” quando chega ao ano esperado para a frequência da fonte: mensal e trimestral já com o parcial deste ano; anual com até 2 anos de atraso, que é o normal do IBGE e do Banco Mundial; Censo, 2022.</p>
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
           <table className="w-full min-w-[760px] border-collapse text-sm">
@@ -167,6 +189,5 @@ export default async function DadosPage({ searchParams }: { searchParams: Promis
           </table>
         </div>
       </section>
-    </div>
   );
 }
