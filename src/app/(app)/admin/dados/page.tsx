@@ -161,7 +161,7 @@ async function Indicators() {
   return (
       <section aria-label="Indicadores">
         <h2 className="display text-xl font-semibold">Indicadores <span className="text-base font-normal text-muted">· {inds.length - late.length} de {inds.length} em dia</span></h2>
-        <p className="mb-3 mt-1 text-sm text-muted">Último ano guardado de cada indicador (do Brasil; ou dos estados e cidades, quando não há dado nacional). “Em dia” quando chega ao ano esperado para a frequência da fonte: mensal e trimestral já com o parcial deste ano; anual com até 2 anos de atraso, que é o normal do IBGE e do Banco Mundial; Censo, 2022.</p>
+        <p className="mb-3 mt-1 text-sm text-muted">“Em dia” quer dizer que buscamos o indicador no último mês e temos o dado mais recente que a fonte publicou. “Atrasado” é falha nossa: não atualizamos no prazo, ou uma série mensal ou trimestral está sem o parcial deste ano. A coluna “Defasagem da fonte” é só informativa: o DATASUS, o Banco Mundial e o IBGE publicam muitos números anuais com 1 a 3 anos de atraso, e algumas séries foram encerradas.</p>
         <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
           <table className="w-full min-w-[760px] border-collapse text-sm">
             <thead>
@@ -169,7 +169,7 @@ async function Indicators() {
                 <th className="px-2.5 py-2 text-left font-medium">Indicador</th>
                 <th className="px-2.5 py-2 text-left font-medium">Frequência</th>
                 <th className="px-2.5 py-2 text-right font-medium">Último dado</th>
-                <th className="px-2.5 py-2 text-right font-medium">Esperado</th>
+                <th className="px-2.5 py-2 text-left font-medium">Defasagem da fonte</th>
                 <th className="px-2.5 py-2 text-right font-medium">Buscado</th>
                 <th className="px-2.5 py-2 text-right font-medium">Situação</th>
               </tr>
@@ -180,9 +180,9 @@ async function Indicators() {
                   <td className="max-w-0 px-2.5 py-2"><span className="block truncate font-medium" title={i.name}>{i.name}</span><span className="block truncate text-[11px] text-faint" title={i.source}>{i.source}</span></td>
                   <td className="px-2.5 py-2">{i.cadence}</td>
                   <td className="px-2.5 py-2 text-right tabular-nums">{i.lastYear ?? "—"}{i.partial && <span className="block text-[11px] text-estadual">parcial: {i.partial}</span>}</td>
-                  <td className="px-2.5 py-2 text-right tabular-nums text-muted">{i.expected}</td>
+                  <td className="px-2.5 py-2 text-xs text-muted">{i.sourceLag}</td>
                   <td className="px-2.5 py-2 text-right text-muted">{rel(i.fetchedAt)}</td>
-                  <td className={`px-2.5 py-2 text-right text-xs font-bold ${STATUS[i.status].cls}`}>{STATUS[i.status].label}</td>
+                  <td className={`px-2.5 py-2 text-right text-xs font-bold ${STATUS[i.status].cls}`}>{STATUS[i.status].label}{i.problem && <span className="block font-normal text-faint">{i.problem}</span>}</td>
                 </tr>
               ))}
             </tbody>

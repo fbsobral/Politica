@@ -68,15 +68,15 @@ export function cadenceOf(ind: Indicator): Cadence {
   return "anual";
 }
 
-/** Último ano que deveria estar disponível, dada a frequência (e o atraso típico de cada fonte). */
-export function expectedYear(c: Cadence): number {
-  const last = lastClosedYear();
-  if (c === "mensal" || c === "trimestral") return last + 1; // já deve haver dado parcial do ano corrente
-  if (c === "decenal") return 2022;
-  return last - 1; // anual: a maioria das fontes publica o ano com 1 a 2 anos de atraso
-}
-
-export type IndicatorHealth = { id: string; name: string; source: string; cadence: Cadence; scopes: string[]; lastYear: number | null; partial: string | null; fetchedAt: Date | null; expected: number; status: "ok" | "atrasado" | "sem-dado" };
+export type IndicatorHealth = {
+  id: string; name: string; source: string; cadence: Cadence; scopes: string[]; lastYear: number | null; partial: string | null; fetchedAt: Date | null;
+  /** situação da NOSSA atualização: em dia (buscado no prazo e com o último dado da fonte), atrasado ou sem dado */
+  status: "ok" | "atrasado" | "sem-dado";
+  /** por que está atrasado, quando está */
+  problem: string | null;
+  /** quanto a própria fonte demora para publicar (informativo, não é atraso nosso) */
+  sourceLag: string;
+};
 
 /** Para cada indicador: o último ano guardado (no Brasil), se é parcial, quando foi buscado e se está em dia. */
 export async function indicatorHealth(): Promise<IndicatorHealth[]> {
@@ -105,8 +105,13 @@ export async function indicatorHealth(): Promise<IndicatorHealth[]> {
       if (!fetchedAt || r.fetchedAt > fetchedAt) fetchedAt = r.fetchedAt;
     }
     const cadence = cadenceOf(ind);
-    const expected = expectedYear(cadence);
-    const status = lastYear === null ? "sem-dado" : lastYear >= expected ? "ok" : "atrasado";
-    return { id: ind.id, name: ind.name, source: ind.source, cadence, scopes: Object.keys(ind.fetch), lastYear, partial, fetchedAt, expected, status };
+    const cur = lastClosedYear() + 1;
+    const stale = !fetchedAt || Date.now() - fetchedAt.getTime() > 35 * 86400000;
+    // atraso NOSSO: não buscamos no prazo, ou uma série mensal/trimestral ficou sem o parcial do ano corrente
+    const problem = lastYear === null ? null : stale ? "não foi atualizado no último mês" : (cadence === "mensal" || cadence === "trimestral") && lastYear < cur ? `falta o parcial de ${cur}` : null;
+    const status = lastYear === null ? "sem-dado" : problem ? "atrasado" : "ok";
+    const lag = lastYear === null ? null : cur - lastYear;
+    const sourceLag = lastYear === null ? "—" : partial ? `parcial de ${lastYear} (${partial})` : cadence === "decenal" ? "Censo: a cada 10 anos" : lag! <= 1 ? "em dia" : lag! <= 3 ? `a fonte publica com ${lag! - 1} a ${lag} anos de atraso` : lag! <= 5 ? "a fonte está bem atrasada" : `série encerrada pela fonte em ${lastYear}`;
+    return { id: ind.id, name: ind.name, source: ind.source, cadence, scopes: Object.keys(ind.fetch), lastYear, partial, fetchedAt, status, problem, sourceLag };
   });
 }

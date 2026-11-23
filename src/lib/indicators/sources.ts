@@ -140,6 +140,23 @@ export const worldBank = (code: string): Fetcher => async () => {
   return toRange(out);
 };
 
+/**
+ * Crescimento real do PIB: anos fechados pelo Banco Central (SGS 7326) e, no ano corrente, a taxa acumulada no ano
+ * contra o mesmo período do ano anterior, das Contas Trimestrais do IBGE (tabela 5932). Ela já é uma comparação
+ * com o mesmo período, então não há outro valor para comparar.
+ */
+export const pibGrowth: Fetcher = async (geo) => {
+  const base = await bcb(7326, "last")(geo);
+  const cur = lastClosedYear() + 1;
+  if (base[cur] !== undefined) return base;
+  const rows = (await sidra("t/5932/n1/all/v/6563/p/last%204/c11255/90707").catch(() => [])).filter((r) => r.v !== null && String(r.D3C).startsWith(String(cur)));
+  const last = rows.sort((a, b) => String(b.D3C).localeCompare(String(a.D3C)))[0];
+  if (!last) return base;
+  const q = Number(String(last.D3C).slice(4));
+  if (q >= 4) return base;
+  return withPartial({ ...base, [cur]: last.v as number }, { year: cur, label: q === 1 ? "1º tri" : `1º–${q}º tri`, prev: null });
+};
+
 export const giniSidra = (scope: Scope): Fetcher => async (geo) => toRange(sidraYears(await sidra(`t/7435/${terr(scope, geo)}/v/10681/p/all`), "D3C"));
 
 /**
